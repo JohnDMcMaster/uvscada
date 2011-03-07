@@ -9,7 +9,7 @@ import os
 
 g_default_prefix_dir = None
 g_default_prefix = None
-PREFIX_BASE = "/tmp/pr0ntools_"
+PREFIX_BASE = "/tmp/uvtemp_"
 
 class TempFile:
 	@staticmethod
