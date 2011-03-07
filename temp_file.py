@@ -6,6 +6,8 @@ Licensed under the terms of the LGPL V3 or later, see COPYING for details
 
 import random
 import os
+import shutil
+from util import print_debug
 
 g_default_prefix_dir = None
 g_default_prefix = None
@@ -66,10 +68,10 @@ class ManagedTempFile:
 	def __del__(self):
 		try:
 			if os.path.exists(self.file_name):
-				# os.remove(self.file_name)
-				print 'Deleted temp file %s' % self.file_name
+				os.remove(self.file_name)
+				print_debug('Deleted temp file %s' % self.file_name)
 			else:
-				print "Didn't delete inexistant temp file %s" % self.file_name
+				print_debug("Didn't delete inexistant temp file %s" % self.file_name)
 		# Ignore if it was never created
 		except:
 			print 'WARNING: failed to delete temp file: %s' % self.file_name
@@ -91,10 +93,10 @@ class ManagedTempDir(ManagedTempFile):
 	def __del__(self):
 		try:
 			if os.path.exists(self.file_name):
-				# shutil.rmtree(self.file_name)
-				print 'Deleted temp dir %s' % self.file_name
+				shutil.rmtree(self.file_name)
+				print_debug('Deleted temp dir %s' % self.file_name)
 			else:
-				print "Didn't delete inexistant temp dir %s" % self.file_name
+				print_debug("Didn't delete inexistant temp dir %s" % self.file_name)
 		# Ignore if it was never created
 		except:
 			print 'WARNING: failed to delete temp dir: %s' % self.file_name
@@ -114,5 +116,4 @@ class TempFileSet:
 		if not prefix:
 			prefix = TempFile.default_prefix()
 		self.prefix = prefix
-
 

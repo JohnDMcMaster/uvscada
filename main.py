@@ -144,7 +144,7 @@ class MainWindow(QtGui.QWidget):
 		print 'cur devices: %s' % cur_devices
 		print 'old devices: %s' % old_devices
 		removed_devices = old_devices - cur_devices
-		print removed_devices
+		print 'removed devices: %s' % removed_devices
 		for device_file_name in removed_devices:
 			print '***removed %s' % device_file_name
 			device = self.devices[device_file_name]
@@ -168,6 +168,59 @@ class MainWindow(QtGui.QWidget):
 		pass
 
 def get_temperature(device):
+	# multiplatform
+	return get_temperature_by_smartctl(device)
+	return get_temperature_by_hddtemp(device)
+	
+def get_temperature_by_hddtemp(device):
+	'''
+	'''
+	command = "hddtemp"
+	args = list()
+	
+	args.append(device)
+	
+	# go go go
+	(rc, output) = Execute.with_output(command, args)
+	'''
+	'''
+	rc_adj = rc / 256
+	if not rc == 0:
+		print output
+		print 'Bad rc: %d (%d)' % (rc_adj, rc)
+		return None
+	
+	print_debug()
+	print_debug()
+	print_debug(output)
+	print_debug()
+	print_debug()
+	
+	'''
+	[root@gespenst uvtemp]# hddtemp /dev/sda
+	WARNING: Drive /dev/sda doesn't seem to have a temperature sensor.
+	WARNING: This doesn't mean it hasn't got one.
+	WARNING: If you are sure it has one, please contact me (hddtemp@guzu.net).
+	WARNING: See --help, --debug and --drivebase options.
+	/dev/sda: OCZ-AGILITY:  no sensor
+	[root@gespenst uvtemp]# echo $?
+	0
+	'''
+	if output.find('no sensor') >= 0:
+		return None
+	
+	# 194 Temperature_Celsius     0x0022   117   097   000    Old_age   Always       -       30
+	line = re.search(".*Temperature_Celsius.*", output).group()
+	print_debug('line: %s' % repr(line))
+
+	worst_temp = float(line.split()[4])
+	print_debug('worst: %s' % worst_temp)
+	cur_temp = float(line.split()[9])
+	print_debug('cur: %s' % cur_temp)
+
+	return (cur_temp, worst_temp)
+
+def get_temperature_by_smartctl(device):
 	'''
 	[root@gespenst ~]# smartctl --all /dev/sdb
 	...
