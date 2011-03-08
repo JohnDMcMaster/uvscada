@@ -6,13 +6,14 @@ Licensed under the terms of the LGPL V3 or later, see COPYING for details
 
 import os
 from temp_file import ManagedTempFile
+from util import print_debug
 
 class Execute:
 	@staticmethod
 	def simple(cmd, working_dir = None):
 		'''Returns rc of process, no output'''
 		
-		print 'cmd in: %s' % cmd
+		print_debug('cmd in: %s' % cmd)
 		if True:
 			#print 'Executing'
 			os.sys.stdout.flush()

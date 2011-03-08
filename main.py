@@ -34,25 +34,29 @@ import os
 import os.path
 from util import print_debug
 
-count = 0
-
 class Device:
 	file_name = None
 	temperature = None
 	dev_label = None
 	value_label = None
+	session_high = None
+	session_low = None
 	
 	def temp_str(self):
-		global count 
-		
 		raw = get_temperature(self.file_name)
 		if raw is None:
 			return '%s:     <N/A>' % self.file_name
 		else:
-			count += 1
-			raw = (count, 123)
 			(cur_temp, worst_temp) = raw
-			return '%s:     cur: %0.1f, worst: %0.1f' % (self.file_name, cur_temp, worst_temp)
+			if self.session_high:
+				self.session_high = max(cur_temp, self.session_high)
+			else:
+				self.session_high = cur_temp
+			if self.session_low:
+				self.session_low = min(cur_temp, self.session_low)
+			else:
+				self.session_low = cur_temp
+			return '%s:     cur: %0.1f, worst ever: %0.1f, low: %0.1f, high: %0.1f' % (self.file_name, cur_temp, worst_temp, self.session_low, self.session_high)
 
 class MainWindow(QtGui.QWidget):
 	devices = dict()
@@ -92,7 +96,7 @@ class MainWindow(QtGui.QWidget):
 			raw = re.match("[hs]d[a-z]", dir)
 			if raw:
 				ret.add(os.path.join("/dev", raw.group()))
-		print ret
+		print_debug(ret)
 		return ret
 
 	def regen_devices(self):
@@ -116,7 +120,9 @@ class MainWindow(QtGui.QWidget):
 				#device.dev_label.setText(device.file_name)
 			
 				device.value_label = QtGui.QLabel(self)
-				device.value_label.setText(device.temp_str())
+				to_set = device.temp_str()
+				print to_set
+				device.value_label.setText(to_set)
 				if True:
 					self.layout.addWidget(device.value_label)
 				elif True:
@@ -141,16 +147,17 @@ class MainWindow(QtGui.QWidget):
 				
 		# Get rid of removed HDDs
 		old_devices = set(self.devices)
-		print 'cur devices: %s' % cur_devices
-		print 'old devices: %s' % old_devices
+		print_debug('cur devices: %s' % cur_devices)
+		print_debug('old devices: %s' % old_devices)
 		removed_devices = old_devices - cur_devices
-		print 'removed devices: %s' % removed_devices
+		print_debug('removed devices: %s' % removed_devices)
 		for device_file_name in removed_devices:
 			print '***removed %s' % device_file_name
 			device = self.devices[device_file_name]
 			if True:
 				#self.layout.removeWidget(device.dev_label)
 				self.layout.removeWidget(device.value_label)
+				device.value_label.setParent(None)
 			else:
 				self.layout.removeWidget(device.layout)
 			del self.devices[device_file_name]
@@ -160,8 +167,8 @@ class MainWindow(QtGui.QWidget):
 		return self.file_name.__cmp__(other.file_name)
 	
 	def update(self):	
-		print
-		print 'update'
+		print_debug()
+		print_debug('update')
 		self.regen_devices()
 	
 	def __del__(self):
@@ -205,6 +212,13 @@ def get_temperature_by_hddtemp(device):
 	/dev/sda: OCZ-AGILITY:  no sensor
 	[root@gespenst uvtemp]# echo $?
 	0
+
+
+	[root@gespenst uvtemp]# hddtemp /dev/hdf
+	/dev/hdf: open: No such file or directory
+	
+	[root@gespenst uvtemp]# echo $?
+	1
 	'''
 	if output.find('no sensor') >= 0:
 		return None
