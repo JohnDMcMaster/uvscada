@@ -25,7 +25,6 @@ palimsest idicates a temperature though
 __author__ = "John McMaster"
 
 import sys
-from PIL import Image, ImageQt
 from PyQt4 import QtGui, QtCore
 from operator import itemgetter
 from execute import Execute
@@ -180,6 +179,7 @@ def get_temperature(device):
 	return get_temperature_by_hddtemp(device)
 	
 def get_temperature_by_hddtemp(device):
+	"""
 	'''
 	'''
 	command = "hddtemp"
@@ -224,7 +224,10 @@ def get_temperature_by_hddtemp(device):
 		return None
 	
 	# 194 Temperature_Celsius     0x0022   117   097   000    Old_age   Always       -       30
-	line = re.search(".*Temperature_Celsius.*", output).group()
+	re_res = re.search(".*Temperature_Celsius.*", output)
+	if re_res is None:
+		return None
+	line = re_res.group()
 	print_debug('line: %s' % repr(line))
 
 	worst_temp = float(line.split()[4])
@@ -233,7 +236,9 @@ def get_temperature_by_hddtemp(device):
 	print_debug('cur: %s' % cur_temp)
 
 	return (cur_temp, worst_temp)
-
+	"""
+	return None
+	
 def get_temperature_by_smartctl(device):
 	'''
 	[root@gespenst ~]# smartctl --all /dev/sdb
@@ -277,6 +282,16 @@ def get_temperature_by_smartctl(device):
 	[root@gespenst uvtemp]# echo $?
 	2
 	'''
+	"""
+	Too many obsecure conditions
+	Try to parse and ignore if the parse fails
+
+	[mcmaster@gespenst uvtemp]$ smartctl /dev/sda
+	smartctl 5.40 2010-10-16 r3189 [i386-redhat-linux-gnu] (local build)
+	Copyright (C) 2002-10 by Bruce Allen, http://smartmontools.sourceforge.net
+
+	Smartctl open device: /dev/sda failed: Permission denied
+
 	rc_adj = rc / 256
 	if rc_adj == 4:
 		'''
@@ -309,6 +324,9 @@ def get_temperature_by_smartctl(device):
 		# This happens for a number of reasons, hard to guage
 		print 'Bad rc: %d (%d)' % (rc_adj, rc)
 		return None
+	"""
+	if output is None:
+		return None
 	
 	print_debug()
 	print_debug()
@@ -316,7 +334,12 @@ def get_temperature_by_smartctl(device):
 	print_debug()
 	print_debug()
 	# 194 Temperature_Celsius     0x0022   117   097   000    Old_age   Always       -       30
-	line = re.search(".*Temperature_Celsius.*", output).group()
+	re_res = re.search(".*Temperature_Celsius.*", output)
+	if re_res is None:
+		return None
+	line = re_res.group()
+	if line is None:
+		return None
 	print_debug('line: %s' % repr(line))
 
 	worst_temp = float(line.split()[4])
