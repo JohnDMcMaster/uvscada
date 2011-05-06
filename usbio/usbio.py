@@ -19,7 +19,10 @@ IOF/PWM1        IO0/TX0
 '''
 
 import serial
+import sys
 import time
+
+VERSION = 0.0
 
 class USBIO:
 	device = None
@@ -29,8 +32,6 @@ class USBIO:
 	def __init__(self, device = "/dev/ttyACM0"):
 		self.device = device
 		self.serial = serial.Serial(self.device, 9600, timeout=1)
-		#self.serial = open(self.device)
-		print self.serial
 
 	'''
 	Read the version of the USB_IO device firmware.
@@ -107,14 +108,76 @@ class USBIO:
 		else:
 			raise Exception("bad relay id")
 
+def str2bool(arg_value):
+	arg_value = arg_value.lower()
+	if arg_value == "false" or arg_value == "0" or arg_value == "no" or arg_value == "off":
+		return False
+	else:
+		return True
+
+def help():
+	print 'usbio version %s' % VERSION
+	print 'Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>'
+	print 'Usage:'
+	print 'usbio [options] [<port> <state>]'
+	print 'Options:'
+	print '--help: this message'
 
 if __name__ == "__main__":
+	port = None
+	state = True
+	raw_index = 0
+	
+	for arg_index in range (1, len(sys.argv)):
+		arg = sys.argv[arg_index]
+		arg_key = None
+		arg_value = None
+		if arg.find("--") == 0:
+			arg_value_bool = True
+			if arg.find("=") > 0:
+				arg_key = arg.split("=")[0][2:]
+				arg_value = arg.split("=")[1]
+				arg_value_bool = str2bool(arg_value)
+			else:
+				arg_key = arg[2:]
+				
+			if arg_key == "help":
+				help()
+				sys.exit(0)
+			elif arg_key == "port":
+				port = arg_value
+			elif arg_key == "state":
+				state = arg_value_bool
+			else:
+				log('Unrecognized argument: %s' % arg)
+				help()
+				sys.exit(1)
+		else:
+			arg_bool = str2bool(arg)
+
+			if arg == "false" or arg == "0" or arg == "no":
+				arg_bool = False
+
+			raw_index += 1
+			if raw_index == 1:
+				port = arg
+			elif raw_index == 2:
+				state = arg_bool
+	
 	usbio = USBIO()
-	for i in range(0, 30000):
-		usbio.set_relay(1, True)
-		usbio.set_relay(2, True)
-		time.sleep(5)
-		usbio.set_relay(1, False)
-		usbio.set_relay(2, False)
-		time.sleep(5)
+	
+	if port is None:
+		print 'port must be specified'
+		help()
+		sys.exit(1)
+	
+	port = port.upper()
+	if port == "RELAY1":
+		usbio.set_relay(1, state)
+	elif port == "RELAY2":
+		usbio.set_relay(2, state)
+	else:
+		print 'bad port: %s' % port
+		help()
+		sys.exit(1)
 
