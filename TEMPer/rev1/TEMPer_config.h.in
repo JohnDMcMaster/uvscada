@@ -1,0 +1,4 @@
+// the configured options and settings for Tutorial
+#define TEMPER_VERSION_MAJOR @TEMPER_VERSION_MAJOR@
+#define TEMPER_VERSION_MINOR @TEMPER_VERSION_MINOR@
+
