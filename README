@@ -1,0 +1,17 @@
+uvscopetek
+AmScope / ScopeTek / Anchor Chips USB camera driver
+Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>
+
+Going to prototype in libusb and maybe eventually write a V4L2 driver.
+Mostly based on USB protocol dumps, so enjoy the magic numbers
+I have an AmScope MD1800.  Anything else detected *might* work
+If you want to get it supported, send me USB capture of the following operations in their own files:
+-Plug in camera to Windows
+-Plug in camera to Windows, launch scope software
+-Plug in camera to Windows, launch scope software, do a SHORT live video capture (at least half a second, try not to do more)
+-Plug in camera to Windows, capture TWAIN picture
+	Send me the picture since I'll need it to validate the data
+		Be creative! ;)
+	Note program used.  AmScope software is noisy since it always likes to capture a live feed
+	Sourceforge program allows only camera image
+
