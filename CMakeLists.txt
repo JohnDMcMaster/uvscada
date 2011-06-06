@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 2.6)
-project (amscope)
+project (uvscopetek)
 # The version number.
 set (TEMPER_VERSION_MAJOR 1)
 set (TEMPER_VERSION_MINOR 0)
@@ -20,6 +20,6 @@ include_directories("${PROJECT_BINARY_DIR}")
 # add the executable
 #add_library(temper SHARED TEMPer.cpp 24c02.cpp  fm75.cpp  i2c.cpp  max6675.cpp  serial.cpp)
 
-add_executable (amscope main.cpp) 
-target_link_libraries(amscope usb)
+add_executable (uvscopetek main.cpp) 
+target_link_libraries(uvscopetek usb)
 
