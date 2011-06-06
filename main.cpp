@@ -11,11 +11,20 @@
 #define CAMERA_VENDOR_ID		0x0547
 #define CAMERA_PRODUCT_ID		0x4D88
 
+/*
+Bit 3...0: The endpoint number
+Bit 6...4: Reserved, reset to zero
+Bit 7:     Direction, ignored for
+           control endpoints
+       0 = OUT endpoint
+       1 = IN endpoint
+*/
 //Best guesses
 //Barely any observed traffic
 //Have yet to show that images actually get send across
 #define IMAGE_ENDPOINT 			0
 //Heavy traffic during startup
+//Does this actually exist?  Might be a VMWare relic
 #define CONFIG_ENDPOINT 		1
 //Observed from capture
 #define	VIDEO_ENDPOINT 			2
@@ -34,12 +43,26 @@ void camera_exit(int rc) {
 }
 
 unsigned int camera_bulk_read(int ep, void *bytes, int size) {
+	//int usb_bulk_read(usb_dev_handle *dev, int ep, char *bytes, int size,
+	//	int timeout);
 	
 	int rc_tmp = usb_bulk_read(g_camera_handle, ep, (char *)bytes, size, 500);
 	
 	if (rc_tmp < 0) {
 		perror("ERROR");
 		printf("failed read: %d\n", rc_tmp);
+		camera_exit(1);
+	}
+	
+	return rc_tmp;
+}
+
+unsigned int camera_bulk_write(int ep, void *bytes, int size) {
+	int rc_tmp =  usb_bulk_write(g_camera_handle, ep, (char *)bytes, size, 500);
+	
+	if (rc_tmp < 0) {
+		perror("ERROR");
+		printf("failed write: %d\n", rc_tmp);
 		camera_exit(1);
 	}
 	
@@ -103,15 +126,15 @@ unsigned int camera_control_message(int requesttype, int request,
 void validate_read(void *expected, size_t expected_size, void *actual, size_t actual_size, const char *msg) {
 	if (expected_size != actual_size) {
 		printf("%s: expected %d bytes, got %d bytes\n", msg, expected_size, actual_size);
-		exit(1);		
+		camera_exit(1);		
 	}
 	if (memcmp(expected, actual, expected_size)) {
 		printf("%s: regions do not match\n", msg);
-		exit(1);
+		camera_exit(1);
 	}
 }
 
-void replay_wireshark() {
+void replay_wireshark_setup() {
 	char buff[0x100];
 	unsigned int n_rw = 0;
 	printf("Replaying wireshark stuff\n");
@@ -236,6 +259,86 @@ void replay_wireshark() {
 	validate_read((char[]){0x08}, 1, &buff, n_rw, "packet 84");
 	//Generated from packet 85
 	n_rw = camera_control_message(0x40, 0x01, 0x0003, 0x000F, NULL, 0);
+}
+
+#define DATA_ENDPOINT 0x82
+void replay_wireshark_bulk() {
+	/*
+	A slew of read requests are launched in parallel:
+		16384 @ 87
+		16384
+		16384
+		13312
+		16384
+		3072
+		16384
+		16384
+		16384 @ 95
+		13312 @ 96		
+	Then 14336 bytes come back @ 97
+	More requests
+		16384 @ 98
+		2048
+		16384
+		16384
+		16384
+		14336 @ 103
+		16384
+		2048
+		16384
+		16384
+		16384
+		14336 @ 109
+	16 reads come back @ 110 - 125
+	
+	*/
+	unsigned int n_read = 0;
+	int rc_tmp = 0;
+
+	//n_read = camera_bulk_read(DATA_ENDPOINT, void *bytes, int size) {
+	char *buff = NULL;
+	const size_t buff_sz = 16384;
+	unsigned int buff_pos = 0;
+	
+	unsigned int to_read = 921600;
+	buff = (char *)malloc(to_read + buff_sz);
+	if (buff == NULL) {
+		printf("out of mem\n");
+		camera_exit(1);
+	}
+	int count = 0;
+	unsigned int last_total = 0;
+	/*
+	Assuming RGB24 encoding @ 640 X 480 need 640 * 480 * 3 = 921600
+	*/
+	while (buff_pos < to_read) {
+		++count;
+		n_read = camera_bulk_read(DATA_ENDPOINT, buff + buff_pos, buff_sz);
+		buff_pos += n_read;
+		last_total += n_read;
+		if (last_total > 1000000) {
+			printf("Got %u\n", last_total);
+			last_total = 0;
+		}
+	}
+	
+	//Log to file
+	FILE *file = fopen("image.bin", "wb");
+	if (!file) {
+		perror("fopen");
+		camera_exit(1);
+	}
+	rc_tmp = fwrite(buff, 1, to_read, file);
+	if (rc_tmp != (int)to_read) {
+		printf("got %d expected %d\n", to_read, rc_tmp);
+		camera_exit(1);
+	}
+	printf("Done!\n");
+}
+
+void replay_wireshark() {
+	replay_wireshark_setup();
+	replay_wireshark_bulk();
 }
 
 void replay() {
