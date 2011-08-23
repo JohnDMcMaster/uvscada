@@ -105,6 +105,8 @@ int main(int argc, char* argv[])
 			continue;
 		}
 			
+		float miny = 255, maxy = 0;
+			
 		unsigned char* image = buf + framestarts[iframe];
 		unsigned char* last_scanline = image;
 		int last_shift = 0; 
@@ -150,10 +152,11 @@ int main(int argc, char* argv[])
 			//save this scanline for reference
 			last_scanline = scanline;
 			
-			//Decode the pixels (2D bayer filter)
+			//Process the pixels
 			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
 			{
 				//Black out if this line got corrupted
+				//TODO: attempt recovery
 				if(dropped)
 				{
 					row[x].r = 0;
@@ -174,19 +177,59 @@ int main(int argc, char* argv[])
 				}
 				else
 				{
-					//this is a pretty good guess
+					//Decode color values (Bayer filter, GBRG)
 					int r = scanline2[x];
 					int b = scanline[x+1];
-					
 					int g = scanline[x];
-					int g2 = scanline2[x+1];		
+					int g2 = scanline2[x+1];
+					
+					//White balance so (136, 171, 129) becomes neutral
+					//This is just a random background pixel chosen from a typical decoded frame, automatic or manual balancing
+					//would be good here!
+					r *= 0.941176471;
+					g *= 0.748538012;
+					b *= 0.992248062;
+					
+					//Store min/max pixel values for leveling (standard NTSC weights)
+					float y = r*0.2989 + g*0.5870 + b*0.1140;
+					if(miny > y) miny = y;
+					if(maxy < y) maxy = y;
 									
-					//TODO: better demosaicing algorithm for G interpolation?
+					//TODO: better demosaicing algorithm?
 					row[x].r = row[x+1].r = row2[x].r = row2[x+1].r = r;
 					row[x].b = row[x+1].b = row2[x].b = row2[x+1].b = b;
 					row[x].g = row[x+1].g = g;
 					row2[x].g = row2[x+1].g = g2;
 				}
+			}
+		}
+		
+		//Once the entire image is done, normalize intensities to full range
+		//This should be done more properly by adjusting exposure on the camera etc
+		//but it will help for now
+		float dy = maxy - miny;
+		float yscale = 255 / dy;
+		for(unsigned int y=0; y<IMG_HEIGHT; y++)
+		{
+			pixel* row = pixels + (y*IMG_WIDTH);
+			for(unsigned int x=0; x<IMG_WIDTH; x ++)
+			{
+				pixel& pix = row[x];
+				
+				float r = (pix.r - miny) * yscale;
+				float g = (pix.g - miny) * yscale;
+				float b = (pix.b - miny) * yscale;
+				
+				if(r < 0) r = 0;
+				if(g < 0) g = 0;
+				if(b < 0) b = 0;
+				if(r > 255) r = 255;
+				if(g > 255) g = 255;
+				if(b > 255) b = 255;
+				
+				pix.r = r;
+				pix.g = g;
+				pix.b = b;
 			}
 		}
 		
