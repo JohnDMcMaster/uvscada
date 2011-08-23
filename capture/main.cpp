@@ -261,6 +261,8 @@ void replay_wireshark_setup() {
 	n_rw = camera_control_message(0x40, 0x01, 0x0003, 0x000F, NULL, 0);
 }
 
+const char *g_image_file_out = "image.bin";
+
 #define DATA_ENDPOINT 0x82
 void replay_wireshark_bulk() {
 	/*
@@ -297,15 +299,18 @@ void replay_wireshark_bulk() {
 
 	//n_read = camera_bulk_read(DATA_ENDPOINT, void *bytes, int size) {
 	char *buff = NULL;
-	const size_t buff_sz = 16384;
 	unsigned int buff_pos = 0;
 	
-	unsigned int to_read = 921600;
+	//unsigned int to_read = 640 * 480 * 3 * 3;
+	unsigned int to_read = 4 * 1024 * 1024;
+	const size_t buff_sz = to_read;
+	printf("Going to read %d, single read buffer size %d\n", to_read, buff_sz);
 	buff = (char *)malloc(to_read + buff_sz);
 	if (buff == NULL) {
 		printf("out of mem\n");
 		camera_exit(1);
 	}
+	fflush(stdout);
 	int count = 0;
 	unsigned int last_total = 0;
 	/*
@@ -314,16 +319,17 @@ void replay_wireshark_bulk() {
 	while (buff_pos < to_read) {
 		++count;
 		n_read = camera_bulk_read(DATA_ENDPOINT, buff + buff_pos, buff_sz);
+		//printf("read %d\n", n_read);
 		buff_pos += n_read;
 		last_total += n_read;
 		if (last_total > 1000000) {
-			printf("Got %u\n", last_total);
+			//printf("Got %u\n", last_total);
 			last_total = 0;
 		}
 	}
 	
 	//Log to file
-	FILE *file = fopen("image.bin", "wb");
+	FILE *file = fopen(g_image_file_out, "wb");
 	if (!file) {
 		perror("fopen");
 		camera_exit(1);
@@ -368,6 +374,8 @@ int validate_device( int vendor_id, int product_id ) {
 		http://www.oplenic.com/faq.asp?page=7
 		A:Dear chris,Please check your email box,we have email it to you.DCM130 is Amscope MD600,2009-06-25
 		*/
+		//20784
+#define PROD_ID_AMSCOPE_MD600E
 		case 0x5130:
 			printf("AmScope MD600E\n");
 			return 0;
@@ -398,12 +406,18 @@ int validate_device( int vendor_id, int product_id ) {
 		case 0x9020:
 			printf("AmScope MD700E\n");
 			return 0;
+		//NOT in stonedrv.sys or its .inf
+		//Not sure if its related
+		case 0x92A0:
+			printf("Jeff's camera\n");
+			return 0;
 		default:
 			printf("Unknown product id\n");
 			return 1;
 		}
 	case 0x04B4:
 		switch (product_id) {
+		//NOT in stonedrv.sys, but in its .inf
 		case 0xE035:
 			printf("AmScope MD400E\n");
 			return 0;
@@ -591,6 +605,10 @@ void relocate_camera() {
 
 int main(int argc, char **argv) {
 	int rc_tmp = 0;
+
+	if (argc > 1) {
+		g_image_file_out = argv[1];
+	}
 
 	usb_init();
 	//Prints out *lots* of information on how it found it
