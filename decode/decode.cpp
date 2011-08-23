@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
 			{
 				//all shifts seem to be multiples of 64 so only check these
 				float mc = 0;
-				for(unsigned int k=0; k<IMG_WIDTH; k += 64)
+				for(unsigned int k=0; k<IMG_WIDTH; k += 2)
 				{
 					float c = crosscorrelation(last_scanline, scanline+k, IMG_WIDTH*2);
 					if(c > mc)
@@ -135,31 +135,57 @@ int main(int argc, char* argv[])
 				
 				if(offset != 0)
 				{
-					printf("detected %d bad bytes in frame %d at scanline %d, interpolating from previous scanline\n", offset, iframe, y);
+					//offset += 2*IMG_WIDTH + 1;
+					
+					//TODO: insert padding
+				
+					printf("detected %d bad bytes in frame %d at scanline %d\n", offset, iframe, y);
 					total_shift += offset;
-					scanline += offset;
+					//scanline += offset;
 					last_shift = y;
 					dropped = true;
 				}
 			}
 			
-			//nope, all is good - decode the pixels (2D bayer filter)
-			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
-			{
-				int r = scanline2[x];
-				int b = scanline[x];
-				int g1 = scanline[x+1];
-				int g2 = scanline2[x+1];		
-				
-				//TODO: better demosaicing algorithm for G interpolation?
-				row[x].r = row[x+1].r = row2[x].r = row2[x+1].r = r;
-				row[x].b = row[x+1].b = row2[x].b = row2[x+1].b = b;
-				row[x].g = row[x+1].g = g1;
-				row2[x].g = row2[x+1].g = g2;
-			}
-			
 			//save this scanline for reference
 			last_scanline = scanline;
+			
+			//Decode the pixels (2D bayer filter)
+			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
+			{
+				//Black out if this line got corrupted
+				if(dropped)
+				{
+					row[x].r = 0;
+					row[x].g = 0;
+					row[x].b = 0;
+					
+					row[x+1].r = 0;
+					row[x+1].g = 0;
+					row[x+1].b = 0;
+					
+					row2[x].r = 0;
+					row2[x].g = 0;
+					row2[x].b = 0;
+					
+					row2[x+1].r = 0;
+					row2[x+1].g = 0;
+					row2[x+1].b = 0;
+				}
+				else
+				{
+					int r = scanline2[x];
+					int b = scanline[x];
+					int g1 = scanline[x+1];
+					int g2 = scanline2[x+1];		
+					
+					//TODO: better demosaicing algorithm for G interpolation?
+					row[x].r = row[x+1].r = row2[x].r = row2[x+1].r = r;
+					row[x].b = row[x+1].b = row2[x].b = row2[x+1].b = b;
+					row[x].g = row[x+1].g = g1;
+					row2[x].g = row2[x+1].g = g2;
+				}
+			}
 		}
 		
 		//Save output
