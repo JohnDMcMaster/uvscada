@@ -2,5 +2,4 @@ uvscopetek
 AmScope / ScopeTek / Anchor Chips USB camera driver
 Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>
 
-Released under GPL V3+
-
+Released under GPL V3+. azonenberg's C++ decoder is dual licensed under GPL v3+ and BSD.
