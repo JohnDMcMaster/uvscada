@@ -35,6 +35,9 @@
  */
 
 #include <stdio.h>
+#include <vector>
+
+using namespace std;
 
 #define IMG_BUFFER_SIZE 1000*1024
 //#define IMG_BUFFER_SIZE 900*1024
@@ -67,10 +70,13 @@ int main(int argc, char* argv[])
 		printf("Failed to open %s\n", argv[1]);
 		return -1;
 	}
-	unsigned char* buf = new unsigned char[IMG_BUFFER_SIZE * sizeof(pixel)];
+	vector<unsigned char> inbuf;
+	inbuf.reserve(IMG_BUFFER_SIZE * sizeof(pixel) * 2);	//allocate enough space for some shifting due to dropped data
+														//TODO: if we ever get any bigger, indicate error since iterators are now invalid
+	inbuf.resize(IMG_BUFFER_SIZE * sizeof(pixel));
 	for(int i=0; i<IMG_BUFFER_SIZE; i += BUFFER_SIZE)
 	{
-		if(BUFFER_SIZE != fread(buf+(i*sizeof(pixel)), sizeof(pixel), BUFFER_SIZE, fp))
+		if(BUFFER_SIZE != fread(&inbuf[0] + i*sizeof(pixel), sizeof(pixel), BUFFER_SIZE, fp))
 		{
 			printf("fread error\n");
 			return -1;
@@ -78,25 +84,27 @@ int main(int argc, char* argv[])
 	}
 	fclose(fp);
 	pixel* pixels = new pixel[FRAME_SIZE];
-		
+	
+	//TODO: parse arguments for start positions
+	
 	//Each frame is 307200 pixels
 	//these start positions are for rgb_wire
 	int framestarts[]=
 	{
 		  -1407,		//incomplete, not processed
-		 305793,		//clean but dark
+		 305793,		//??
 		 612993,		//clean
 		 920193,		//dropped data, middle section lost sync
 		1226881,		//dropped data but looks good otherwise
 		1534593,
-	/*	1842049,
-		2144385,
-		2452609,
-		2758273,*/
+		//1842049,
+		//2144385,
+		//2452609,
+		//2758273,
 	};
 	
 	//Decode the image
-	for(unsigned int iframe=2; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
+	for(unsigned int iframe=3; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
 	{
 		printf("processing frame %u\n", iframe);
 		if(framestarts[iframe] < 0)
@@ -107,15 +115,14 @@ int main(int argc, char* argv[])
 			
 		float miny = 255, maxy = 0;
 			
-		unsigned char* image = buf + framestarts[iframe];
+		unsigned char* image = &inbuf[0] + framestarts[iframe];
 		unsigned char* last_scanline = image;
-		int last_shift = 0; 
-		int total_shift = 0;
+		int last_shift = 0; 							//scanline # of last dropped data
 		for(unsigned int y=0; y<IMG_HEIGHT; y+=2)
 		{
 			pixel* row = pixels + (y*IMG_WIDTH);
 			pixel* row2 = row + IMG_WIDTH;
-			unsigned char* scanline = image + total_shift + y*IMG_WIDTH;
+			unsigned char* scanline = image + y*IMG_WIDTH;
 			unsigned char* scanline2 = scanline + IMG_WIDTH;			
 				
 			//Only check for shifts if we didn't just have some
@@ -123,7 +130,8 @@ int main(int argc, char* argv[])
 			int offset = 0;
 			if( ((y - last_shift) > 5) && (y < IMG_HEIGHT - 5) )
 			{
-				//all shifts seem to be multiples of 64 so only check these
+				//all shifts seem to be multiples of 128 +/- a bit
+				//TODO: see if we can do this more efficiently
 				float mc = 0;
 				for(unsigned int k=0; k<IMG_WIDTH; k += 2)
 				{
@@ -137,15 +145,18 @@ int main(int argc, char* argv[])
 				
 				if(offset != 0)
 				{
-					//offset += 2*IMG_WIDTH + 1;
+					//TODO: determine which of these two will give a better result color-wise
+					//(i.e. did we lose 0-1 rows or 1-2?)
+					offset = IMG_WIDTH - offset;
+					//offset += IMG_WIDTH;
 					
-					//TODO: insert padding
-				
 					printf("detected %d bad bytes in frame %d at scanline %d\n", offset, iframe, y);
-					total_shift += offset;
-					//scanline += offset;
 					last_shift = y;
 					dropped = true;
+					
+					//Insert the appropriate number of bytes into the stream to attempt resync
+					for(int k=0; k<offset; k++)
+						inbuf.insert(inbuf.begin() + y*IMG_WIDTH, 0);
 				}
 			}
 			
@@ -155,25 +166,13 @@ int main(int argc, char* argv[])
 			//Process the pixels
 			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
 			{
-				//Black out if this line got corrupted
-				//TODO: attempt recovery
 				if(dropped)
 				{
-					row[x].r = 0;
-					row[x].g = 0;
-					row[x].b = 0;
-					
-					row[x+1].r = 0;
-					row[x+1].g = 0;
-					row[x+1].b = 0;
-					
-					row2[x].r = 0;
-					row2[x].g = 0;
-					row2[x].b = 0;
-					
-					row2[x+1].r = 0;
-					row2[x+1].g = 0;
-					row2[x+1].b = 0;
+					//Don't attempt to repair bad scanlines for now, just black them out (less distracting)
+					row[x].r = row[x].g = row[x].b = 0;
+					row2[x].r = row2[x].g = row2[x].b = 0;
+					row[x+1].r = row[x+1].g = row[x+1].b = 0;
+					row2[x+1].r = row2[x+1].g = row2[x+1].b = 0;
 				}
 				else
 				{
@@ -245,17 +244,18 @@ int main(int argc, char* argv[])
 		fprintf(fp, "P6 %lu %lu %d\n", IMG_WIDTH, IMG_HEIGHT, 255);
 		fwrite(pixels, sizeof(pixel), FRAME_SIZE, fp);
 		fclose(fp);
-		
+	
 		break;
 	}
-		
+	
 	//clean up
 	delete[] pixels;
-	delete[] buf;
 }
 
 /**
-	@brief computes normalized cross-correlation between two scanlines
+	@brief computes cross-correlation between two scanlines
+	
+	TODO: ignore the non-overlapping areas in some way
  */
 float crosscorrelation(unsigned char* a, unsigned char* b, int size)
 {
