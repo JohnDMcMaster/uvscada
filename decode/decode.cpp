@@ -3,6 +3,8 @@
 	@author Andrew D. Zonenberg
 	@brief AmScope camera data decoder, v0.1
 	
+	This file is dual licensed under GPL v3+ and a BSD-style license (included below for clarity).
+	
 	Copyright (c) 2011 Andrew D. Zonenberg
 	All rights reserved.
 	
@@ -95,9 +97,9 @@ int main(int argc, char* argv[])
 	};
 	
 	//Decode the image
-	for(int iframe=2; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
+	for(unsigned int iframe=2; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
 	{
-		printf("processing frame %d\n", iframe);
+		printf("processing frame %u\n", iframe);
 		if(framestarts[iframe] < 0)
 		{
 			printf("skipping frame (negative start pos)\n");
@@ -106,22 +108,21 @@ int main(int argc, char* argv[])
 			
 		unsigned char* image = buf + framestarts[iframe];
 		unsigned char* last_scanline = image;
-		int last_shift = 0; 
+		//int last_shift = 0; 
 		int total_shift = 0;
-		for(int y=0; y<IMG_HEIGHT; y+=2)
+		for(unsigned int y=0; y<IMG_HEIGHT; y+=2)
 		{
 			pixel* row = pixels + (y*IMG_WIDTH);
 			pixel* row2 = row + IMG_WIDTH;
 			unsigned char* scanline = image + total_shift + y*IMG_WIDTH;
 			unsigned char* scanline2 = scanline + IMG_WIDTH;			
 				
-			bool dropped = false;
-			int offset = 0;
-			
 			/*
 			//Only check for shifts if we didn't just have some
 			//Most of the boundary numbers here are totally random but seem to work
 			//TODO: fix this - it gets a lot more complex now that we're reading color data!
+			bool dropped = false;
+			int offset = 0;
 			if( ((y - last_shift) > 5) && (y < IMG_HEIGHT - 5) )
 			{
 				//Detect dropped data
@@ -150,7 +151,7 @@ int main(int argc, char* argv[])
 			*/	
 			
 			//nope, all is good - decode the pixels (2D bayer filter)
-			for(int x=0; x<IMG_WIDTH; x += 2)
+			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
 			{
 				int r = scanline2[x];
 				int b = scanline[x];
