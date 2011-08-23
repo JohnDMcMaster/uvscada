@@ -51,7 +51,6 @@ struct pixel
 };
 
 float crosscorrelation(unsigned char* a, unsigned char* b, int size);
-int maximize_crosscorrelation(unsigned char* a, unsigned char* b, int size, int minshift, int maxshift);
 
 int main(int argc, char* argv[])
 {
@@ -87,17 +86,17 @@ int main(int argc, char* argv[])
 		  -1407,		//skipped, not processed
 		 305793,		//clean but dark
 		 612993,		//clean
-		 918273,		//dropped data from here on
-		1227521,
+		 920193,		//dropped data from here on
+	/*	1227521,
 		1534593,
 		1842049,
 		2144385,
 		2452609,
-		2758273,
+		2758273,*/
 	};
 	
 	//Decode the image
-	for(unsigned int iframe=2; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
+	for(unsigned int iframe=3; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
 	{
 		printf("processing frame %u\n", iframe);
 		if(framestarts[iframe] < 0)
@@ -108,7 +107,7 @@ int main(int argc, char* argv[])
 			
 		unsigned char* image = buf + framestarts[iframe];
 		unsigned char* last_scanline = image;
-		//int last_shift = 0; 
+		int last_shift = 0; 
 		int total_shift = 0;
 		for(unsigned int y=0; y<IMG_HEIGHT; y+=2)
 		{
@@ -117,38 +116,32 @@ int main(int argc, char* argv[])
 			unsigned char* scanline = image + total_shift + y*IMG_WIDTH;
 			unsigned char* scanline2 = scanline + IMG_WIDTH;			
 				
-			/*
 			//Only check for shifts if we didn't just have some
-			//Most of the boundary numbers here are totally random but seem to work
-			//TODO: fix this - it gets a lot more complex now that we're reading color data!
 			bool dropped = false;
 			int offset = 0;
 			if( ((y - last_shift) > 5) && (y < IMG_HEIGHT - 5) )
 			{
-				//Detect dropped data
-				offset = maximize_crosscorrelation(last_scanline, scanline, IMG_WIDTH*2, 5, IMG_WIDTH - 64);
+				//all shifts seem to be multiples of 64 so only check these
+				float mc = 0;
+				for(unsigned int k=0; k<IMG_WIDTH; k += 64)
+				{
+					float c = crosscorrelation(last_scanline, scanline+k, IMG_WIDTH*2);
+					if(c > mc)
+					{
+						mc = c;
+						offset = k;
+					}
+				}
+				
 				if(offset != 0)
 				{
 					printf("detected %d bad bytes in frame %d at scanline %d, interpolating from previous scanline\n", offset, iframe, y);
-					
-					//Print out the bad data
-					printf("Missing data: \n");
-					for(int k=0; k<offset; k++)
-					{
-						printf("%02x ", scanline[k] & 0xff);
-						if( (k % 16) == 15)
-							printf("\n");
-					}
-					printf("\n");
-					
-					
 					total_shift += offset;
-				//	scanline += total_shift;
+					scanline += offset;
 					last_shift = y;
 					dropped = true;
 				}
 			}
-			*/	
 			
 			//nope, all is good - decode the pixels (2D bayer filter)
 			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
@@ -171,7 +164,7 @@ int main(int argc, char* argv[])
 		
 		//Save output
 		char fname[1024];
-		snprintf(fname, 1023, "out_%d.ppm", iframe);
+		snprintf(fname, 1023, "testdata/out_%d.ppm", iframe);
 		fp = fopen(fname, "wb");
 		if(!fp)
 		{
@@ -206,25 +199,4 @@ float crosscorrelation(unsigned char* a, unsigned char* b, int size)
 		result += na*nb;
 	}
 	return result;
-}
-
-int maximize_crosscorrelation(unsigned char* a, unsigned char* b, int size, int minshift, int maxshift)
-{
-	float mc = 0;
-	int mv = 0;
-	for(int i=0; i<maxshift; i++)
-	{
-		float c = crosscorrelation(a, b+i, size);
-		if(c > mc)
-		{
-			mc = c;
-			mv = i;
-		}
-	}
-	
-	//todo: figure out why we have high correlation in first few
-	if(mv < minshift)
-		return 0;
-	
-	return mv;
 }
