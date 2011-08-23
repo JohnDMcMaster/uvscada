@@ -83,20 +83,20 @@ int main(int argc, char* argv[])
 	//these start positions are for rgb_wire
 	int framestarts[]=
 	{
-		  -1407,		//skipped, not processed
+		  -1407,		//incomplete, not processed
 		 305793,		//clean but dark
 		 612993,		//clean
-		 920193,		//dropped data from here on
-	/*	1227521,
+		 920193,		//dropped data, middle section lost sync
+		1226881,		//dropped data but looks good otherwise
 		1534593,
-		1842049,
+	/*	1842049,
 		2144385,
 		2452609,
 		2758273,*/
 	};
 	
 	//Decode the image
-	for(unsigned int iframe=3; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
+	for(unsigned int iframe=2; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
 	{
 		printf("processing frame %u\n", iframe);
 		if(framestarts[iframe] < 0)
@@ -174,15 +174,17 @@ int main(int argc, char* argv[])
 				}
 				else
 				{
+					//this is a pretty good guess
 					int r = scanline2[x];
-					int b = scanline[x];
-					int g1 = scanline[x+1];
-					int g2 = scanline2[x+1];		
+					int b = scanline[x+1];
 					
+					int g = scanline[x];
+					int g2 = scanline2[x+1];		
+									
 					//TODO: better demosaicing algorithm for G interpolation?
 					row[x].r = row[x+1].r = row2[x].r = row2[x+1].r = r;
 					row[x].b = row[x+1].b = row2[x].b = row2[x+1].b = b;
-					row[x].g = row[x+1].g = g1;
+					row[x].g = row[x+1].g = g;
 					row2[x].g = row2[x+1].g = g2;
 				}
 			}
