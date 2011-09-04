@@ -35,6 +35,9 @@
  */
 
 #include <stdio.h>
+#include <vector>
+
+using namespace std;
 
 #define IMG_BUFFER_SIZE 1000*1024
 //#define IMG_BUFFER_SIZE 900*1024
@@ -51,7 +54,6 @@ struct pixel
 };
 
 float crosscorrelation(unsigned char* a, unsigned char* b, int size);
-int maximize_crosscorrelation(unsigned char* a, unsigned char* b, int size, int minshift, int maxshift);
 
 int main(int argc, char* argv[])
 {
@@ -68,10 +70,13 @@ int main(int argc, char* argv[])
 		printf("Failed to open %s\n", argv[1]);
 		return -1;
 	}
-	unsigned char* buf = new unsigned char[IMG_BUFFER_SIZE * sizeof(pixel)];
+	vector<unsigned char> inbuf;
+	inbuf.reserve(IMG_BUFFER_SIZE * sizeof(pixel) * 2);	//allocate enough space for some shifting due to dropped data
+														//TODO: if we ever get any bigger, indicate error since iterators are now invalid
+	inbuf.resize(IMG_BUFFER_SIZE * sizeof(pixel));
 	for(int i=0; i<IMG_BUFFER_SIZE; i += BUFFER_SIZE)
 	{
-		if(BUFFER_SIZE != fread(buf+(i*sizeof(pixel)), sizeof(pixel), BUFFER_SIZE, fp))
+		if(BUFFER_SIZE != fread(&inbuf[0] + i*sizeof(pixel), sizeof(pixel), BUFFER_SIZE, fp))
 		{
 			printf("fread error\n");
 			return -1;
@@ -79,25 +84,27 @@ int main(int argc, char* argv[])
 	}
 	fclose(fp);
 	pixel* pixels = new pixel[FRAME_SIZE];
-		
+	
+	//TODO: parse arguments for start positions
+	
 	//Each frame is 307200 pixels
 	//these start positions are for rgb_wire
 	int framestarts[]=
 	{
-		  -1407,		//skipped, not processed
-		 305793,		//clean but dark
+		  -1407,		//incomplete, not processed
+		 305793,		//??
 		 612993,		//clean
-		 918273,		//dropped data from here on
-		1227521,
+		 920193,		//dropped data, middle section lost sync
+		1226881,		//dropped data but looks good otherwise
 		1534593,
-		1842049,
-		2144385,
-		2452609,
-		2758273,
+		//1842049,
+		//2144385,
+		//2452609,
+		//2758273,
 	};
 	
 	//Decode the image
-	for(unsigned int iframe=2; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
+	for(unsigned int iframe=3; iframe < (sizeof(framestarts) / sizeof(framestarts[0])); iframe++)
 	{
 		printf("processing frame %u\n", iframe);
 		if(framestarts[iframe] < 0)
@@ -106,72 +113,128 @@ int main(int argc, char* argv[])
 			continue;
 		}
 			
-		unsigned char* image = buf + framestarts[iframe];
+		float miny = 255, maxy = 0;
+			
+		unsigned char* image = &inbuf[0] + framestarts[iframe];
 		unsigned char* last_scanline = image;
-		//int last_shift = 0; 
-		int total_shift = 0;
+		int last_shift = 0; 							//scanline # of last dropped data
 		for(unsigned int y=0; y<IMG_HEIGHT; y+=2)
 		{
 			pixel* row = pixels + (y*IMG_WIDTH);
 			pixel* row2 = row + IMG_WIDTH;
-			unsigned char* scanline = image + total_shift + y*IMG_WIDTH;
+			unsigned char* scanline = image + y*IMG_WIDTH;
 			unsigned char* scanline2 = scanline + IMG_WIDTH;			
 				
-			/*
 			//Only check for shifts if we didn't just have some
-			//Most of the boundary numbers here are totally random but seem to work
-			//TODO: fix this - it gets a lot more complex now that we're reading color data!
 			bool dropped = false;
 			int offset = 0;
 			if( ((y - last_shift) > 5) && (y < IMG_HEIGHT - 5) )
 			{
-				//Detect dropped data
-				offset = maximize_crosscorrelation(last_scanline, scanline, IMG_WIDTH*2, 5, IMG_WIDTH - 64);
+				//all shifts seem to be multiples of 128 +/- a bit
+				//TODO: see if we can do this more efficiently
+				float mc = 0;
+				for(unsigned int k=0; k<IMG_WIDTH; k += 2)
+				{
+					float c = crosscorrelation(last_scanline, scanline+k, IMG_WIDTH*2);
+					if(c > mc)
+					{
+						mc = c;
+						offset = k;
+					}
+				}
+				
 				if(offset != 0)
 				{
-					printf("detected %d bad bytes in frame %d at scanline %d, interpolating from previous scanline\n", offset, iframe, y);
+					//TODO: determine which of these two will give a better result color-wise
+					//(i.e. did we lose 0-1 rows or 1-2?)
+					offset = IMG_WIDTH - offset;
+					//offset += IMG_WIDTH;
 					
-					//Print out the bad data
-					printf("Missing data: \n");
-					for(int k=0; k<offset; k++)
-					{
-						printf("%02x ", scanline[k] & 0xff);
-						if( (k % 16) == 15)
-							printf("\n");
-					}
-					printf("\n");
-					
-					
-					total_shift += offset;
-				//	scanline += total_shift;
+					printf("detected %d bad bytes in frame %d at scanline %d\n", offset, iframe, y);
 					last_shift = y;
 					dropped = true;
+					
+					//Insert the appropriate number of bytes into the stream to attempt resync
+					for(int k=0; k<offset; k++)
+						inbuf.insert(inbuf.begin() + y*IMG_WIDTH, 0);
 				}
-			}
-			*/	
-			
-			//nope, all is good - decode the pixels (2D bayer filter)
-			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
-			{
-				int r = scanline2[x];
-				int b = scanline[x];
-				int g1 = scanline[x+1];
-				int g2 = scanline2[x+1];		
-				
-				//TODO: better demosaicing algorithm for G interpolation?
-				row[x].r = row[x+1].r = row2[x].r = row2[x+1].r = r;
-				row[x].b = row[x+1].b = row2[x].b = row2[x+1].b = b;
-				row[x].g = row[x+1].g = g1;
-				row2[x].g = row2[x+1].g = g2;
 			}
 			
 			//save this scanline for reference
 			last_scanline = scanline;
+			
+			//Process the pixels
+			for(unsigned int x=0; x<IMG_WIDTH; x += 2)
+			{
+				if(dropped)
+				{
+					//Don't attempt to repair bad scanlines for now, just black them out (less distracting)
+					row[x].r = row[x].g = row[x].b = 0;
+					row2[x].r = row2[x].g = row2[x].b = 0;
+					row[x+1].r = row[x+1].g = row[x+1].b = 0;
+					row2[x+1].r = row2[x+1].g = row2[x+1].b = 0;
+				}
+				else
+				{
+					//Decode color values (Bayer filter, GBRG)
+					int r = scanline2[x];
+					int b = scanline[x+1];
+					int g = scanline[x];
+					int g2 = scanline2[x+1];
+					
+					//White balance so (136, 171, 129) becomes neutral
+					//This is just a random background pixel chosen from a typical decoded frame, automatic or manual balancing
+					//would be good here!
+					r *= 0.941176471;
+					g *= 0.748538012;
+					b *= 0.992248062;
+					
+					//Store min/max pixel values for leveling (standard NTSC weights)
+					float y = r*0.2989 + g*0.5870 + b*0.1140;
+					if(miny > y) miny = y;
+					if(maxy < y) maxy = y;
+									
+					//TODO: better demosaicing algorithm?
+					row[x].r = row[x+1].r = row2[x].r = row2[x+1].r = r;
+					row[x].b = row[x+1].b = row2[x].b = row2[x+1].b = b;
+					row[x].g = row[x+1].g = g;
+					row2[x].g = row2[x+1].g = g2;
+				}
+			}
+		}
+		
+		//Once the entire image is done, normalize intensities to full range
+		//This should be done more properly by adjusting exposure on the camera etc
+		//but it will help for now
+		float dy = maxy - miny;
+		float yscale = 255 / dy;
+		for(unsigned int y=0; y<IMG_HEIGHT; y++)
+		{
+			pixel* row = pixels + (y*IMG_WIDTH);
+			for(unsigned int x=0; x<IMG_WIDTH; x ++)
+			{
+				pixel& pix = row[x];
+				
+				float r = (pix.r - miny) * yscale;
+				float g = (pix.g - miny) * yscale;
+				float b = (pix.b - miny) * yscale;
+				
+				if(r < 0) r = 0;
+				if(g < 0) g = 0;
+				if(b < 0) b = 0;
+				if(r > 255) r = 255;
+				if(g > 255) g = 255;
+				if(b > 255) b = 255;
+				
+				pix.r = r;
+				pix.g = g;
+				pix.b = b;
+			}
 		}
 		
 		//Save output
 		char fname[1024];
-		snprintf(fname, 1023, "out_%d.ppm", iframe);
+		snprintf(fname, 1023, "testdata/out_%d.ppm", iframe);
 		fp = fopen(fname, "wb");
 		if(!fp)
 		{
@@ -181,17 +244,18 @@ int main(int argc, char* argv[])
 		fprintf(fp, "P6 %lu %lu %d\n", IMG_WIDTH, IMG_HEIGHT, 255);
 		fwrite(pixels, sizeof(pixel), FRAME_SIZE, fp);
 		fclose(fp);
-		
+	
 		break;
 	}
-		
+	
 	//clean up
 	delete[] pixels;
-	delete[] buf;
 }
 
 /**
-	@brief computes normalized cross-correlation between two scanlines
+	@brief computes cross-correlation between two scanlines
+	
+	TODO: ignore the non-overlapping areas in some way
  */
 float crosscorrelation(unsigned char* a, unsigned char* b, int size)
 {
@@ -206,25 +270,4 @@ float crosscorrelation(unsigned char* a, unsigned char* b, int size)
 		result += na*nb;
 	}
 	return result;
-}
-
-int maximize_crosscorrelation(unsigned char* a, unsigned char* b, int size, int minshift, int maxshift)
-{
-	float mc = 0;
-	int mv = 0;
-	for(int i=0; i<maxshift; i++)
-	{
-		float c = crosscorrelation(a, b+i, size);
-		if(c > mc)
-		{
-			mc = c;
-			mv = i;
-		}
-	}
-	
-	//todo: figure out why we have high correlation in first few
-	if(mv < minshift)
-		return 0;
-	
-	return mv;
 }
