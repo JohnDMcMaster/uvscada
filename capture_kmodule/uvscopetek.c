@@ -1,5 +1,5 @@
 /*
- * USB Skeleton driver - 2.2
+ * USB uvscopetek driver - 2.2
  *
  * Copyright (C) 2001-2004 Greg Kroah-Hartman (greg@kroah.com)
  *
@@ -7,7 +7,7 @@
  *	modify it under the terms of the GNU General Public License as
  *	published by the Free Software Foundation, version 2.
  *
- * This driver is based on the 2.6.3 version of drivers/usb/usb-skeleton.c
+ * This driver is based on the 2.6.3 version of drivers/usb/usb-uvscopetek.c
  * but has been rewritten to be easier to read and use.
  *
  */
@@ -24,19 +24,19 @@
 
 
 /* Define these values to match your devices */
-#define USB_SKEL_VENDOR_ID	0xfff0
-#define USB_SKEL_PRODUCT_ID	0xfff0
+#define uvscopetek_VENDOR_ID	0x0547
+#define uvscopetek_PRODUCT_ID	0x4D88
 
 /* table of devices that work with this driver */
-static const struct usb_device_id skel_table[] = {
-	{ USB_DEVICE(USB_SKEL_VENDOR_ID, USB_SKEL_PRODUCT_ID) },
+static const struct usb_device_id uvscopetek_table[] = {
+	{ USB_DEVICE(uvscopetek_VENDOR_ID, uvscopetek_PRODUCT_ID) },
 	{ }					/* Terminating entry */
 };
-MODULE_DEVICE_TABLE(usb, skel_table);
+MODULE_DEVICE_TABLE(usb, uvscopetek_table);
 
 
 /* Get a minor range for your devices from the usb maintainer */
-#define USB_SKEL_MINOR_BASE	192
+#define uvscopetek_MINOR_BASE	192
 
 /* our private defines. if this grows any larger, use your own .h file */
 #define MAX_TRANSFER		(PAGE_SIZE - 512)
@@ -47,7 +47,7 @@ MODULE_DEVICE_TABLE(usb, skel_table);
 /* arbitrarily chosen */
 
 /* Structure to hold all of our device specific stuff */
-struct usb_skel {
+struct uvscopetek {
 	struct usb_device	*udev;			/* the usb device for this device */
 	struct usb_interface	*interface;		/* the interface for this device */
 	struct semaphore	limit_sem;		/* limiting the number of writes in progress */
@@ -58,7 +58,7 @@ struct usb_skel {
 	size_t			bulk_in_filled;		/* number of bytes in the buffer */
 	size_t			bulk_in_copied;		/* already copied to user space */
 	__u8			bulk_in_endpointAddr;	/* the address of the bulk in endpoint */
-	__u8			bulk_out_endpointAddr;	/* the address of the bulk out endpoint */
+	//__u8			bulk_out_endpointAddr;	/* the address of the bulk out endpoint */
 	int			errors;			/* the last request tanked */
 	int			open_count;		/* count the number of openers */
 	bool			ongoing_read;		/* a read is going on */
@@ -68,14 +68,14 @@ struct usb_skel {
 	struct mutex		io_mutex;		/* synchronize I/O with disconnect */
 	struct completion	bulk_in_completion;	/* to wait for an ongoing read */
 };
-#define to_skel_dev(d) container_of(d, struct usb_skel, kref)
+#define to_uvscopetek_dev(d) container_of(d, struct uvscopetek, kref)
 
-static struct usb_driver skel_driver;
-static void skel_draw_down(struct usb_skel *dev);
+static struct usb_driver uvscopetek_driver;
+static void uvscopetek_draw_down(struct uvscopetek *dev);
 
-static void skel_delete(struct kref *kref)
+static void uvscopetek_delete(struct kref *kref)
 {
-	struct usb_skel *dev = to_skel_dev(kref);
+	struct uvscopetek *dev = to_uvscopetek_dev(kref);
 
 	usb_free_urb(dev->bulk_in_urb);
 	usb_put_dev(dev->udev);
@@ -83,16 +83,199 @@ static void skel_delete(struct kref *kref)
 	kfree(dev);
 }
 
-static int skel_open(struct inode *inode, struct file *file)
+int validate_read(void *expected, size_t expected_size, void *actual, size_t actual_size, const char *msg) {
+	if (expected_size != actual_size) {
+		printk(KERN_ALERT "%s: expected %d bytes, got %d bytes\n", msg, expected_size, actual_size);
+		return 1;
+	}
+	if (memcmp(expected, actual, expected_size)) {
+		printk(KERN_ALERT "%s: regions do not match\n", msg);
+		return 1;
+	}
+	return 0;
+}
+
+/*
+extern int usb_control_msg(struct usb_device *dev, unsigned int pipe,
+	__u8 request, __u8 requesttype, __u16 value, __u16 index,
+	void *data, __u16 size, int timeout);
+
+	ret = usb_control_msg(serial->dev,    
+			usb_rcvctrlpipe(serial->dev, 0),
+			MOS7703_REQ_READ, MOS7703_REQTYPE_READ, 
+			reg_class, reg,
+			data, 0x01, MOS_URB_TIMEOUT);
+*/
+
+int camera_control_message(struct uvscopetek *dev, int requesttype, int request,
+	int value, int index, char *bytes, int size) {
+	int rc_tmp = 0;
+	
+	//XXX: should be endpoint 2?
+	rc_tmp = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 2),
+			requesttype, request, value, index, bytes, size, 500);
+	if (rc_tmp < 0) {
+		printk(KERN_ALERT "failed control: %d\n", rc_tmp);
+	}
+	return rc_tmp;
+}
+
+#define CAMERA_CONTROL_MESSAGE(_requesttype, _request, \
+	_value, _index, _bytes, _size) \
+	n_rw = camera_control_message(dev, _requesttype, _request, \
+		_value, _index, _bytes, _size); \
+	if (n_rw < 0) return 1;
+#define VALIDATE_READ(_expected, _expected_size, _actual, _actual_size, _msg) \
+	if (validate_read(_expected, _expected_size, _actual, _actual_size, _msg)) \
+		return 1
+int replay_wireshark_setup(struct uvscopetek *dev) {
+	char buff[0x100];
+	int n_rw = 0;
+	printk(KERN_ALERT "Replaying wireshark stuff 1\n");
+	
+	if (!dev) {
+		printk(KERN_ALERT "replay: dev null\n");
+		return 1;
+	}
+
+	printk(KERN_ALERT "trying packet 5\n");
+	//Generated from packet 5
+	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0001, 0x000F, NULL, 0);
+	printk(KERN_ALERT "trying packet 7\n");
+	//Generated from packet 7
+	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0000, 0x000F, NULL, 0);
+	//Generated from packet 9
+	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0001, 0x000F, NULL, 0);
+	//Generated from packet 11
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0103, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 12");
+	//Generated from packet 13
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 14");
+	//Generated from packet 15
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0A, 0x0000, 0x3000, (char *)&buff, 3);
+	if (validate_read((char[]){0x2B, 0x00, 0x08}, 3, &buff, n_rw, "packet 16"))
+		return 1;
+	//Generated from packet 17
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 18");
+	//Generated from packet 19
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0020, 0x0344, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 20");
+	//Generated from packet 21
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0CA1, 0x0348, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 22");
+	//Generated from packet 23
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0020, 0x0346, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 24");
+	//Generated from packet 25
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0981, 0x034A, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 26");
+	//Generated from packet 27
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x02FC, 0x3040, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 28");
+	//Generated from packet 29
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0002, 0x0400, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 30");
+	//Generated from packet 31
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0014, 0x0404, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 32");
+	//Generated from packet 33
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0280, 0x034C, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 34");
+	//Generated from packet 35
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x01E0, 0x034E, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 36");
+	//Generated from packet 37
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x02C0, 0x300A, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 38");
+	//Generated from packet 39
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0E00, 0x300C, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 40");
+	//Generated from packet 41
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 42");
+	//Generated from packet 43
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0100, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 44");
+	//Generated from packet 45
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 46");
+	//Generated from packet 47
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0004, 0x0300, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 48");
+	//Generated from packet 49
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x0302, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 50");
+	//Generated from packet 51
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0008, 0x0308, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 52");
+	//Generated from packet 53
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x030A, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 54");
+	//Generated from packet 55
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0004, 0x0304, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 56");
+	//Generated from packet 57
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0020, 0x0306, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 58");
+	//Generated from packet 59
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x90D8, 0x301A, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 60");
+	//Generated from packet 61
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 62");
+	//Generated from packet 63
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0100, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 64");
+	//Generated from packet 65
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0A, 0x0000, 0x300C, (char *)&buff, 3);
+	if (validate_read((char[]){0x0E, 0x00, 0x08}, 3, &buff, n_rw, "packet 66"))
+		return 1;
+	//Generated from packet 67
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x90D8, 0x301A, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 68");
+	//Generated from packet 69
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0805, 0x3064, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 70");
+	//Generated from packet 71
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 72");
+	//Generated from packet 73
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0100, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 74");
+	//Generated from packet 75
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x0402, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 76");
+	//Generated from packet 77
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 78");
+	//Generated from packet 79
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 80");
+	//Generated from packet 81
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x01F4, 0x3012, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 82");
+	//Generated from packet 83
+	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x023E, 0x305E, (char *)&buff, 1);
+	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 84");
+	//Generated from packet 85
+	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0003, 0x000F, NULL, 0);
+	
+	printk(KERN_ALERT "Replaying success!\n");
+	return 0;
+}
+
+static int uvscopetek_open(struct inode *inode, struct file *file)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 	struct usb_interface *interface;
 	int subminor;
 	int retval = 0;
 
 	subminor = iminor(inode);
 
-	interface = usb_find_interface(&skel_driver, subminor);
+	interface = usb_find_interface(&uvscopetek_driver, subminor);
 	if (!interface) {
 		err("%s - error, can't find device for minor %d",
 		     __func__, subminor);
@@ -113,21 +296,31 @@ static int skel_open(struct inode *inode, struct file *file)
 	 * in resumption */
 	mutex_lock(&dev->io_mutex);
 
-	if (!dev->open_count++) {
+	if (!dev->open_count) {
+		++dev->open_count;
+		printk(KERN_ALERT "open: new count: %d\n", dev->open_count);
 		retval = usb_autopm_get_interface(interface);
-			if (retval) {
-				dev->open_count--;
-				mutex_unlock(&dev->io_mutex);
-				kref_put(&dev->kref, skel_delete);
-				goto exit;
-			}
-	} /* else { //uncomment this block if you want exclusive open
+		if (retval) {
+			printk(KERN_ALERT "open: failed to get interface\n");
+			dev->open_count--;
+			mutex_unlock(&dev->io_mutex);
+			kref_put(&dev->kref, uvscopetek_delete);
+			goto exit;
+		}
+		if (replay_wireshark_setup(dev)) {
+			printk(KERN_ALERT "open: failed to replay\n");
+			dev->open_count--;
+			mutex_unlock(&dev->io_mutex);
+			kref_put(&dev->kref, uvscopetek_delete);
+			goto exit;
+		}
+	} else { //uncomment this block if you want exclusive open
+		printk(KERN_ALERT "open: already open (%d)\n", dev->open_count);
 		retval = -EBUSY;
-		dev->open_count--;
 		mutex_unlock(&dev->io_mutex);
-		kref_put(&dev->kref, skel_delete);
+		kref_put(&dev->kref, uvscopetek_delete);
 		goto exit;
-	} */
+	}
 	/* prevent the device from being autosuspended */
 
 	/* save our object in the file's private structure */
@@ -138,11 +331,11 @@ exit:
 	return retval;
 }
 
-static int skel_release(struct inode *inode, struct file *file)
+static int uvscopetek_release(struct inode *inode, struct file *file)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 
-	dev = (struct usb_skel *)file->private_data;
+	dev = (struct uvscopetek *)file->private_data;
 	if (dev == NULL)
 		return -ENODEV;
 
@@ -153,22 +346,22 @@ static int skel_release(struct inode *inode, struct file *file)
 	mutex_unlock(&dev->io_mutex);
 
 	/* decrement the count on our device */
-	kref_put(&dev->kref, skel_delete);
+	kref_put(&dev->kref, uvscopetek_delete);
 	return 0;
 }
 
-static int skel_flush(struct file *file, fl_owner_t id)
+static int uvscopetek_flush(struct file *file, fl_owner_t id)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 	int res;
 
-	dev = (struct usb_skel *)file->private_data;
+	dev = (struct uvscopetek *)file->private_data;
 	if (dev == NULL)
 		return -ENODEV;
 
 	/* wait for io to stop */
 	mutex_lock(&dev->io_mutex);
-	skel_draw_down(dev);
+	uvscopetek_draw_down(dev);
 
 	/* read out errors, leave subsequent opens a clean slate */
 	spin_lock_irq(&dev->err_lock);
@@ -181,9 +374,9 @@ static int skel_flush(struct file *file, fl_owner_t id)
 	return res;
 }
 
-static void skel_read_bulk_callback(struct urb *urb)
+static void uvscopetek_read_bulk_callback(struct urb *urb)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 
 	dev = urb->context;
 
@@ -206,7 +399,7 @@ static void skel_read_bulk_callback(struct urb *urb)
 	complete(&dev->bulk_in_completion);
 }
 
-static int skel_do_read_io(struct usb_skel *dev, size_t count)
+static int uvscopetek_do_read_io(struct uvscopetek *dev, size_t count)
 {
 	int rv;
 
@@ -217,7 +410,7 @@ static int skel_do_read_io(struct usb_skel *dev, size_t count)
 				dev->bulk_in_endpointAddr),
 			dev->bulk_in_buffer,
 			min(dev->bulk_in_size, count),
-			skel_read_bulk_callback,
+			uvscopetek_read_bulk_callback,
 			dev);
 	/* tell everybody to leave the URB alone */
 	spin_lock_irq(&dev->err_lock);
@@ -239,14 +432,24 @@ static int skel_do_read_io(struct usb_skel *dev, size_t count)
 	return rv;
 }
 
-static ssize_t skel_read(struct file *file, char *buffer, size_t count,
+static ssize_t uvscopetek_read(struct file *file, char *buffer, size_t count,
 			 loff_t *ppos)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 	int rv;
 	bool ongoing_io;
 
-	dev = (struct usb_skel *)file->private_data;
+	if (!file) {
+		printk(KERN_ALERT "read: null file\n");
+		return 0;
+	}
+	
+	dev = (struct uvscopetek *)file->private_data;
+	
+	if (!dev) {
+		printk(KERN_ALERT "read: null dev\n");
+		return 0;
+	}
 
 	/* if we cannot read at all, return EOF */
 	if (!dev->bulk_in_urb || !count)
@@ -327,7 +530,7 @@ retry:
 			 * all data has been used
 			 * actual IO needs to be done
 			 */
-			rv = skel_do_read_io(dev, count);
+			rv = uvscopetek_do_read_io(dev, count);
 			if (rv < 0)
 				goto exit;
 			else
@@ -352,10 +555,10 @@ retry:
 		 * we start IO but don't wait
 		 */
 		if (available < count)
-			skel_do_read_io(dev, count - chunk);
+			uvscopetek_do_read_io(dev, count - chunk);
 	} else {
 		/* no data in the buffer */
-		rv = skel_do_read_io(dev, count);
+		rv = uvscopetek_do_read_io(dev, count);
 		if (rv < 0)
 			goto exit;
 		else if (!(file->f_flags & O_NONBLOCK))
@@ -367,9 +570,10 @@ exit:
 	return rv;
 }
 
-static void skel_write_bulk_callback(struct urb *urb)
+#if 0
+static void uvscopetek_write_bulk_callback(struct urb *urb)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 
 	dev = urb->context;
 
@@ -392,16 +596,16 @@ static void skel_write_bulk_callback(struct urb *urb)
 	up(&dev->limit_sem);
 }
 
-static ssize_t skel_write(struct file *file, const char *user_buffer,
+static ssize_t uvscopetek_write(struct file *file, const char *user_buffer,
 			  size_t count, loff_t *ppos)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 	int retval = 0;
 	struct urb *urb = NULL;
 	char *buf = NULL;
 	size_t writesize = min(count, (size_t)MAX_TRANSFER);
 
-	dev = (struct usb_skel *)file->private_data;
+	dev = (struct uvscopetek *)file->private_data;
 
 	/* verify that we actually have some data to write */
 	if (count == 0)
@@ -465,7 +669,7 @@ static ssize_t skel_write(struct file *file, const char *user_buffer,
 	/* initialize the urb properly */
 	usb_fill_bulk_urb(urb, dev->udev,
 			  usb_sndbulkpipe(dev->udev, dev->bulk_out_endpointAddr),
-			  buf, writesize, skel_write_bulk_callback, dev);
+			  buf, writesize, uvscopetek_write_bulk_callback, dev);
 	urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 	usb_anchor_urb(urb, &dev->submitted);
 
@@ -499,30 +703,31 @@ error:
 exit:
 	return retval;
 }
+#endif
 
-static const struct file_operations skel_fops = {
+static const struct file_operations uvscopetek_fops = {
 	.owner =	THIS_MODULE,
-	.read =		skel_read,
-	.write =	skel_write,
-	.open =		skel_open,
-	.release =	skel_release,
-	.flush =	skel_flush,
+	.read =		uvscopetek_read,
+	//.write =	uvscopetek_write,
+	.open =		uvscopetek_open,
+	.release =	uvscopetek_release,
+	.flush =	uvscopetek_flush,
 };
 
 /*
  * usb class driver info in order to get a minor number from the usb core,
  * and to have the device registered with the driver core
  */
-static struct usb_class_driver skel_class = {
-	.name =		"skel%d",
-	.fops =		&skel_fops,
-	.minor_base =	USB_SKEL_MINOR_BASE,
+static struct usb_class_driver uvscopetek_class = {
+	.name =		"uvscopetek%d",
+	.fops =		&uvscopetek_fops,
+	.minor_base =	uvscopetek_MINOR_BASE,
 };
 
-static int skel_probe(struct usb_interface *interface,
+static int uvscopetek_probe(struct usb_interface *interface,
 		      const struct usb_device_id *id)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 	struct usb_host_interface *iface_desc;
 	struct usb_endpoint_descriptor *endpoint;
 	size_t buffer_size;
@@ -557,6 +762,7 @@ static int skel_probe(struct usb_interface *interface,
 			buffer_size = le16_to_cpu(endpoint->wMaxPacketSize);
 			dev->bulk_in_size = buffer_size;
 			dev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
+			printk(KERN_ALERT "Selected endpoint 0x%02X\n", dev->bulk_in_endpointAddr);
 			dev->bulk_in_buffer = kmalloc(buffer_size, GFP_KERNEL);
 			if (!dev->bulk_in_buffer) {
 				err("Could not allocate bulk_in_buffer");
@@ -569,13 +775,15 @@ static int skel_probe(struct usb_interface *interface,
 			}
 		}
 
+		#if 0
 		if (!dev->bulk_out_endpointAddr &&
 		    usb_endpoint_is_bulk_out(endpoint)) {
 			/* we found a bulk out endpoint */
 			dev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
 		}
+		#endif
 	}
-	if (!(dev->bulk_in_endpointAddr && dev->bulk_out_endpointAddr)) {
+	if (!(dev->bulk_in_endpointAddr/* && dev->bulk_out_endpointAddr*/)) {
 		err("Could not find both bulk-in and bulk-out endpoints");
 		goto error;
 	}
@@ -584,7 +792,7 @@ static int skel_probe(struct usb_interface *interface,
 	usb_set_intfdata(interface, dev);
 
 	/* we can register the device now, as it is ready */
-	retval = usb_register_dev(interface, &skel_class);
+	retval = usb_register_dev(interface, &uvscopetek_class);
 	if (retval) {
 		/* something prevented us from registering this driver */
 		err("Not able to get a minor for this device.");
@@ -594,27 +802,27 @@ static int skel_probe(struct usb_interface *interface,
 
 	/* let the user know what node this device is now attached to */
 	dev_info(&interface->dev,
-		 "USB Skeleton device now attached to USBSkel-%d",
+		 "USB uvscopetek device now attached to uvscopetek-%d",
 		 interface->minor);
 	return 0;
 
 error:
 	if (dev)
 		/* this frees allocated memory */
-		kref_put(&dev->kref, skel_delete);
+		kref_put(&dev->kref, uvscopetek_delete);
 	return retval;
 }
 
-static void skel_disconnect(struct usb_interface *interface)
+static void uvscopetek_disconnect(struct usb_interface *interface)
 {
-	struct usb_skel *dev;
+	struct uvscopetek *dev;
 	int minor = interface->minor;
 
 	dev = usb_get_intfdata(interface);
 	usb_set_intfdata(interface, NULL);
 
 	/* give back our minor */
-	usb_deregister_dev(interface, &skel_class);
+	usb_deregister_dev(interface, &uvscopetek_class);
 
 	/* prevent more I/O from starting */
 	mutex_lock(&dev->io_mutex);
@@ -624,12 +832,12 @@ static void skel_disconnect(struct usb_interface *interface)
 	usb_kill_anchored_urbs(&dev->submitted);
 
 	/* decrement our usage count */
-	kref_put(&dev->kref, skel_delete);
+	kref_put(&dev->kref, uvscopetek_delete);
 
-	dev_info(&interface->dev, "USB Skeleton #%d now disconnected", minor);
+	dev_info(&interface->dev, "USB uvscopetek #%d now disconnected", minor);
 }
 
-static void skel_draw_down(struct usb_skel *dev)
+static void uvscopetek_draw_down(struct uvscopetek *dev)
 {
 	int time;
 
@@ -639,34 +847,34 @@ static void skel_draw_down(struct usb_skel *dev)
 	usb_kill_urb(dev->bulk_in_urb);
 }
 
-static int skel_suspend(struct usb_interface *intf, pm_message_t message)
+static int uvscopetek_suspend(struct usb_interface *intf, pm_message_t message)
 {
-	struct usb_skel *dev = usb_get_intfdata(intf);
+	struct uvscopetek *dev = usb_get_intfdata(intf);
 
 	if (!dev)
 		return 0;
-	skel_draw_down(dev);
+	uvscopetek_draw_down(dev);
 	return 0;
 }
 
-static int skel_resume(struct usb_interface *intf)
+static int uvscopetek_resume(struct usb_interface *intf)
 {
 	return 0;
 }
 
-static int skel_pre_reset(struct usb_interface *intf)
+static int uvscopetek_pre_reset(struct usb_interface *intf)
 {
-	struct usb_skel *dev = usb_get_intfdata(intf);
+	struct uvscopetek *dev = usb_get_intfdata(intf);
 
 	mutex_lock(&dev->io_mutex);
-	skel_draw_down(dev);
+	uvscopetek_draw_down(dev);
 
 	return 0;
 }
 
-static int skel_post_reset(struct usb_interface *intf)
+static int uvscopetek_post_reset(struct usb_interface *intf)
 {
-	struct usb_skel *dev = usb_get_intfdata(intf);
+	struct uvscopetek *dev = usb_get_intfdata(intf);
 
 	/* we are sure no URBs are active - no locking needed */
 	dev->errors = -EPIPE;
@@ -675,37 +883,37 @@ static int skel_post_reset(struct usb_interface *intf)
 	return 0;
 }
 
-static struct usb_driver skel_driver = {
-	.name =		"skeleton",
-	.probe =	skel_probe,
-	.disconnect =	skel_disconnect,
-	.suspend =	skel_suspend,
-	.resume =	skel_resume,
-	.pre_reset =	skel_pre_reset,
-	.post_reset =	skel_post_reset,
-	.id_table =	skel_table,
+static struct usb_driver uvscopetek_driver = {
+	.name =		"uvscopetek",
+	.probe =	uvscopetek_probe,
+	.disconnect =	uvscopetek_disconnect,
+	.suspend =	uvscopetek_suspend,
+	.resume =	uvscopetek_resume,
+	.pre_reset =	uvscopetek_pre_reset,
+	.post_reset =	uvscopetek_post_reset,
+	.id_table =	uvscopetek_table,
 	.supports_autosuspend = 1,
 };
 
-static int __init usb_skel_init(void)
+static int __init uvscopetek_init(void)
 {
 	int result;
 
 	/* register this driver with the USB subsystem */
-	result = usb_register(&skel_driver);
+	result = usb_register(&uvscopetek_driver);
 	if (result)
 		err("usb_register failed. Error number %d", result);
 
 	return result;
 }
 
-static void __exit usb_skel_exit(void)
+static void __exit uvscopetek_exit(void)
 {
 	/* deregister this driver with the USB subsystem */
-	usb_deregister(&skel_driver);
+	usb_deregister(&uvscopetek_driver);
 }
 
-module_init(usb_skel_init);
-module_exit(usb_skel_exit);
+module_init(uvscopetek_init);
+module_exit(uvscopetek_exit);
 
 MODULE_LICENSE("GPL");

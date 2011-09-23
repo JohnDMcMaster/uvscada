@@ -30,3 +30,9 @@ uninstall:
 
 .PHONY: default clean load unload install uninstall dist
 
+go: default
+	-rmmod uvscopetek
+	insmod ./uvscopetek.ko
+	-dd if=/dev/uvscopetek0  of=dump.bin count=1024
+	dmesg |tail
+	
