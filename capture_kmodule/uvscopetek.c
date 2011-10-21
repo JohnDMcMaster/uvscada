@@ -111,11 +111,19 @@ extern int usb_control_msg(struct usb_device *dev, unsigned int pipe,
 int camera_control_message(struct uvscopetek *dev, int requesttype, int request,
 	int value, int index, char *bytes, int size) {
 	int rc_tmp = 0;
+	unsigned int pipe = 0;
 	
 	//XXX: should be endpoint 2?
 	//82 should be mass data, 81 should be config in dump
 	//but vmware can do funny stuff to device IDs
-	rc_tmp = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0),
+	if (requesttype & USB_DIR_IN) {
+		pipe = usb_rcvctrlpipe(dev->udev, 0);
+		printk(KERN_ALERT "creating recv pipe, buff 0x%p, size %d", bytes, size);
+	} else {
+		printk(KERN_ALERT "creating send pipe");
+		pipe = usb_sndctrlpipe(dev->udev, 0);
+	}
+	rc_tmp = usb_control_msg(dev->udev, pipe,
 			request, requesttype, value, index, bytes, size, 500);
 	if (rc_tmp < 0) {
 		printk(KERN_ALERT "failed control: %d w/ req type 0x%02X, req 0x%02X, value 0x%04X, index 0x%04X, size 0x%04X\n", 
@@ -226,127 +234,129 @@ int replay_wireshark_setup(struct uvscopetek *dev) {
 	printk(KERN_ALERT "\n");
 
 
-	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0001, 0x000F, NULL, 0);
+	CAMERA_CONTROL_MESSAGE(USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x01, 0x0001, 0x000F, NULL, 0);
 	printk(KERN_ALERT "trying packet 7\n");
-	//Generated from packet 7
-	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0000, 0x000F, NULL, 0);
-	//Generated from packet 9
-	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0001, 0x000F, NULL, 0);
-	//Generated from packet 11
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0103, buff, 1);
+	printk(KERN_ALERT "Generated from packet 7\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x01, 0x0000, 0x000F, NULL, 0);
+	printk(KERN_ALERT "Generated from packet 9\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x01, 0x0001, 0x000F, NULL, 0);
+	
+	printk(KERN_ALERT "Generated from packet 11\n");	
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0100, 0x0103, buff, 1);
+	
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 12");
-	//Generated from packet 13
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 13\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0100, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 14");
-	//Generated from packet 15
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0A, 0x0000, 0x3000, buff, 3);
+	printk(KERN_ALERT "Generated from packet 15\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0A, 0x0000, 0x3000, buff, 3);
 	if (validate_read((char[]){0x2B, 0x00, 0x08}, 3, &buff, n_rw, "packet 16"))
 		return 1;
-	//Generated from packet 17
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 17\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0100, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 18");
-	//Generated from packet 19
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0020, 0x0344, buff, 1);
+	printk(KERN_ALERT "Generated from packet 19\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0020, 0x0344, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 20");
-	//Generated from packet 21
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0CA1, 0x0348, buff, 1);
+	printk(KERN_ALERT "Generated from packet 21\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0CA1, 0x0348, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 22");
-	//Generated from packet 23
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0020, 0x0346, buff, 1);
+	printk(KERN_ALERT "Generated from packet 23\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0020, 0x0346, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 24");
-	//Generated from packet 25
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0981, 0x034A, buff, 1);
+	printk(KERN_ALERT "Generated from packet 25\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0981, 0x034A, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 26");
-	//Generated from packet 27
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x02FC, 0x3040, buff, 1);
+	printk(KERN_ALERT "Generated from packet 27\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x02FC, 0x3040, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 28");
-	//Generated from packet 29
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0002, 0x0400, buff, 1);
+	printk(KERN_ALERT "Generated from packet 29\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0002, 0x0400, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 30");
-	//Generated from packet 31
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0014, 0x0404, buff, 1);
+	printk(KERN_ALERT "Generated from packet 31\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0014, 0x0404, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 32");
-	//Generated from packet 33
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0280, 0x034C, buff, 1);
+	printk(KERN_ALERT "Generated from packet 33\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0280, 0x034C, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 34");
-	//Generated from packet 35
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x01E0, 0x034E, buff, 1);
+	printk(KERN_ALERT "Generated from packet 35\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x01E0, 0x034E, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 36");
-	//Generated from packet 37
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x02C0, 0x300A, buff, 1);
+	printk(KERN_ALERT "Generated from packet 37\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x02C0, 0x300A, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 38");
-	//Generated from packet 39
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0E00, 0x300C, buff, 1);
+	printk(KERN_ALERT "Generated from packet 39\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0E00, 0x300C, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 40");
-	//Generated from packet 41
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 41\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0000, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 42");
-	//Generated from packet 43
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0100, buff, 1);
+	printk(KERN_ALERT "Generated from packet 43\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0000, 0x0100, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 44");
-	//Generated from packet 45
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 45\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0100, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 46");
-	//Generated from packet 47
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0004, 0x0300, buff, 1);
+	printk(KERN_ALERT "Generated from packet 47\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0004, 0x0300, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 48");
-	//Generated from packet 49
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x0302, buff, 1);
+	printk(KERN_ALERT "Generated from packet 49\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0001, 0x0302, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 50");
-	//Generated from packet 51
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0008, 0x0308, buff, 1);
+	printk(KERN_ALERT "Generated from packet 51\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0008, 0x0308, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 52");
-	//Generated from packet 53
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x030A, buff, 1);
+	printk(KERN_ALERT "Generated from packet 53\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0001, 0x030A, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 54");
-	//Generated from packet 55
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0004, 0x0304, buff, 1);
+	printk(KERN_ALERT "Generated from packet 55\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0004, 0x0304, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 56");
-	//Generated from packet 57
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0020, 0x0306, buff, 1);
+	printk(KERN_ALERT "Generated from packet 57\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0020, 0x0306, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 58");
-	//Generated from packet 59
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x90D8, 0x301A, buff, 1);
+	printk(KERN_ALERT "Generated from packet 59\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x90D8, 0x301A, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 60");
-	//Generated from packet 61
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 61\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0000, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 62");
-	//Generated from packet 63
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0100, buff, 1);
+	printk(KERN_ALERT "Generated from packet 63\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0100, 0x0100, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 64");
-	//Generated from packet 65
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0A, 0x0000, 0x300C, buff, 3);
+	printk(KERN_ALERT "Generated from packet 65\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0A, 0x0000, 0x300C, buff, 3);
 	if (validate_read((char[]){0x0E, 0x00, 0x08}, 3, &buff, n_rw, "packet 66"))
 		return 1;
-	//Generated from packet 67
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x90D8, 0x301A, buff, 1);
+	printk(KERN_ALERT "Generated from packet 67\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x90D8, 0x301A, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 68");
-	//Generated from packet 69
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0805, 0x3064, buff, 1);
+	printk(KERN_ALERT "Generated from packet 69\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0805, 0x3064, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 70");
-	//Generated from packet 71
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 71\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0000, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 72");
-	//Generated from packet 73
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0100, 0x0100, buff, 1);
+	printk(KERN_ALERT "Generated from packet 73\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0100, 0x0100, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 74");
-	//Generated from packet 75
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x0402, buff, 1);
+	printk(KERN_ALERT "Generated from packet 75\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0001, 0x0402, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 76");
-	//Generated from packet 77
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0001, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 77\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0001, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 78");
-	//Generated from packet 79
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x0000, 0x0104, buff, 1);
+	printk(KERN_ALERT "Generated from packet 79\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x0000, 0x0104, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 80");
-	//Generated from packet 81
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x01F4, 0x3012, buff, 1);
+	printk(KERN_ALERT "Generated from packet 81\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x01F4, 0x3012, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 82");
-	//Generated from packet 83
-	CAMERA_CONTROL_MESSAGE(0xC0, 0x0B, 0x023E, 0x305E, buff, 1);
+	printk(KERN_ALERT "Generated from packet 83\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x0B, 0x023E, 0x305E, buff, 1);
 	VALIDATE_READ((char[]){0x08}, 1, &buff, n_rw, "packet 84");
-	//Generated from packet 85
-	CAMERA_CONTROL_MESSAGE(0x40, 0x01, 0x0003, 0x000F, NULL, 0);
+	printk(KERN_ALERT "Generated from packet 85\n");
+	CAMERA_CONTROL_MESSAGE(USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE, 0x01, 0x0003, 0x000F, NULL, 0);
 	
 	printk(KERN_ALERT "Replaying success!\n");
 	return 0;
@@ -382,31 +392,33 @@ static int uvscopetek_open(struct inode *inode, struct file *file)
 	 * in resumption */
 	mutex_lock(&dev->io_mutex);
 
-	if (!dev->open_count) {
-		++dev->open_count;
-		printk(KERN_ALERT "open: new count: %d\n", dev->open_count);
-		retval = usb_autopm_get_interface(interface);
-		if (retval) {
-			printk(KERN_ALERT "open: failed to get interface\n");
-			dev->open_count--;
-			mutex_unlock(&dev->io_mutex);
-			kref_put(&dev->kref, uvscopetek_delete);
-			goto exit;
-		}
-		if (replay_wireshark_setup(dev)) {
-			printk(KERN_ALERT "open: failed to replay\n");
-			dev->open_count--;
-			mutex_unlock(&dev->io_mutex);
-			kref_put(&dev->kref, uvscopetek_delete);
-			goto exit;
-		}
-	} else { //uncomment this block if you want exclusive open
+
+	if (dev->open_count) {
 		printk(KERN_ALERT "open: already open (%d)\n", dev->open_count);
 		retval = -EBUSY;
 		mutex_unlock(&dev->io_mutex);
 		kref_put(&dev->kref, uvscopetek_delete);
 		goto exit;
 	}
+		
+	++dev->open_count;
+	printk(KERN_ALERT "open: new count: %d\n", dev->open_count);
+	retval = usb_autopm_get_interface(interface);
+	if (retval) {
+		printk(KERN_ALERT "open: failed to get interface\n");
+		dev->open_count--;
+		mutex_unlock(&dev->io_mutex);
+		kref_put(&dev->kref, uvscopetek_delete);
+		goto exit;
+	}
+	if (replay_wireshark_setup(dev)) {
+		printk(KERN_ALERT "open: failed to replay\n");
+		dev->open_count--;
+		mutex_unlock(&dev->io_mutex);
+		kref_put(&dev->kref, uvscopetek_delete);
+		goto exit;
+	}
+	
 	/* prevent the device from being autosuspended */
 
 	/* save our object in the file's private structure */
@@ -485,10 +497,11 @@ static void uvscopetek_read_bulk_callback(struct urb *urb)
 	complete(&dev->bulk_in_completion);
 }
 
-static int uvscopetek_do_read_io(struct uvscopetek *dev, size_t count)
+
+static int uvscopetek_do_read_io(struct uvscopetek *dev, size_t count) /*__attribute__ ((unused))*/
 {
 	int rv;
-
+	
 	/* prepare a read */
 	usb_fill_bulk_urb(dev->bulk_in_urb,
 			dev->udev,
@@ -518,15 +531,23 @@ static int uvscopetek_do_read_io(struct uvscopetek *dev, size_t count)
 	return rv;
 }
 
+static char g_buff[0x1400];
+
 static ssize_t uvscopetek_read(struct file *file, char *buffer, size_t count,
 			 loff_t *ppos)
 {
 	struct uvscopetek *dev;
 	int rv;
-	bool ongoing_io;
+	//bool ongoing_io;
+	int actual_length = 0;
 
-	printk(KERN_ALERT "read: disabled\n");
-	return 0;
+	//printk(KERN_ALERT "read: disabled\n");
+	//return 0;
+
+	if (sizeof(g_buff) < count) {
+		printk(KERN_ALERT "buffer too big\n");
+		return 0;
+	}
 
 	if (!file) {
 		printk(KERN_ALERT "read: null file\n");
@@ -554,6 +575,30 @@ static ssize_t uvscopetek_read(struct file *file, char *buffer, size_t count,
 		goto exit;
 	}
 
+	printk(KERN_ALERT "count %d\n", count);
+	count = 0x400;
+	rv = usb_bulk_msg(dev->udev, usb_rcvbulkpipe(dev->udev, dev->bulk_in_endpointAddr), g_buff,
+		  count, &actual_length, 500);
+	if (rv) {
+		printk(KERN_ALERT "failed read :( %d\n", rv);
+		printk(KERN_ALERT "count %d\n", count);
+		goto exit;
+	}
+	if (actual_length < 0) {
+		printk(KERN_ALERT "failed read w/ length %d\n", actual_length);
+		goto exit;
+	}
+	if (copy_to_user(buffer,
+			 g_buff,
+			 actual_length)) {
+		printk(KERN_ALERT "failed to copy to user\n");
+		rv = -EFAULT;
+		goto exit;
+	}
+	printk( KERN_ALERT "ZOMG SUCCESS!!11!\n");
+	rv = actual_length;
+
+#if 0
 	/* if IO is under way, we must not touch things */
 retry:
 	spin_lock_irq(&dev->err_lock);
@@ -654,8 +699,12 @@ retry:
 			goto retry;
 		rv = -EAGAIN;
 	}
+	
+#endif
+
 exit:
 	mutex_unlock(&dev->io_mutex);
+	printk( KERN_ALERT "returning %d\n", rv );
 	return rv;
 }
 
@@ -869,6 +918,8 @@ static int uvscopetek_probe(struct usb_interface *interface,
 		err("Out of memory");
 		goto error;
 	}
+	(void)uvscopetek_do_read_io;
+
 	kref_init(&dev->kref);
 	sema_init(&dev->limit_sem, WRITES_IN_FLIGHT);
 	mutex_init(&dev->io_mutex);

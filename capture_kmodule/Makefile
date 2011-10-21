@@ -36,3 +36,14 @@ go: default
 	-dd if=/dev/uvscopetek0  of=dump.bin count=1024
 	dmesg |tail
 	
+run: default user
+	-rmmod uvscopetek
+	insmod ./uvscopetek.ko
+	./user
+	hexdump -C read.bin |head -n 30
+	
+.PHONY: user
+user:
+	$(MAKE) -f user.mk all
+	
+	
