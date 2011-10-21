@@ -116,6 +116,19 @@ unsigned int camera_control_message(int requesttype, int request,
 		int value, int index, char *bytes, int size) {
 	int rc_tmp = 0;
 	
+	/*
+	WARNING: request / request type parameters are swapped between kernel and libusb
+	request type is clearly listed first in USB spec and seems more logically first so I'm going to blame kernel on this
+	although maybe libusb came after and was trying for multi OS comatibility right off the bat
+	
+	libusb
+	int usb_control_msg(usb_dev_handle *dev, int requesttype, int request, int value, int index, char *bytes, int size, int timeout);
+	
+	kernel
+	extern int usb_control_msg(struct usb_device *dev, unsigned int pipe,
+		__u8 request, __u8 requesttype, __u16 value, __u16 index,
+		void *data, __u16 size, int timeout);
+	*/
 	rc_tmp = usb_control_msg(g_camera_handle, requesttype, request, value, index, bytes, size, 500);
 	if (rc_tmp < 0) {
 		printf("failed\n");
@@ -615,7 +628,7 @@ int main(int argc, char **argv) {
 	//usb_set_debug(2);
 	relocate_camera();
 
-	//print_all_device_information();
+	print_all_device_information();
 	//dump_strings();
 	usb_set_debug(4);
 
