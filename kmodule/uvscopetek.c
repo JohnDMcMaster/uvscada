@@ -77,6 +77,7 @@ struct uvscopetek {
 	struct kref		kref;
 	struct mutex		io_mutex;		/* synchronize I/O with disconnect */
 	struct completion	bulk_in_completion;	/* to wait for an ongoing read */
+	struct v4l2_device v4l2;
 };
 #define to_uvscopetek_dev(d) container_of(d, struct uvscopetek, kref)
 
