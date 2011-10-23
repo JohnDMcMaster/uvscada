@@ -32,7 +32,6 @@ Bit 7:     Direction, ignored for
 struct usb_dev_handle *g_camera_handle = NULL;
 struct usb_device *g_dev = NULL;
 
-
 usb_dev_handle *locate_camera( void );
 
 void camera_exit(int rc) {

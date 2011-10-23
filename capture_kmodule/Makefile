@@ -34,8 +34,12 @@ go: default
 	-rmmod uvscopetek
 	insmod ./uvscopetek.ko
 	-dd if=/dev/uvscopetek0  of=dump.bin count=1024
+	hexdump -C dump.bin
 	dmesg |tail
+
+gou:
 	
+
 run: default user
 	-rmmod uvscopetek
 	insmod ./uvscopetek.ko
@@ -46,4 +50,5 @@ run: default user
 user:
 	$(MAKE) -f user.mk all
 	
-	
+
+
