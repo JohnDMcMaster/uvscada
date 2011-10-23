@@ -34,8 +34,6 @@ MODULE_LICENSE("GPL");
 //#define sdbg_replay sdbg
 #define sdbg_replay(...)
 
-static unsigned int g_bytes = 0;
-static unsigned int g_frame_size = 640 * 480 * 3;
 
 
 /* specific webcam descriptor */
@@ -50,13 +48,22 @@ static const struct ctrl sd_ctrls[] = {
 //Andrew's guess
 #define PIX_FMT		V4L2_PIX_FMT_SGBRG8
 //Website
-//#define PIX_FMT		4L2_PIX_FMT_RGB24
+//#define PIX_FMT		V4L2_PIX_FMT_RGB24
 static const struct v4l2_pix_format vga_mode[] = {
 	{640, 480, PIX_FMT, V4L2_FIELD_NONE,
-		.bytesperline = 320,
-		.sizeimage = 640 * 480 * 3 / 8,
+		.bytesperline = 640 * 3,
+		.sizeimage = 640 * 480 * 3 /*/ 8*/,
 		.colorspace = V4L2_COLORSPACE_SRGB},
 };
+
+static unsigned int g_bytes = 0;
+static unsigned int g_frame_size = 640 * 480 * 3;
+
+#if MAX_NURBS < 4
+#error "Not enough URBs in the gspca table"
+#endif
+#define SD_PKT_SZ 64
+#define SD_NPKT 32
 
 static void sd_isoc_irq(struct urb *urb);
 
@@ -65,16 +72,31 @@ static void sd_isoc_irq(struct urb *urb);
 static int sd_config(struct gspca_dev *gspca_dev,
 			const struct usb_device_id *id)
 {
+	sdbg("sd_config start");
 	gspca_dev->cam.cam_mode = vga_mode;
 	gspca_dev->cam.nmodes = ARRAY_SIZE(vga_mode);
-	gspca_dev->cam.no_urb_create = 1;
-	gspca_dev->cam.reverse_alts = 1;
+
+	//FIXME: this might be able to simplify this driver
+	gspca_dev->cam.no_urb_create = 0;
+	//presumably above ignores this
+	gspca_dev->cam.bulk_nurbs = 2;
+	gspca_dev->cam.bulk_size = SD_PKT_SZ * SD_NPKT;
+	gspca_dev->cam.bulk_size = 0x400;
+	//Def need to use bulk transfers
+	gspca_dev->cam.bulk = 1;
+	
+	//shouldn't really matter
+	//oh yes it does...reversing skips the first element since otherwise why would be reverse
+	gspca_dev->cam.reverse_alts = 0;
+	sdbg("sd_config end");
 	return 0;
 }
 
 /* this function is called at probe and resume time */
 static int sd_init(struct gspca_dev *gspca_dev)
 {
+	sdbg("sd_init");
+
 	return 0;
 }
 
@@ -117,46 +139,49 @@ static int sd_start(struct gspca_dev *gspca_dev)
 	struct urb *urb;
 	int i, n;
 
+	sdbg("sd_start start XXX");
+	
 	g_bytes = 0;
 	replay_wireshark_setup_neo(gspca_dev);
 
-	/* create 2 URBs on endpoint 0x082 */
-#if MAX_NURBS < 4
-#error "Not enough URBs in the gspca table"
-#endif
-#define SD_PKT_SZ 64
-#define SD_NPKT 32
-	for (n = 0; n < 2; n++) {
-		urb = usb_alloc_urb(SD_NPKT, GFP_KERNEL);
-		if (!urb) {
-			err("usb_alloc_urb failed");
-			return -ENOMEM;
-		}
-		gspca_dev->urb[n] = urb;
-		urb->transfer_buffer = usb_buffer_alloc(gspca_dev->dev,
-						SD_PKT_SZ * SD_NPKT,
-						GFP_KERNEL,
-						&urb->transfer_dma);
+	if (true) {
+		sdbg("Not reinit URBs");
+	} else {
+		sdbg("Reinit URBs");
+		/* create 2 URBs on endpoint 0x082 */
+		for (n = 0; n < 2; n++) {
+			urb = usb_alloc_urb(SD_NPKT, GFP_KERNEL);
+			if (!urb) {
+				err("usb_alloc_urb failed");
+				return -ENOMEM;
+			}
+			gspca_dev->urb[n] = urb;
+			urb->transfer_buffer = usb_buffer_alloc(gspca_dev->dev,
+							SD_PKT_SZ * SD_NPKT,
+							GFP_KERNEL,
+							&urb->transfer_dma);
 
-		if (urb->transfer_buffer == NULL) {
-			err("usb_buffer_alloc failed");
-			return -ENOMEM;
-		}
-		urb->dev = gspca_dev->dev;
-		urb->context = gspca_dev;
-		urb->transfer_buffer_length = SD_PKT_SZ * SD_NPKT;
-		urb->pipe = usb_rcvisocpipe(gspca_dev->dev,
-					0x82);
-		urb->transfer_flags = URB_ISO_ASAP
-					| URB_NO_TRANSFER_DMA_MAP;
-		urb->interval = 1;
-		urb->complete = sd_isoc_irq;
-		urb->number_of_packets = SD_NPKT;
-		for (i = 0; i < SD_NPKT; i++) {
-			urb->iso_frame_desc[i].length = SD_PKT_SZ;
-			urb->iso_frame_desc[i].offset = SD_PKT_SZ * i;
+			if (urb->transfer_buffer == NULL) {
+				err("usb_buffer_alloc failed");
+				return -ENOMEM;
+			}
+			urb->dev = gspca_dev->dev;
+			urb->context = gspca_dev;
+			urb->transfer_buffer_length = SD_PKT_SZ * SD_NPKT;
+			urb->pipe = usb_rcvisocpipe(gspca_dev->dev,
+						0x82);
+			urb->transfer_flags = URB_ISO_ASAP
+						| URB_NO_TRANSFER_DMA_MAP;
+			urb->interval = 1;
+			urb->complete = sd_isoc_irq;
+			urb->number_of_packets = SD_NPKT;
+			for (i = 0; i < SD_NPKT; i++) {
+				urb->iso_frame_desc[i].length = SD_PKT_SZ;
+				urb->iso_frame_desc[i].offset = SD_PKT_SZ * i;
+			}
 		}
 	}
+	sdbg("sd_start end");
 
 	return gspca_dev->usb_err;
 }
@@ -165,7 +190,40 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 			u8 *data,		/* isoc packet */
 			int len)		/* iso packet length */
 {
+	int i = 0;
+	
 	/* unused */
+	for (i = 0; i < len && i < 0x1; ++i) {
+		sdbg("sd_pkt_scan[%d of %d]: 0x%02X", i, len, data[i]);
+	}
+	
+	//if a frame is in progress see if we can finish it off
+	//do {
+		if (g_bytes + len >= g_frame_size) {
+			unsigned int remainder = g_frame_size - len;
+			sdbg("Completing frame");
+			//Completed a frame
+			gspca_frame_add(gspca_dev, LAST_PACKET,
+					data, remainder);
+			g_frame_size = 0;
+			len -= remainder;
+			data += remainder;
+			g_bytes = 0;
+		}
+		if (len > 0) {
+			if (g_bytes == 0) {
+				sdbg("start frame");
+				gspca_frame_add(gspca_dev, FIRST_PACKET,
+						data, len);
+			} else {
+				sdbg("continue frame");
+				gspca_frame_add(gspca_dev, INTER_PACKET,
+						data, len);
+			}
+			g_bytes += len;
+		}
+	//} while (len > 0);
+	
 }
 
 /* reception of an URB */
@@ -175,6 +233,7 @@ static void sd_isoc_irq(struct urb *urb)
 	u8 *data;
 	int i, st;
 
+	sdbg("sd_isoc_irq\n");
 	PDEBUG(D_PACK, "sd isoc irq");
 	if (!gspca_dev->streaming)
 		return;
@@ -217,32 +276,7 @@ static void sd_isoc_irq(struct urb *urb)
 		}
 		data = (u8 *) urb->transfer_buffer
 					+ urb->iso_frame_desc[i].offset;
-		
-		//if a frame is in progress see if we can finish it off
-		//do {
-			if (g_bytes < g_frame_size) {
-				if (g_frame_size + data_len >= g_frame_size) {
-					unsigned int remainder = g_frame_size - data_len;
-					//Completed a frame
-					gspca_frame_add(gspca_dev, LAST_PACKET,
-							data, remainder);
-					g_frame_size = 0;
-					data_len -= remainder;
-					data += remainder;
-					g_bytes = 0;
-				}
-			}
-			if (g_bytes > 0) {
-				if (g_bytes == 0) {
-					gspca_frame_add(gspca_dev, FIRST_PACKET,
-							data, data_len);
-				} else {
-					gspca_frame_add(gspca_dev, INTER_PACKET,
-							data, data_len);
-				}
-				g_bytes += data_len;
-			}
-		//} while (data_len > 0);
+		sd_pkt_scan(gspca_dev, data, data_len);
 	}
 
 	/* resubmit the URBs */
@@ -276,8 +310,12 @@ MODULE_DEVICE_TABLE(usb, device_table);
 static int sd_probe(struct usb_interface *intf,
 			const struct usb_device_id *id)
 {
-	return gspca_dev_probe(intf, id, &sd_desc, sizeof(struct sd),
+	int rc = 0;
+	sdbg("sd_probe start, alt 0x%p", intf->cur_altsetting);
+	rc = gspca_dev_probe(intf, id, &sd_desc, sizeof(struct sd),
 				THIS_MODULE);
+	sdbg("sd_probe done");
+	return rc;
 }
 
 static struct usb_driver sd_driver = {

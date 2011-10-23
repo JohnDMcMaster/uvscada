@@ -8,12 +8,12 @@ EXTRA_CFLAGS += -I/home/mcmaster/document/build/linux/linux-2.6.34.8/drivers/med
 
 KDIR:=/lib/modules/$(shell uname -r)/build
 
-EXTRA_CFLAGS += -I$(KDIR)/drivers/usb/serial -Wall -Werror
+EXTRA_CFLAGS += -I$(KDIR)/drivers/usb/serial -Wall -Werror -g
 
 obj-m:=uvscopetek.o
 
 default:
-	$(MAKE) -C $(KDIR) $(EXTRA_CFLAGS) SUBDIRS=$(PWD) modules
+	$(MAKE) -C $(KDIR) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" SUBDIRS=$(PWD) modules
 
 clean:
 	$(RM) *.mod.c *.o *.ko .*.cmd *~ Modules.* modules.*
@@ -25,7 +25,7 @@ unload:
 	rmmod uvscopetek
 
 install:
-	modprobe gspca_main
+	-modprobe gspca_main
 	insmod ./uvscopetek.ko
 
 uninstall:
@@ -36,24 +36,12 @@ uninstall:
 
 go: default
 	-rmmod uvscopetek
+	-modprobe gspca_main
+	dmesg -c >/dev/null
 	insmod ./uvscopetek.ko
-	-dd if=/dev/uvscopetek0  of=dump.bin count=1024
-	hexdump -C dump.bin
+	echo 'its in'
+	mplayer /dev/video0
 	dmesg |tail
-
-gou:
-	
-
-run: default user
-	-rmmod uvscopetek
-	modprobe gspca_main
-	insmod ./uvscopetek.ko
-	./user
-	hexdump -C read.bin |head -n 30
-	
-.PHONY: user
-user:
-	$(MAKE) -f user.mk all
-	
+	echo 'done done done'
 
 
