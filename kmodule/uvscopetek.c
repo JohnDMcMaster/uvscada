@@ -35,7 +35,7 @@ static const struct usb_device_id uvscopetek_table[] = {
 MODULE_DEVICE_TABLE(usb, uvscopetek_table);
 
 
-#define BUFF_SZ		0x1400
+#define BUFF_SZ		0x14000
 //static uint8_t g_buff[BUFF_SZ];
 static uint8_t *g_buff_alloc = NULL;
 
@@ -77,7 +77,7 @@ struct uvscopetek {
 	struct kref		kref;
 	struct mutex		io_mutex;		/* synchronize I/O with disconnect */
 	struct completion	bulk_in_completion;	/* to wait for an ongoing read */
-	struct v4l2_device v4l2;
+	//struct v4l2_device v4l2;
 };
 #define to_uvscopetek_dev(d) container_of(d, struct uvscopetek, kref)
 
@@ -165,8 +165,9 @@ int replay_wireshark_setup(struct uvscopetek *dev) {
 	//Note: we still get image data even without these,
 	//presumably it has default config
 	
-	return replay_wireshark_setup_twain(dev);
-	//return replay_wireshark_setup_neo(dev);
+	//return replay_wireshark_setup_twain(dev);
+	//Either of these two seem to do fine, twain capture makes mplayer timeout on packets
+	return replay_wireshark_setup_neo(dev);
 	//return replay_wireshark_setup_orig( dev );
 	return 0;
 }
@@ -180,11 +181,31 @@ int validate_write( unsigned int size, int n_rw, const char *desc) {
 	return 0;
 }
 
+int send_bright(struct uvscopetek *dev, unsigned int wValue ) {
+	int n_rw = 0;
+	char buff[16];
+	
+	n_rw = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0), 0x0B, 0x0C, wValue, 12306, buff, 1, 500);
+	if (validate_read((char[]){0x08}, 1, buff, n_rw, "packet test") < 0)
+		return 1;
+	return 0;
+}
+
 int replay_wireshark_setup_neo(struct uvscopetek *dev) {
 	sdbg("neo replay");
 	{
 #include "replay.c"
+
+		if (false) {
+			unsigned int wValue[] = {0x0292, 0x02C1, 0x02F0, 0x031F, 0x034E, 0x037D, 0x03AC, 0x03DB, 0x040A, 0x0439, 0x0468, 0x0497, 0x04C6};
+			unsigned int i ;
+			for (i = 0; i < sizeof(wValue) / sizeof(wValue[0]); ++i) {
+				if (send_bright(dev, wValue[i]) < 0)
+					return 1;
+			}
+		}
 	}
+
 	sdbg("neo replay done");
 	return 0;
 }
@@ -208,27 +229,33 @@ int replay_wireshark_setup_orig(struct uvscopetek *dev) {
 }
 
 static int update_buffer(struct uvscopetek *dev, unsigned int count) {
+	static int counter = 0;
 	uint8_t pois = 0xFF;
 	int actual_length = 0;
 	int rv = 0;
+	unsigned int i = 0;
 	
 	sdbg_write("count %d", count);
-	count = 0x400;
+	if (count > 0x400) {
+		count = 0x400;
+	}
 	//memset( g_buff, pois, sizeof(g_buff) );
 	memset( g_buff_alloc, pois, BUFF_SZ );
-	rv = usb_bulk_msg(dev->udev,
-			usb_rcvbulkpipe(dev->udev, dev->bulk_in_endpointAddr),
-			g_buff_alloc,
-			count, &actual_length, 500);
-	//printk("rv %d, read %d\n", rv, actual_length);
-	if (rv) {
-		printk(KERN_ALERT "failed read :( %d\n", rv);
-		printk(KERN_ALERT "count %d\n", count);
-		return rv;
-	}
-	if (actual_length < 0) {
-		printk(KERN_ALERT "failed read w/ length %d\n", actual_length);
-		return -1;
+	for (i = 0; actual_length == 0 && i < 16; ++i) {
+		rv = usb_bulk_msg(dev->udev,
+				usb_rcvbulkpipe(dev->udev, dev->bulk_in_endpointAddr),
+				g_buff_alloc,
+				count, &actual_length, 500);
+		//printk("rv %d, read %d\n", rv, actual_length);
+		if (rv) {
+			printk(KERN_ALERT "failed read :( %d\n", rv);
+			printk(KERN_ALERT "count %d\n", count);
+			return rv;
+		}
+		if (actual_length < 0) {
+			printk(KERN_ALERT "failed read w/ length %d\n", actual_length);
+			return -1;
+		}
 	}
 	/*
 	{
@@ -246,6 +273,14 @@ static int update_buffer(struct uvscopetek *dev, unsigned int count) {
 		sdbg_write("nz: %d", nz);
 	}
 	*/
+	sdbg("count %d => %d", count, actual_length);
+	
+	counter += actual_length;
+	if (actual_length >= 640 * 480) {
+		send_bright(dev, 0x0100);
+		counter = 0;
+	}
+	
 	
 	return actual_length;
 }
@@ -307,7 +342,7 @@ static int uvscopetek_open(struct inode *inode, struct file *file)
 		kref_put(&dev->kref, uvscopetek_delete);
 		goto exit;
 	}
-	update_buffer(dev, 123);
+	//update_buffer(dev, 123);
 	
 	/* prevent the device from being autosuspended */
 

@@ -172,3 +172,8 @@ n_rw = usb_control_msg(udev, usb_sndctrlpipe(udev, 0), 0x01, USB_DIR_OUT | USB_T
 if (validate_write(0, n_rw, "packet 204/205") < 0)
 	return 1;
 
+
+
+
+
+

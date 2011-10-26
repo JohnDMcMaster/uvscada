@@ -33,12 +33,10 @@ uninstall:
 go: default
 	-rmmod uvscopetek
 	insmod ./uvscopetek.ko
-	-dd if=/dev/uvscopetek0  of=dump.bin count=1024
-	hexdump -C dump.bin
-	dmesg |tail
-
-gou:
-	
+	#-dd if=/dev/uvscopetek0  of=dump.bin count=1024
+	#hexdump -C dump.bin
+	#dmesg |tail
+	mplayer /dev/uvscopetek0 -rawvideo format=rgb24:w=640:h=480 -demuxer rawvideo
 
 run: default user
 	-rmmod uvscopetek

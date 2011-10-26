@@ -51,13 +51,13 @@ static const struct ctrl sd_ctrls[] = {
 //#define PIX_FMT		V4L2_PIX_FMT_RGB24
 static const struct v4l2_pix_format vga_mode[] = {
 	{640, 480, PIX_FMT, V4L2_FIELD_NONE,
-		.bytesperline = 640 * 3,
-		.sizeimage = 640 * 480 * 3 /*/ 8*/,
+		.bytesperline = 640,
+		.sizeimage = 640 * 480,
 		.colorspace = V4L2_COLORSPACE_SRGB},
 };
 
 static unsigned int g_bytes = 0;
-static unsigned int g_frame_size = 640 * 480 * 3;
+static unsigned int g_frame_size = 640 * 480;
 
 #if MAX_NURBS < 4
 #error "Not enough URBs in the gspca table"
