@@ -3,10 +3,6 @@
  *
  * Copyright (C) 2011 John McMaster <JohnDMcMaster@gmail.com>
  *
- * Original copyright:
- * Benq DC E300 subdriver
- * Copyright (C) 2009 Jean-Francois Moine (http://moinejf.free.fr)
- *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -22,7 +18,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
-#define MODULE_NAME "benq"
+#define MODULE_NAME "uvscopetek"
 
 #include "gspca.h"
 
@@ -47,10 +43,15 @@ static const struct ctrl sd_ctrls[] = {
 
 //Andrew's guess
 #define PIX_FMT		V4L2_PIX_FMT_SGBRG8
+//#define PIX_FMT		V4L2_PIX_FMT_SBGGR8
 //Website
 //#define PIX_FMT		V4L2_PIX_FMT_RGB24
 static const struct v4l2_pix_format vga_mode[] = {
-	{640, 480, PIX_FMT, V4L2_FIELD_NONE,
+	{640, 480,
+		PIX_FMT,
+		V4L2_FIELD_NONE,
+		//padding bytes not data bytes?  V4L2 pdf doesn't indicate that
+		//.bytesperline = 640,
 		.bytesperline = 640,
 		.sizeimage = 640 * 480,
 		.colorspace = V4L2_COLORSPACE_SRGB},
@@ -200,23 +201,24 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 	//if a frame is in progress see if we can finish it off
 	//do {
 		if (g_bytes + len >= g_frame_size) {
-			unsigned int remainder = g_frame_size - len;
-			sdbg("Completing frame");
+			unsigned int remainder = g_frame_size - g_bytes;
+			sdbg("Completing frame, so far %u + %u new >= %u frame size just getting the last %u of %u",
+					g_bytes, len, g_frame_size, remainder, g_frame_size);
 			//Completed a frame
 			gspca_frame_add(gspca_dev, LAST_PACKET,
 					data, remainder);
-			g_frame_size = 0;
+			//g_frame_size = 0;
 			len -= remainder;
 			data += remainder;
 			g_bytes = 0;
 		}
 		if (len > 0) {
 			if (g_bytes == 0) {
-				sdbg("start frame");
+				sdbg("start frame w/ %u bytes", len);
 				gspca_frame_add(gspca_dev, FIRST_PACKET,
 						data, len);
 			} else {
-				sdbg("continue frame");
+				sdbg("continue frame w/ %u new bytes w/ %u so far of needed %u", len, g_bytes, g_frame_size);
 				gspca_frame_add(gspca_dev, INTER_PACKET,
 						data, len);
 			}
