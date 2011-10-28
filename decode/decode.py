@@ -78,8 +78,9 @@ def decode_SGBRG8():
 	image = Image.new("RGB", (width, height), "White")
 	
 	# Skip offset
-	f.read(254)
-	f.read(640 * 480 * 2)
+	#f.read(254)
+	f.read(1)
+	f.read(640 * 480 * 3)
 	
 	for y in range(0, height, 2):
 		# GBGB
