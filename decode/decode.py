@@ -64,7 +64,49 @@ def decode2():
 	#image.save(
 
 
-decode_orig()
-#decode2()
+def decode_SGBRG8():
+	'''
+	Require interpolation
+	Read two lines at a time
+	'''
+	width = 640
+	#width = 642
+	height = 480
+	
+	
+	f = open(image_in, "r")
+	image = Image.new("RGB", (width, height), "White")
+	
+	# Skip offset
+	f.read(254)
+	f.read(640 * 480 * 2)
+	
+	for y in range(0, height, 2):
+		# GBGB
+		# RGRG
+		line0 = f.read(width)
+		#line0 = f.read(width)
+		#line0 = f.read(width)
+		
+		line1 = f.read(width)
+		#line1 = f.read(width)
+		#line1 = f.read(width)
+		for x in range(0, width):
+			R = ord(line1[x])
+			G = ord(line0[x])
+			# make even
+			B = ord(line0[x - (x % 2)])
+			image.putpixel((x, y), (R, G, B))
+		for x in range(0, width):
+			R = ord(line1[x])
+			# Make odd
+			G = ord(line1[x - (x % 2) + 1])
+			# make even
+			B = ord(line0[x - (x % 2)])
+			image.putpixel((x, y + 1), (R, G, B))
+	image.show()
 
+#decode_orig()
+#decode2()
+decode_SGBRG8()
 
