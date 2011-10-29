@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+
+'''
+Sync seems to show up in upper left
+Slightly darker stripe one pixel in
+Essentially along the red pixels
+'''
+
 import Image
 import sys
 import time
@@ -126,6 +133,62 @@ def decode_SGBRG8():
 		print
 		print
 
+def hexdump(data, prefix = ''):
+	'''
+	[mcmaster@gespenst icd2prog-0.3.0]$ hexdump -C /bin/ls |head
+	00000000  7f 45 4c 46 01 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
+	00000010  02 00 03 00 01 00 00 00  f0 99 04 08 34 00 00 00  |............4...|
+	00017380  00 00 00 00 01 00 00 00  00 00 00 00              |............|
+	'''
+	import sys
+	
+	g_bytesPerRow = 16
+	g_bytesPerHalfRow = 8
+
+	def hexdumpHalfRow(data, start):
+		col = 0
+
+		while col < g_bytesPerHalfRow and start + col < size:
+			index = start + col
+			c = data[index]
+			sys.stdout.write("%.2X " % ord(c))
+			col += 1
+
+		#pad remaining
+		while col < g_bytesPerHalfRow:
+			sys.stdout.write("   ")
+			col += 1
+
+		#End pad
+		sys.stdout.write(" ")
+
+		return start + g_bytesPerHalfRow
+
+	pos = 0
+	while pos < size:
+		row_start = pos
+		i = 0
+
+		sys.stdout.write(prefix)
+		pos = hexdumpHalfRow(data, size, pos)
+		pos = hexdumpHalfRow(data, size, pos)
+
+		sys.stdout.write("|")
+
+		#Char view
+		i = row_start
+		while i < row_start + g_bytesPerRow and i < size:
+			c = data[i]
+			if isprint(c):
+				sys.stdout.write("%c", c)
+			else:
+				sys.stdout.write("%c", '.')
+			i += 1
+		while i < row_start + g_bytesPerRow:
+			sys.stdout.write(" ")
+			i += 1
+
+		sys.stdout.write("|\n")
 
 def decode_as_sensor():
 	'''
@@ -140,7 +203,8 @@ def decode_as_sensor():
 	f = open(image_in, "r")
 	
 	# Skip offset
-	#f.read(254)
+	#f.read(640 / 2)
+	#f.read(640)
 	#f.read(640 / 2 + 300)
 	f.read(640 * 480 * 2)
 		
@@ -158,6 +222,8 @@ def decode_as_sensor():
 			#line1 = f.read(width)
 			#line1 = f.read(width)
 		
+			
+		
 			if y < 0:
 				print '%03u start: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y, ord(line0[0]), ord(line0[1]), ord(line0[2]), ord(line0[3]))
 				print '%03u start: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y + 1, ord(line1[0]), ord(line1[1]), ord(line1[2]), ord(line1[3]))
@@ -166,7 +232,7 @@ def decode_as_sensor():
 				print '%03u   end: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y, ord(line0[b + 0]), ord(line0[b + 1]), ord(line0[b + 2]), ord(line0[b + 3]))
 				print '%03u   end: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y + 1, ord(line1[b + 0]), ord(line1[b + 1]), ord(line1[b + 2]), ord(line1[b + 3]))
 
-			if True:
+			if False:
 				temp = line0
 				line0 = line1
 				line1 = temp
@@ -175,9 +241,9 @@ def decode_as_sensor():
 				R = 0
 				if x % 2 == 0:
 					G = 0
-					B = ord(line0[x])
+					B = ord(line1[x])
 				else:
-					G = ord(line0[x])
+					G = ord(line1[x])
 					B = 0
 					
 				if image:
@@ -186,9 +252,9 @@ def decode_as_sensor():
 				B = 0
 				if x % 2 == 0:
 					R = 0
-					G = ord(line1[x])
+					G = ord(line0[x])
 				else:
-					R = ord(line1[x])
+					R = ord(line0[x])
 					G = 0
 				
 				if image:
