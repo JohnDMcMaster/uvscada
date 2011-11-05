@@ -4618,6 +4618,7 @@ static const __devinitdata struct usb_device_id device_table[] = {
 	{USB_DEVICE(0x0e96, 0xc001), .driver_info = BRIDGE_OVFX2 },
 	{USB_DEVICE(0x1046, 0x9967), .driver_info = BRIDGE_W9968CF },
 	{USB_DEVICE(0x8020, 0xEF04), .driver_info = BRIDGE_OVFX2 },
+	{USB_DEVICE(0x0547, 0x4D88), .driver_info = BRIDGE_OVFX2 },
 	{}
 };
 
