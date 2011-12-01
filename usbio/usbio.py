@@ -57,7 +57,7 @@ class USBIO:
 	# Raw
 	def send_core(self, bytes_in):
 		bytes = '~' + bytes_in + '~'
-		print 'Sending: %s' % bytes
+		#print 'Sending: %s' % bytes
 		self.serial.write(bytes)
 	
 	def recv(self):

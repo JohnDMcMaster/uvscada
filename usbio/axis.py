@@ -24,6 +24,10 @@ class Axis:
 		self.do_forward()
 		self.usbio.set_gpio(self.step_pin, True)
 		
+		self.step_delay_s = 0.001
+		
+		self.net = 0
+		
 	def inches(self):
 		self.unit = Unit.INCH
 		
@@ -35,13 +39,17 @@ class Axis:
 		steps = self.get_steps(units)
 		self.forward(steps > 0)
 		self.step(abs(steps))
-	
+		
+		self.net += steps
+		print '%s net %d' % (self.name, self.net)
+
 	def step(self, steps):
 		for i in range(steps):
 			def s():
-				time.sleep(0.001)
+				#time.sleep(self.step_delay_s)
+				pass
 			
-			print 'Step %d / %d' % (i + 1, steps)
+			#print 'Step %d / %d' % (i + 1, steps)
 			# No idea if one is better before the other
 			s()
 			self.usbio.set_gpio(self.step_pin, True)

@@ -18,6 +18,8 @@ configure_file (
 include_directories("${PROJECT_BINARY_DIR}")
  
 # add the executable
-add_executable(TEMPer TEMPer.cpp)
+add_library(temper SHARED TEMPer.cpp 24c02.cpp  fm75.cpp  i2c.cpp  max6675.cpp  serial.cpp)
 
+add_executable (TEMPerMain main.cpp) 
+target_link_libraries(TEMPerMain temper)
 

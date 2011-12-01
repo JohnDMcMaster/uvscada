@@ -55,6 +55,8 @@ class MC:
 		for axis in self.axes:
 			axis.do_forward(True)
 		self.inches()
+		# enforce some initial state?
+		#self.off()
 		
 	def inches(self):
 		for axis in self.axes:
@@ -64,7 +66,20 @@ class MC:
 		for axis in self.axes:
 			axis.mm()
 
-				
+	def off(self):
+		self.usbio.set_relay(2, False)
+		self.is_on = False
+	
+	def on(self):
+		'''
+		After USBIO was plugged in but before it was initialized steppers were freaking out
+		I'm not sure the exact cause but I solved it by routing the buffer power
+		(USBIO is 3.3V and steppers require 3.5V min 5V safe)
+		through relay 2
+		'''
+		self.usbio.set_relay(2, True)
+		self.is_on = True
+		
 def str2bool(arg_value):
 	arg_value = arg_value.lower()
 	if arg_value == "false" or arg_value == "0" or arg_value == "no" or arg_value == "off":
