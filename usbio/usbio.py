@@ -77,6 +77,15 @@ class USBIO:
 		
 		return ret
 		
+	def flush_rx(self):
+		return
+		try:
+			while len(self.serial.read(1)) > 0:
+				#print 'waiting...'
+				pass
+		except:
+			pass
+	
 	def send(self, bytes_out):
 		self.send_core(bytes_out)
 		reply = self.recv()
@@ -98,7 +107,12 @@ class USBIO:
 		else:
 			is_on = 0
 		
+		
+		#self.serial.flush()
 		self.send_core("out%X=%d" % (index, is_on))
+		#self.serial.flush()
+		#self.flush_rx()
+		self.recv()
 	
 	def set_relay(self, relay_id, is_on):
 		if relay_id == 1:
@@ -165,6 +179,22 @@ if __name__ == "__main__":
 				state = arg_bool
 	
 	usbio = USBIO()
+	
+	i = 0
+	import time
+	
+	for i in range(20):
+		usbio.set_gpio(0, True)
+		usbio.set_gpio(0, False)	
+		
+	sys.exit(1)
+	
+	while True:
+		i += 1
+		print i
+		usbio.set_gpio(0, True)
+		usbio.set_gpio(0, False)
+		#time.sleep(0.05)
 	
 	if port is None:
 		print 'port must be specified'
