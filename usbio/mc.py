@@ -36,9 +36,10 @@ VERSION = 0.0
 
 from optparse import OptionParser
 from axis import Axis
+from controller import Controller
 
 # Klinger / Micro-controle driver
-class MC:
+class MC(Controller):
 	UNIT_INCH = 1
 	UNIT_MM = 2
 	
@@ -46,6 +47,8 @@ class MC:
 	#DIR_REVERSE = 2
 	
 	def __init__(self):
+		Machine.__init__(self)
+		
 		self.usbio = USBIO()
 		self.x = Axis('X', self, 2, 3)
 		self.y = Axis('Y', self, 0, 1)

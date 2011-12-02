@@ -8,6 +8,8 @@ class Unit:
 A simple axis that is controlled by a step and direction input
 Can subclass later if needed to implement other styles
 	ex: raw stepper
+	
+For now units are in mm
 '''
 class Axis:
 	def __init__(self, name, mc, step_pin, dir_pin):
@@ -19,12 +21,16 @@ class Axis:
 		
 		# Active stepping
 		self.steps_per_unit = 1
+		# NeoSPlan 5X
+		# per mm
+		self.steps_per_unit = 8510
 		
 		# Set a known output state
 		self.do_forward()
 		self.usbio.set_gpio(self.step_pin, True)
 		
 		self.step_delay_s = 0.001
+		self.step_delay_s = None
 		
 		self.net = 0
 		
@@ -46,8 +52,8 @@ class Axis:
 	def step(self, steps):
 		for i in range(steps):
 			def s():
-				#time.sleep(self.step_delay_s)
-				pass
+				if self.step_delay_s:
+					time.sleep(self.step_delay_s)
 			
 			#print 'Step %d / %d' % (i + 1, steps)
 			# No idea if one is better before the other
@@ -68,3 +74,14 @@ class Axis:
 		self.usbio.set_gpio(self.dir_pin, really)
 		self.is_forward = really
 
+class DummyAxis(Axis):
+	def __init__(self):
+		pass
+	
+	def step(self, steps):
+		print 'Dummy: stepping %d' % steps
+	
+	def do_forward(self, really = True):
+		pass
+	
+	
