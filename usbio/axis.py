@@ -9,7 +9,7 @@ A simple axis that is controlled by a step and direction input
 Can subclass later if needed to implement other styles
 	ex: raw stepper
 	
-For now units are in mm
+For now units are in um
 '''
 class Axis:
 	def __init__(self, name, mc, step_pin, dir_pin):
@@ -22,8 +22,8 @@ class Axis:
 		# Active stepping
 		self.steps_per_unit = 1
 		# NeoSPlan 5X
-		# per mm
-		self.steps_per_unit = 8510
+		# per um
+		self.steps_per_unit = 8.510
 		
 		# Set a known output state
 		self.do_forward()
@@ -75,8 +75,11 @@ class Axis:
 		self.is_forward = really
 
 class DummyAxis(Axis):
-	def __init__(self):
-		pass
+	def __init__(self, name = 'dummy'):
+		self.steps_per_unit = 1
+		self.is_forward = True
+		self.net = 0
+		self.name = name
 	
 	def step(self, steps):
 		print 'Dummy: stepping %d' % steps
