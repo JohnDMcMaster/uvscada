@@ -12,12 +12,13 @@ Can subclass later if needed to implement other styles
 For now units are in um
 '''
 class Axis:
-	def __init__(self, name, mc, step_pin, dir_pin):
+	def __init__(self, name, mc, step_pin, dir_pin, invert_dir = False):
 		self.name = name
 		#self.mc = mc
 		self.usbio = mc.usbio
 		self.step_pin = step_pin
 		self.dir_pin = dir_pin
+		self.invert_dir = invert_dir
 		
 		# Active stepping
 		self.steps_per_unit = 1
@@ -47,7 +48,7 @@ class Axis:
 		self.step(abs(steps))
 		
 		self.net += steps
-		print '%s net %d' % (self.name, self.net)
+		print '%s net %f um (%d steps)' % (self.name, self.net / self.steps_per_unit, self.net)
 
 	def step(self, steps):
 		for i in range(steps):
@@ -63,16 +64,19 @@ class Axis:
 			self.usbio.set_gpio(self.step_pin, False)
 
 	def get_steps(self, units):
-		return units * self.steps_per_unit
+		return int(units * self.steps_per_unit)
 	
 	def forward(self, really = True):
 		if self.is_forward == really:
 			return
 		self.do_forward(really)
 		
-	def do_forward(self, really = True):
-		self.usbio.set_gpio(self.dir_pin, really)
-		self.is_forward = really
+	def do_forward(self, is_forward = True):
+		to_set = is_forward
+		if self.invert_dir:
+			to_set = not to_set
+		self.usbio.set_gpio(self.dir_pin, to_set)
+		self.is_forward = is_forward
 
 class DummyAxis(Axis):
 	def __init__(self, name = 'dummy'):

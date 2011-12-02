@@ -47,11 +47,16 @@ class MC(Controller):
 	#DIR_REVERSE = 2
 	
 	def __init__(self):
-		Machine.__init__(self)
+		Controller.__init__(self)
 		
 		self.usbio = USBIO()
-		self.x = Axis('X', self, 2, 3)
-		self.y = Axis('Y', self, 0, 1)
+		print 'opened okay'
+		#self.usbio.set_relay(2, True)
+		#print 'debug break'
+		#sys.exit(1)
+		
+		self.x = Axis('X', self, 0, 1)
+		self.y = Axis('Y', self, 2, 3, invert_dir=True)
 		
 		self.axes = [self.x, self.y]
 		
@@ -60,6 +65,14 @@ class MC(Controller):
 		self.inches()
 		# enforce some initial state?
 		#self.off()
+		print 'Controller ready'
+	
+	def __del__(self):
+		'''
+		When the pins go to high impedance things seem to go crazy
+		Maybe all I need are some pullups / pulldowns
+		'''
+		self.off()
 		
 	def inches(self):
 		for axis in self.axes:

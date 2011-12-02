@@ -29,10 +29,26 @@ class USBIO:
 	serial = None
 	
 	# wtf is acm
-	def __init__(self, device = "/dev/ttyACM0"):
-		self.device = device
-		self.serial = serial.Serial(self.device, 9600, timeout=1)
+	def __init__(self, device = None):
+		self.serial = None
+		if device is None:
+			for s in ("/dev/ttyACM0", "/dev/ttyS5", "COM12"):
+				try:
+					self.try_open(s)
+					print 'Opened %s okay' % s
+					break
+				except:
+					print 'Failed to open %s' % s
+					continue
+			if self.device is None:
+				raise Exception("Failed to find a suitable device")
+		else:
+			self.try_open(device)
 
+	def try_open(self, device):
+		self.device = device
+		self.serial = serial.Serial(self.device, 9600, timeout=1)	
+			
 	'''
 	Read the version of the USB_IO device firmware.
 	~ver~            ...............send to USB_IO
