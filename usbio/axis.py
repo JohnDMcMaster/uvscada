@@ -44,13 +44,16 @@ class Axis:
 	def jog(self, units):
 		'''Move axis to position as fast as possible'''
 		steps = self.get_steps(units)
-		self.forward(steps > 0)
-		self.step(abs(steps))
-		
-		self.net += steps
-		print '%s net %f um (%d steps)' % (self.name, self.net / self.steps_per_unit, self.net)
+		self.step(steps)
 
 	def step(self, steps):
+		self.forward(steps > 0)
+		self.do_step(abs(steps))
+		
+		self.net += steps
+		print '%s net %f um (%d steps)' % (self.name, self.net / self.steps_per_unit, self.net)	
+
+	def do_step(self, steps):
 		for i in range(steps):
 			def s():
 				if self.step_delay_s:
@@ -77,6 +80,9 @@ class Axis:
 			to_set = not to_set
 		self.usbio.set_gpio(self.dir_pin, to_set)
 		self.is_forward = is_forward
+		
+	def home(self):
+		self.step(-self.net)
 
 class DummyAxis(Axis):
 	def __init__(self, name = 'dummy'):

@@ -56,7 +56,7 @@ class MC(Controller):
 		#sys.exit(1)
 		
 		self.x = Axis('X', self, 0, 1)
-		self.y = Axis('Y', self, 2, 3, invert_dir=True)
+		self.y = Axis('Y', self, 2, 3)
 		
 		self.axes = [self.x, self.y]
 		
