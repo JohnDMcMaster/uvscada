@@ -50,19 +50,21 @@ class MC(Controller):
 		Controller.__init__(self)
 		
 		self.usbio = USBIO()
-		print 'opened okay'
+		print 'opened USBIO okay'
 		#self.usbio.set_relay(2, True)
 		#print 'debug break'
 		#sys.exit(1)
 		
 		self.x = Axis('X', self, 0, 1)
 		self.y = Axis('Y', self, 2, 3)
+		self.z = Axis('Z', self, 4, 5)
 		
-		self.axes = [self.x, self.y]
+		self.axes = [self.x, self.y, self.z]
 		
 		for axis in self.axes:
 			axis.do_forward(True)
-		self.inches()
+		#self.inches()
+		self.um()
 		# enforce some initial state?
 		#self.off()
 		print 'Controller ready'
@@ -82,6 +84,10 @@ class MC(Controller):
 		for axis in self.axes:
 			axis.mm()
 
+	def um(self):
+		for axis in self.axes:
+			axis.um()
+	
 	def off(self):
 		self.usbio.set_relay(2, False)
 		self.is_on = False
