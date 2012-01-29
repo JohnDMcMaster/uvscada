@@ -23,7 +23,7 @@ while True:
 	m = d.wait_meas()
 	print 'T: %s, L: %d (%d CFM), S: %d (%d CFM), Q: %s' % (time.strftime('%F %T'), m.small, m.small_cfm(), m.large, m.large_cfm(), d.quality_str())
 	if f:
-		f.write('%s,%d,%d' % (time.time(), m.small, m.large))
+		f.write('%s,%d,%d\n' % (time.time(), m.small, m.large))
 		# Its a while before we write data again
 		f.flush()
 		
