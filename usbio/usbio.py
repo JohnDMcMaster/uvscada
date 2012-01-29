@@ -25,9 +25,6 @@ import time
 VERSION = 0.0
 
 class USBIO:
-	device = None
-	serial = None
-	
 	# wtf is acm
 	def __init__(self, device = "/dev/ttyACM0"):
 		self.device = device
