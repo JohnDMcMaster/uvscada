@@ -25,7 +25,7 @@ class DylosTest(unittest.TestCase):
 		d.last_meas = m
 		self.assertEqual(d.quality_str(), 'VERY_GOOD')
     	
-	def test_cfm(self):
+	def test_cpm(self):
 		'''
 		0.01 cubic foot to meters
 		
@@ -39,10 +39,10 @@ class DylosTest(unittest.TestCase):
 		'''
 		p = 3531.466672
 		m = Measurement(100, 1)
-		print 'Small CFM: %f' % m.small_cfm()
-		print 'Large CFM: %f' % m.large_cfm()
-		self.assertTrue(abs(m.small_cfm() - 100.0 * p) < 1.0 )
-		self.assertTrue(abs(m.large_cfm() - p) < 1.0 )
+		print 'Small CPM: %f' % m.small_cpm()
+		print 'Large CPM: %f' % m.large_cpm()
+		self.assertTrue(abs(m.small_cpm() - 100.0 * p) < 1.0 )
+		self.assertTrue(abs(m.large_cpm() - p) < 1.0 )
 	
 if __name__ == '__main__':
 	unittest.main()

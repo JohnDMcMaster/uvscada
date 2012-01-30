@@ -52,13 +52,23 @@ class Measurement:
 		self.small = small
 		self.large = large
 	
-	def small_cfm(self):
-		return self.small * self.cfm_conversion()
+	def small_cpf(self):
+		return self.small * self.cpf_conversion()
 	
-	def large_cfm(self):
-		return self.large * self.cfm_conversion()
+	def large_cpf(self):
+		return self.large * self.cpf_conversion()
 		
-	def cfm_conversion(self):
+	def cpf_conversion(self):
+		# Convert particles / (0.01 ft**3) to particles / ft**3
+		return 1 / 0.01
+	
+	def small_cpm(self):
+		return self.small * self.cpm_conversion()
+	
+	def large_cpm(self):
+		return self.large * self.cpm_conversion()
+		
+	def cpm_conversion(self):
 		# Convert particles / (0.01 ft**3) to particles / m**3
 		return 1 / (0.01 * ((12.0 * 25.4 / 1000.0)**3))
 	

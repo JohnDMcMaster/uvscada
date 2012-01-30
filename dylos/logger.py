@@ -21,9 +21,10 @@ d = DC1100Pro(dev)
 print 'Waiting for data...'
 while True:
 	m = d.wait_meas()
-	print 'T: %s, L: %d (%d CFM), S: %d (%d CFM), Q: %s' % (time.strftime('%F %T'), m.small, m.small_cfm(), m.large, m.large_cfm(), d.quality_str())
+	print 'T: %s, L: %d (%d CPF), S: %d (%d CPF), Q: %s' % (time.strftime('%F %T'), m.small, m.small_cpf(), m.large, m.large_cpf(), d.quality_str())
 	if f:
 		f.write('%s,%d,%d\n' % (time.time(), m.small, m.large))
 		# Its a while before we write data again
 		f.flush()
-		
+
+
