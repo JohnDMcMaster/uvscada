@@ -98,8 +98,20 @@ class DC1100:
 		self.serial = serial.Serial(self.device, 9600, timeout=1)
 		self.last_meas = None
 		
+		# Start out
+		# spike
+		# and then drop back
+		self.test_meas = []
+		#self.test_meas = [(100, 10), (100, 10), (100, 10), (100, 10), (1000, 100), (1000, 100), (1000, 100), (100, 10), (100, 10), (100, 10), (100, 10), (100, 10)]
+		
 	# Don't return until a measurement is availible
 	def wait_meas(self, require_valid = False):
+		if len(self.test_meas) > 0:
+			m =  Measurement(*self.test_meas[0])
+			self.test_meas = self.test_meas[1:]
+			self.last_meas = m
+			return m
+		
 		while True:
 			m = self.meas()
 			if m and ((not require_valid) or m.valid()):
@@ -164,6 +176,7 @@ class DC1100Pro(DC1100):
 			return Measurement.FAIR
 		elif small >= 150:
 			return Measurement.GOOD
+		# 100 would be barely passing class 10k cleanroom
 		elif small >= 75:
 			return Measurement.VERY_GOOD
 		elif small >= 0:
