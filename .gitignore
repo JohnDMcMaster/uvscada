@@ -6,4 +6,6 @@ testdata
 *.ko
 *.o
 *.lib
+*.bin
+*.png
 
