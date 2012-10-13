@@ -43,16 +43,37 @@ Bit 7:     Direction, ignored for
 #define DATA_EP     (VIDEO_ENDPOINT | LIBUSB_ENDPOINT_IN)
 
 
-struct libusb_device_handle *g_camera_handle = NULL;
-struct libusb_device *g_dev = NULL;
+typedef struct {
+    /*
+    3264x2448
+    1600x1200
+    800x600
+    */
+    unsigned int width;
+    unsigned int height;
+    uint16_t key;
+    struct libusb_device_handle *handle;
+    struct libusb_device *dev;
+} camera_t;
+camera_t g_camera = {
+    width: 3264,
+    height: 2448,
+};
 
-libusb_device_handle *locate_camera( void );
 bool g_verbose = true;
 
-void camera_exit(int rc) {
-	if (g_camera_handle) {
-		libusb_close(g_camera_handle);
+
+libusb_device_handle *locate_camera( void );
+
+
+void shutdown() {
+	if (g_camera.handle) {
+		libusb_close(g_camera.handle);
 	}
+}
+
+void camera_exit(int rc) {
+    shutdown();
 	exit(1);
 }
 
@@ -91,56 +112,12 @@ const char* libusb_error_name 	( 	int  	error_code	) {
     }
 }
 
-
-/*
-Although wLength is two byte, response is only one byte
-So I don't think its a good idea to request strings > 0xFF
-*/
-#if 0
-int extract_string(int i, unsigned int buff_size = 0xFF) {
-	char buff[0xFF];
-	int rc_tmp;
-	
-	if (buff_size > sizeof(buff)) {
-	    printf("bad buff size\n");
-	    exit(1);
-	}
-	
-	//rc_tmp = libusb_get_string_simple(g_camera_handle, i, buff, buff_size);
-	rc_tmp = libusb_get_string(g_camera_handle, i, 0x0409, buff, buff_size);
-	if (rc_tmp < 0) {
-		printf("error @ %d\n", i);
-		/*
-		if (!g_keep_going) {
-		    break;
-	    }
-	    */
-	    return -1;
-	}
-	//printf("%02X%02X%02X%02X\n", buff[0], buff[1], buff[2], buff[3]);
-	//buff[rc_tmp] = 0;
-	//wchar..how to print?
-	//in any case I'm getting weird chars back so better to hex dump
-	//printf("string[%d]: %s\n", i, &buff[0]); fflush(stdout);
-    printf("Got string, dumping\n");
-    UVDHexdumpCore(buff, rc_tmp, "    ", false, 0);
-    return 0;
-}
-
-void extract_string_fatal(int i, unsigned int buff_size = 0xFF) {
-    if (extract_string(i, buff_size)) {
-		printf("failed to extract string\n");
-		camera_exit(1);
-    }
-}
-#endif
-
 unsigned int camera_bulk_read(int ep, void *bytes, int size) {
     int actual_length = 0;
     
 	//int libusb_bulk_read(usb_dev_handle *dev, int ep, char *bytes, int size,
 	//	int timeout);
-	int rc_tmp = libusb_bulk_transfer(g_camera_handle, ep, (unsigned char *)bytes, size, &actual_length, 500);
+	int rc_tmp = libusb_bulk_transfer(g_camera.handle, ep, (unsigned char *)bytes, size, &actual_length, 500);
 	
 	if (rc_tmp < 0) {
 		perror("ERROR");
@@ -157,7 +134,7 @@ unsigned int camera_bulk_read(int ep, void *bytes, int size) {
 
 unsigned int camera_bulk_write(int ep, void *bytes, int size) {
     int actual_length = 0;
-	int rc_tmp =  libusb_bulk_transfer(g_camera_handle, ep, (unsigned char *)bytes, size, &actual_length, 500);
+	int rc_tmp =  libusb_bulk_transfer(g_camera.handle, ep, (unsigned char *)bytes, size, &actual_length, 500);
 	
 	if (rc_tmp < 0) {
 		perror("ERROR");
@@ -177,8 +154,6 @@ int libusb_control_msg(usb_dev_handle *dev, int requesttype, int request,
 	int value, int index, char *bytes, int size, int timeout);
 */
 
-//generator spits out that
-#define dev_ctrl_msg camera_control_message
 unsigned int camera_control_message(int requesttype, int request,
 		int value, int index, uint8_t *bytes, int size) {
 	int rc_tmp = 0;
@@ -207,7 +182,7 @@ unsigned int camera_control_message(int requesttype, int request,
 		__u8 request, __u8 requesttype, __u16 value, __u16 index,
 		void *data, __u16 size, int timeout);
 	*/
-	rc_tmp = libusb_control_transfer(g_camera_handle, requesttype, request, value, index, (unsigned char *)bytes, size, 500);
+	rc_tmp = libusb_control_transfer(g_camera.handle, requesttype, request, value, index, (unsigned char *)bytes, size, 500);
 	if (rc_tmp < 0) {
 		printf("failed\n");
 		exit(1);
@@ -215,21 +190,25 @@ unsigned int camera_control_message(int requesttype, int request,
 	return rc_tmp;
 }
 
-void validate_read(void *expected, size_t expected_size, void *actual, size_t actual_size, const char *msg) {
+int validate_read(void *expected, size_t expected_size, void *actual, size_t actual_size, const char *msg) {
 	if (expected_size != actual_size) {
 		printf("%s: expected %d bytes, got %d bytes\n", msg, expected_size, actual_size);
-		camera_exit(1);		
+		return -1;
 	}
 	if (memcmp(expected, actual, expected_size)) {
-		printf("%s: regions do not match\n", msg);
-		printf("  Actual:\n");
-		UVDHexdumpCore(actual, expected_size, "    ", false, 0);
-		printf("  Expected:\n");
-		UVDHexdumpCore(expected, expected_size, "    ", false, 0);
-		//camera_exit(1);
-		return;
+	    printf("%s: regions do not match\n", msg);
+	    if (g_verbose) {
+		    printf("  Actual:\n");
+		    UVDHexdumpCore(actual, expected_size, "    ", false, 0);
+		    printf("  Expected:\n");
+		    UVDHexdumpCore(expected, expected_size, "    ", false, 0);
+	    }
+		return -1;
 	}
-	printf("Regions of length %d DO match\n", expected_size);
+	if (g_verbose) {
+    	printf("Regions of length %d DO match\n", expected_size);
+	}
+	return 0;
 }
 
 //#include "fx2.cpp"
@@ -244,7 +223,7 @@ void capture() {
 	char *buff = NULL;
 	unsigned int buff_pos = 0;
 	
-	unsigned int to_read = 800 * 600 * 4;
+	unsigned int to_read = g_camera.width * g_camera.height * 4;
 	//800x600 size
 	//const size_t buff_sz = 16384;
 	//having issues..use something shorter
@@ -289,7 +268,7 @@ void capture() {
 }
 
 unsigned char *g_async_buff = NULL;
-const size_t g_async_buff_sz = 800 * 600 * 4;
+const size_t g_async_buff_sz = g_camera.width * g_camera.height * 4;
 unsigned int g_async_buff_pos = 0;
 bool g_should_stall = false;
 bool g_have_stalled = false;
@@ -332,11 +311,13 @@ void capture_async_cb(struct libusb_transfer *transfer) {
     /*
     The hope is that the camera will detect getting behind and do something special
     */
-    if (!g_have_stalled && g_should_stall && g_async_buff_pos >= g_async_buff_sz / 2) {
-        unsigned int stall_ms = 300;
-        printf("Stalling @ %u for %u ms\n", g_async_buff_pos, stall_ms);
-        usleep(stall_ms * 1000);
-        g_have_stalled = true;
+    if (g_should_stall) {
+        if (!g_have_stalled && g_async_buff_pos >= g_async_buff_sz / 2) {
+            unsigned int stall_ms = 300;
+            printf("Stalling @ %u for %u ms\n", g_async_buff_pos, stall_ms);
+            usleep(stall_ms * 1000);
+            g_have_stalled = true;
+        }
     }
     
     //Resubmit
@@ -403,7 +384,7 @@ void capture_async() {
         
         transfers[i] = transfer;
         libusb_fill_bulk_transfer( transfer,
-		    g_camera_handle, DATA_EP,
+		    g_camera.handle, DATA_EP,
 		    buff, buff_sz,
 		    capture_async_cb, NULL, 500 );
         ++active_urbs;
@@ -461,62 +442,142 @@ void capture_async() {
 	save_buffer();
 }
 
-void replay() {
-    struct libusb_device_handle *udev = g_camera_handle;
+//Return true if returned exactly {0x80}s
+int val_reply(const uint8_t *reply, size_t size) {
+    if (size != 1) {
+        printf("Bad reply size %u\n", size);
+        return -1;
+    } else if (reply[0] != 0x08) {
+        printf("Bad reply 0x%02X\n", reply[0]);
+        return -1;
+    }
+    return 0;
+}
+
+int dev_init() {
+#define std_ctrl(_request, _value, _index) do {\
+    if (val_reply(buff, camera_control_message(0xC0, _request, _value, _index, buff, 1))) { \
+        printf("Failed req(0xC0, 0x%02X, 0x%04X, 0x%04X\n", _request, _value, _index);\
+        return -1; \
+    } \
+} while(0)
+#define std_enc_ctrl std_ctrl
+
+    
+    struct libusb_device_handle *udev = g_camera.handle;
+    uint8_t buff[4096];
+    unsigned int n_rw = 0;
+
+    //Reference packet numbers are from 01_3264_2448.cap
     
     /*
-    This piece has been highly variable
-    What is wValue and why does it seem random each device init?
+    First driver sets a sort of encryption key
+    Reference packets 154-155
+    A number of futur requests of this type have wValue and wIndex encrypted as follows:
+    -Compute key = this wValue rotate left by 4 bits
+        (decrypt.py rotates right because we are decrypting)
+    -Later packets encrypt packets by XOR'ing with key
+        XOR encrypt/decrypt is symmetrical
+    Therefore by setting 0 we XOR with 0 and the shifting and XOR drops out
+    Finally, the driver sends a 2 byte control out but always gets 1 back so just use the standard control
     */
-    if (1) {
-        /*
-        printf("\n");
-        printf("Replaying early setup...\n");
-        {
-            #include "captures/800x600_1/touptek_0_early_setup.c"
-        }
-        */
-        int n_rw = 0;
-        uint8_t buff[64];
-
-        //Generated from packet 5/6
-        n_rw = dev_ctrl_msg(0xC0, 0x16, 0xA20F, 0x0000, buff, 2);
-        //WARNING: shrinking response, max 2 but got 1
-        validate_read((char[]){0x08}, 1, buff, n_rw, "packet 5/6");
+    g_camera.key = 0x0000;
+    n_rw = camera_control_message(0xC0, 0x16, g_camera.key, 0x0000, buff, 2);
+    if (val_reply(buff, n_rw)) {
+        printf("Failed key req\n");
+        return -1;
     }
     
+    //Packets 158/159
     printf("Setting alt\n");
-    if (libusb_set_interface_alt_setting (g_camera_handle, 0, 1)) {
+    if (libusb_set_interface_alt_setting (g_camera.handle, 0, 1)) {
         printf("Failed to set alt setting\n");
-        camera_exit(1);
+        return -1;
     }
 
     /*
-    This seems to be optional
-    if (0) {
-        //Between these two there were a few string fetch packets
-        printf("\n");
-        printf("Requesting strings...\n");
-        //This is what replay has
-        extract_string_fatal(1, 0xFF);
-        extract_string_fatal(1, 0xFF);
-        extract_string_fatal(1, 0xFF);
-        extract_string_fatal(1, 2);
-        extract_string_fatal(1, 2);
-        extract_string_fatal(1, 2);
-    }
+    Does some funky string reads here
+    Optional, don't care about them
     */
 
-    if (1) {
-        printf("\n");
-        printf("Replaying late/main setup...\n");
-        if (1) {
-            #include "captures/800x600_1/touptek_0_main_setup.c"
-        }
-
-
-
+    //Next (172-175) does some sort of challenge / response to make sure its not cloned hardware
+    //It seems to be optional and I don't care to learn how it works since
+    //I want to work with their hardware, not clone it
+    
+    //The following transactions are constant (no encryption)
+    //Packets 176-183
+    camera_control_message(0x40, 0x01, 0x0001, 0x000F, NULL, 0);
+    camera_control_message(0x40, 0x01, 0x0000, 0x000F, NULL, 0);
+    camera_control_message(0x40, 0x01, 0x0001, 0x000F, NULL, 0);
+    n_rw = camera_control_message(0xC0, 0x20, 0x0000, 0x0000, buff, 4);
+    if (validate_read((char[]){0xE6, 0x0D, 0x00, 0x00}, 4, buff, n_rw, "packet 182/183")) {
+        return -1;
     }
+    
+    /*
+    184/185 is a large read, possibly EEPROM configuration (ex: bad pixel) data
+    Skip it since we don't know what to do with it
+    Its partially encrypted
+    */
+    n_rw = camera_control_message(0xC0, 0x20, 0x0000, 0x0000, buff, 3590);
+    if (3590 != n_rw) {
+        printf("Wrong length back from EEPROM read\n");
+        return -1;
+    }
+    
+    /*
+    Now begins the encrypted packets (186-263)
+    */
+    std_enc_ctrl(0x0B, 0x0100, 0x0103);
+    std_enc_ctrl(0x0B, 0x0000, 0x0100);
+    std_enc_ctrl(0x0B, 0x0100, 0x0104);
+    std_enc_ctrl(0x0B, 0x0004, 0x0300);
+    std_enc_ctrl(0x0B, 0x0001, 0x0302);
+    std_enc_ctrl(0x0B, 0x0008, 0x0308);
+    std_enc_ctrl(0x0B, 0x0001, 0x030A);
+    std_enc_ctrl(0x0B, 0x0004, 0x0304);
+    std_enc_ctrl(0x0B, 0x0040, 0x0306);
+    std_enc_ctrl(0x0B, 0x90D8, 0x301A);
+    std_enc_ctrl(0x0B, 0x0000, 0x0104);
+    std_enc_ctrl(0x0B, 0x0100, 0x0100);
+    std_enc_ctrl(0x0B, 0x0100, 0x0104);
+    std_enc_ctrl(0x0B, 0x00E8, 0x0344);
+    std_enc_ctrl(0x0B, 0x0DA7, 0x0348);
+    std_enc_ctrl(0x0B, 0x009E, 0x0346);
+    std_enc_ctrl(0x0B, 0x0A2D, 0x034A);
+    std_enc_ctrl(0x0B, 0x0241, 0x3040);
+    std_enc_ctrl(0x0B, 0x0000, 0x0400);
+    std_enc_ctrl(0x0B, 0x0010, 0x0404);
+    
+#define INDEX_WIDTH         0x034C
+#define INDEX_HEIGHT        0x034E
+    //std_enc_ctrl(0x0B, 0x0CC0, 0x034C)
+    std_enc_ctrl(0x0B, g_camera.width, INDEX_WIDTH);
+    //std_enc_ctrl(0x0B, 0x0990, 0x034E)
+    std_enc_ctrl(0x0B, g_camera.height, INDEX_HEIGHT);
+    
+    std_enc_ctrl(0x0B, 0x0B4B, 0x300A);
+    std_enc_ctrl(0x0B, 0x1F40, 0x300C);
+    std_enc_ctrl(0x0B, 0x0000, 0x0104);
+    std_enc_ctrl(0x0B, 0x0301, 0x31AE);
+    std_enc_ctrl(0x0B, 0x0805, 0x3064);
+    std_enc_ctrl(0x0B, 0x0071, 0x3170);
+    std_enc_ctrl(0x0B, 0x0000, 0x0100);
+    std_enc_ctrl(0x0B, 0x0018, 0x0306);
+    std_enc_ctrl(0x0B, 0x0100, 0x0100);
+    std_enc_ctrl(0x0B, 0x0465, 0x3012);
+    std_enc_ctrl(0x0B, 0x0465, 0x3012);
+    std_enc_ctrl(0x0B, 0x0100, 0x0104);
+    std_enc_ctrl(0x0B, 0x11C5, 0x3056);
+    std_enc_ctrl(0x0B, 0x11CF, 0x3058);
+    std_enc_ctrl(0x0B, 0x11ED, 0x305A);
+    std_enc_ctrl(0x0B, 0x11C5, 0x305C);
+    std_enc_ctrl(0x0B, 0x0000, 0x0104);
+
+    //Omitted this by accident, does not work without it
+    camera_control_message(0x40, 0x01, 0x0003, 0x000F, NULL, 0);
+    
+    return 0;
 }
 
 int validate_device( int vendor_id, int product_id ) {
@@ -560,8 +621,8 @@ int validate_device( int vendor_id, int product_id ) {
         Bus 002 Device 007: ID 0547:6801 Anchor Chips, Inc. 
         */
         switch (product_id) {
-		case 0x6801:
-			printf("AmScope MU800\n");
+		case 0x6801: 
+			printf("ToupTek UCMOS08000KPB (AmScope MU800)\n");
 			return 0;
         
 		default:
@@ -610,15 +671,15 @@ libusb_device_handle *locate_camera( void ) {
 		}
 		
 		located++;
-		g_dev = dev;
+		g_camera.dev = dev;
 		printf("Camera Device Found\n");
 	}
 	
 	if (located > 1) {
 	    printf("WARNING: more devices than expected\n");
 	}
-	if (g_dev) {
-         rc = libusb_open(g_dev, &handle);
+	if (g_camera.dev) {
+         rc = libusb_open(g_camera.dev, &handle);
          if (rc) {
             printf("Failed to get dev descriptor\n");
         	libusb_free_device_list(list, 1);
@@ -630,32 +691,14 @@ libusb_device_handle *locate_camera( void ) {
 	return handle;
 }
 
-#if 0
-#include "dump.cpp"
-
-/*
-Strings from dump
-1 (hex): 03 54
-err nvm I think wireshark is confused
-*/
-
-void dump_strings() {
-    printf("Dumping strings\n");
-	//Think index 0 is special case to get language ID
-	for (int i = 1; ; ++i) {
-	    extract_string(i);
-	}
-}
-#endif
-
 void relocate_camera() {
-	if (g_camera_handle) {
-		libusb_close(g_camera_handle);
+	if (g_camera.handle) {
+		libusb_close(g_camera.handle);
 	}
 	
-	g_camera_handle = locate_camera();
-	printf("Handle: 0x%08X\n", (int)g_camera_handle);
- 	if (g_camera_handle == NULL) {
+	g_camera.handle = locate_camera();
+	printf("Handle: 0x%08X\n", (int)g_camera.handle);
+ 	if (g_camera.handle == NULL) {
 		printf("Could not open the camera device\n");
 		exit(1);
 	}
@@ -673,7 +716,7 @@ int main(int argc, char **argv) {
 	
 	opterr = 0;
 	while (true) {
-		int c = getopt(argc, argv, "h?vs");
+		int c = getopt(argc, argv, "h?vsr:");
 		
 		if (c == -1) {
 			break;
@@ -694,6 +737,10 @@ int main(int argc, char **argv) {
 			case 's':
 				should_dump_strings = true;
 				break;
+
+			case 'r':
+			    //FIXME: select resolution
+				break;
 				
 			default:
 				printf("Unknown argument %c\n", c);
@@ -711,32 +758,8 @@ int main(int argc, char **argv) {
 	//Prints out *lots* of information on how it found it
 	libusb_set_debug(NULL, 4);
 	relocate_camera();
-
-    /*
-	//print_all_device_information();
-	if (should_dump_strings) {
-    	dump_strings();
-	    exit(1);
-	}
-	if (g_verbose) {
-    	usb_set_debug(4);
-	}
-	*/
-
 		
-	/*
-	Config = 0 results in fail to claim since it would put it into address mode
-	Should I try to enumerate these?
-	invalid arg if 2
-	Kernel seems to chose config 1
-		usb 1-3: new high speed USB device using ehci_hcd and address 122
-		usb 1-3: config 1 interface 0 altsetting 0 bulk endpoint 0x82 has invalid maxpacket 1024
-		usb 1-3: New USB device found, idVendor=0547, idProduct=4d88
-		usb 1-3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
-		usb 1-3: Product: DCM800
-		usb 1-3: Manufacturer: ScopeTek
-	*/
-	rc_tmp = libusb_set_configuration(g_camera_handle, 1);
+	rc_tmp = libusb_set_configuration(g_camera.handle, 1);
 	printf("conf_stat=%d\n", rc_tmp);
 	if (rc_tmp < 0) {
 		perror("test");
@@ -744,10 +767,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	//relocate_camera();
-	//print_all_device_information();
-	
-	rc_tmp = libusb_claim_interface(g_camera_handle, 0);
+	rc_tmp = libusb_claim_interface(g_camera.handle, 0);
 	printf("claim_stat=%d\n", rc_tmp);
 	if (rc_tmp < 0) {
 		perror("test");
@@ -765,24 +785,16 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	/*
-	rc_tmp = libusb_set_altinterface(g_camera_handle, 0);
-	printf("alt_stat=%d\n", rc_tmp);
-	if (rc_tmp < 0) {
-		perror("test");
-		printf("Failed to set alt interface\n");
-		return 1;
-	}
-	*/
-	//sleep(5);
-	
 	//download_ram();
-	replay();
+	if (dev_init()) {
+	    printf("Failed to initialize camera\n");
+    	shutdown();
+	    return 1;
+	}
 	//It tries to dump string a bunch of times
 	//capture();
 	capture_async();
-	
-	libusb_close(g_camera_handle);
+	shutdown();
 	
 	return 0;
 }

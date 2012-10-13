@@ -28,5 +28,7 @@ for l in f.readlines():
     #l = l[len('n_rw = dev_ctrl_msg('):]
     #l = l.replace('(', '').replace(');', '')
     (bmRequestType, bRequest, wValue, wIndex) = [int(part, 0) for part in l.split(',')[0:4]]
-    print 'OUT(0x%02X, 0x%02X, 0x%04X, 0x%04X, ...)' % (bmRequestType, bRequest, decrypt16(wValue), decrypt16(wIndex))
+    if bmRequestType != 0xC0:
+        raise Exception('bad request type')
+    print 'std_enc_ctrl(0x%02X, 0x%04X, 0x%04X);' % (bRequest, decrypt16(wValue), decrypt16(wIndex))
 
