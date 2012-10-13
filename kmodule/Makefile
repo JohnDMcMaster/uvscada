@@ -46,7 +46,6 @@ run: default user
 	
 .PHONY: user
 user:
-	$(MAKE) -f user.mk all
+	g++ user.cpp -o user
 	
-
 

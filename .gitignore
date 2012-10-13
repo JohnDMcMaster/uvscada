@@ -3,3 +3,7 @@ cmake_install.cmake
 Makefile
 CMakeCache.txt
 testdata
+*.ko
+*.o
+*.lib
+

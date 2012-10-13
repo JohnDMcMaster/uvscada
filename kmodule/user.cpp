@@ -6,6 +6,15 @@
 #include <unistd.h>
 #include <string>
 
+/*
+0x3480
+0x4600
+------
+0x1120 = 4384
+
+640 * 480 = 307200 = 0x4B000
+*/
+
 //Size that the Windows driver uses as seen through UsbSnoop
 //Note that it has 4 outstanding requests at one time
 //May need to change the internal kernel buffering
@@ -13,23 +22,31 @@
 //char buff[WIN_BUFF_SZ];
 char buff[0x400];
 
-int main( void ) {
+int main( int argc, char **argv ) {
 	int fd = 0;
 	FILE *out = NULL;
+	std::string dev = "/dev/uvscopetek0";
+	std::string out_file_name = "out.bin";
 	
-	fd = open("/dev/uvscopetek0", 0);
+	if (argc > 1) {
+		dev = argv[1];
+	}
+	if (argc > 2) {
+		out_file_name = argv[2];
+	}
+	
+	fd = open(dev.c_str(), 0);
 	if (fd < 0) { 
 		perror("open");
 		exit(1);
 	}
-	std::string out_file_name = "out.bin";
 	out = fopen(out_file_name.c_str(), "w");
 	if (out == NULL) { 
 		perror("fopen");
 		exit(1);
 	}
 	
-	unsigned int to_read = 640 * 480 * 3    * 4;
+	unsigned int to_read = 640 * 480 * 3 * 4;
 	unsigned n_written = 0;
 	while (to_read) {
 		unsigned int this_read = to_read;
@@ -40,6 +57,10 @@ int main( void ) {
 		if (rc < 0) {
 			perror("read");
 			exit(1);
+		}
+		if (rc != to_read) {
+			printf("WARNING: wanted %d got %d, may have wrong frame size\n",
+					rc, to_read );
 		}
 		if ((unsigned)rc > this_read || (unsigned)rc > to_read) {
 			printf("WTF? %d %d %d\n", rc, this_read, to_read);

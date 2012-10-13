@@ -95,7 +95,7 @@ def decode_mu800():
     f = open(image_in, "r")
     
     # First frame or two are dark
-    f.read(width * height * 18 + width * 0 + 0)
+    f.read(width * height * 0 + width * 0 + 0)
         
     image = None
     first_loop = True
@@ -105,6 +105,7 @@ def decode_mu800():
     while True:
         frame += 1
         bin = ''
+        print
         print 'Rendering frame %d...' % frame
         for y in range(0, height, 2):
             # GBGB
@@ -114,11 +115,13 @@ def decode_mu800():
             line1 = f.read(width)
             bin += line1
         
+            '''
             if y == 0:
                 print 'Line 0:'
                 hexdump(line0, '  ')
+            '''
         
-            if y % (height / 100) == 0:
+            if y % (height / 10) == 0:
                 print 'Rendering y = %d / %d...' % (y, height)
         
             '''
@@ -199,7 +202,7 @@ def decode_mu800():
                 B = 0
                 image.putpixel((x + 1, y + 1), (R, G, B))
                 
-        if 1:
+        if 0:
             print 'Displaying image (%u bytes)' % len(bin)
             image.show()
             return
@@ -208,7 +211,7 @@ def decode_mu800():
             image.save('frame_%04d.png' % frame)
             print 'Saving binary'
             open('frame_%04d.bin' % frame, 'w').write(bin)
-            return
+            #return
 decode_mu800()
 
 

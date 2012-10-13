@@ -1,6 +1,3 @@
-/*
-*/
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -8,9 +5,17 @@
 #include <string.h>
 #include <string>
 
+#include "hexdump.cpp"
+
+/*
+The original:
 //Bus 002 Device 006: ID 0547:4d88 Anchor Chips, Inc. 
 #define CAMERA_VENDOR_ID		0x0547
 #define CAMERA_PRODUCT_ID		0x4D88
+
+New guy (rev 2 cameras):
+Bus 002 Device 007: ID 0547:6801 Anchor Chips, Inc. 
+*/
 
 /*
 Bit 3...0: The endpoint number
@@ -155,8 +160,14 @@ void validate_read(void *expected, size_t expected_size, void *actual, size_t ac
 	}
 	if (memcmp(expected, actual, expected_size)) {
 		printf("%s: regions do not match\n", msg);
-		camera_exit(1);
+		printf("  Actual:\n");
+		UVDHexdumpCore(actual, expected_size, "    ", false, 0);
+		printf("  Expected:\n");
+		UVDHexdumpCore(expected, expected_size, "    ", false, 0);
+		//camera_exit(1);
+		return;
 	}
+	printf("Regions of length %d DO match\n", expected_size);
 }
 
 void replay_wireshark_setup() {
@@ -287,99 +298,6 @@ void replay_wireshark_setup() {
 }
 
 
-uint32_t g_bytesPerRow = 16;
-uint32_t g_bytesPerHalfRow = 8;
-
-static unsigned int hexdumpHalfRow(const uint8_t *data, size_t size, uint32_t start)
-{
-	uint32_t col = 0;
-
-	for( ; col < g_bytesPerHalfRow && start + col < size; ++col )
-	{
-		uint32_t index = start + col;
-		uint8_t c = data[index];
-		
-		printf("%.2X ", (unsigned int)c);
-		fflush(stdout);
-	}
-
-	//pad remaining
-	while( col < g_bytesPerHalfRow )
-	{
-		printf("   ");
-		fflush(stdout);
-		++col;
-	}
-
-	//End pad
-	printf(" ");
-	fflush(stdout);
-
-	return start + g_bytesPerHalfRow;
-}
-
-void UVDHexdumpCore(const void *data_in, size_t size, const std::string &prefix, bool print_address, unsigned int address_start)
-{
-	/*
-	[mcmaster@gespenst icd2prog-0.3.0]$ hexdump -C /bin/ls |head
-	00000000  7f 45 4c 46 01 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
-	00000010  02 00 03 00 01 00 00 00  f0 99 04 08 34 00 00 00  |............4...|
-	00017380  00 00 00 00 01 00 00 00  00 00 00 00              |............|
-	*/
-	const uint8_t *data = (const uint8_t *)data_in;
-
-	size_t pos = 0;
-	while( pos < size )
-	{
-		uint32_t row_start = pos;
-		uint32_t i = 0;
-
-		if (print_address) {
-			printf("0x%04X: ", address_start + pos);
-		}
-
-		printf("%s", prefix.c_str());
-		fflush(stdout);
-
-		pos = hexdumpHalfRow(data, size, pos);
-		pos = hexdumpHalfRow(data, size, pos);
-
-		printf("|");
-		fflush(stdout);
-
-		//Char view
-		for( i = row_start; i < row_start + g_bytesPerRow && i < size; ++i )
-		{
-			char c = data[i];
-			if( isprint(c) )
-			{
-				printf("%c", c);
-				fflush(stdout);
-			}
-			else
-			{
-				printf("%c", '.');
-				fflush(stdout);
-			}
-		} 
-		for( ; i < row_start + g_bytesPerRow; ++i )
-		{
-			printf(" ");
-			fflush(stdout);
-		}
-
-		printf("|\n");
-		fflush(stdout);
-	}
-	fflush(stdout);
-}
-
-void UVDHexdump(const void *data, size_t size)
-{
-	UVDHexdumpCore(data, size, "", false, 0);
-}
-
-
 #define REQ_FIRMWARE_LOAD		0xA0
 #define REG_CPUCS				0xE600
 
@@ -438,12 +356,21 @@ uint8_t *dump_fx2_mem( unsigned int start, size_t size ) {
 	return buff_ret;
 }
 
-void hexdump_fx2_mem( unsigned int start, unsigned int end ) {
+void hexdump_fx2_mem( unsigned int start, unsigned int end, const char *file ) {
 	size_t code_sz = end - start + 1;
 	uint8_t *code = NULL;
 	
 	code = dump_fx2_mem( start, code_sz );
 	UVDHexdumpCore( code, code_sz, "", true, start );
+	if (file) {
+		FILE *f = fopen(file, "w");
+		if (f == NULL) {
+			printf("file open failed\n");
+			exit(1);
+		}
+		fwrite(code, 1, code_sz, f);
+		fclose(f);
+	}
 	free( code );
 }
 
@@ -485,19 +412,19 @@ void download_ram() {
 	//Must be reset before reading / writing is allowed
 	fx2_reset();
 	
-	if (false) {
+	if (true) {
 		printf("Code short:\n");
-		hexdump_fx2_mem( 0x0000, 0x00F );
+		hexdump_fx2_mem( 0x0000, 0x00F, NULL );
 	}
 	if (true) {
 		printf("\n\n\n\n");
 		printf("Code:\n");
-		hexdump_fx2_mem( 0x0000, 0x1FFF );
+		hexdump_fx2_mem( 0x0000, 0x1FFF, "code.bin" );
 	}
 	if (true) {
 		printf("\n\n\n\n");
 		printf("RAM:\n");
-		hexdump_fx2_mem( 0xE000, 0xE1FF );
+		hexdump_fx2_mem( 0xE000, 0xE1FF, "ram.bin" );
 	}
 	/*
 	Leaving this out seems to make the next read not work until plugged back in
@@ -648,7 +575,7 @@ int validate_device( int vendor_id, int product_id ) {
 		A:Dear chris,Please check your email box,we have email it to you.DCM130 is Amscope MD600,2009-06-25
 		*/
 		//20784
-#define PROD_ID_AMSCOPE_MD600E
+//#define PROD_ID_AMSCOPE_MD600E
 		case 0x5130:
 			printf("AmScope MD600E\n");
 			return 0;
@@ -679,6 +606,14 @@ int validate_device( int vendor_id, int product_id ) {
 		case 0x9020:
 			printf("AmScope MD700E\n");
 			return 0;
+		/*
+        New guy (rev 2 cameras):
+        Bus 002 Device 007: ID 0547:6801 Anchor Chips, Inc. 
+        */
+		case 0x6801:
+			printf("AmScope MU800\n");
+			return 0;
+        
 		//NOT in stonedrv.sys or its .inf
 		//Not sure if its related
 		case 0x92A0:
@@ -947,8 +882,8 @@ int main(int argc, char **argv) {
 	//sleep(5);
 	
 	//example_code();
-	download_ram();
-	//replay();
+	//download_ram();
+	replay();
 	
 	usb_close(g_camera_handle);
 	
