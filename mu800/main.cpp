@@ -268,7 +268,7 @@ void capture() {
 }
 
 unsigned char *g_async_buff = NULL;
-const size_t g_async_buff_sz = g_camera.width * g_camera.height * 4;
+const size_t g_async_buff_sz = 0;
 unsigned int g_async_buff_pos = 0;
 bool g_should_stall = false;
 bool g_have_stalled = false;
@@ -353,6 +353,8 @@ void save_buffer(void) {
 void capture_async() {
     struct libusb_transfer *transfers[N_TRANSFERS];
 	int rc = 0;
+	
+	g_async_buff_sz = g_camera.width * g_camera.height * 4;
 	
     printf("Allocating main buffer...\n");
 	//Assemble everything into this buffer
@@ -528,6 +530,7 @@ int dev_init() {
     /*
     Now begins the encrypted packets (186-263)
     */
+#if 0
     std_enc_ctrl(0x0B, 0x0100, 0x0103);
     std_enc_ctrl(0x0B, 0x0000, 0x0100);
     std_enc_ctrl(0x0B, 0x0100, 0x0104);
@@ -567,6 +570,98 @@ int dev_init() {
     std_enc_ctrl(0x0B, 0x0100, 0x0100);
     std_enc_ctrl(0x0B, 0x0465, 0x3012);
     std_enc_ctrl(0x0B, 0x0465, 0x3012);
+    std_enc_ctrl(0x0B, 0x0100, 0x0104);
+    std_enc_ctrl(0x0B, 0x11C5, 0x3056);
+    std_enc_ctrl(0x0B, 0x11CF, 0x3058);
+    std_enc_ctrl(0x0B, 0x11ED, 0x305A);
+    std_enc_ctrl(0x0B, 0x11C5, 0x305C);
+    std_enc_ctrl(0x0B, 0x0000, 0x0104);
+#endif
+
+//#include "captures/resolution/800_600.decrypted"
+//#include "captures/resolution/1600_1200.decrypted"
+//#include "captures/resolution/3264_2448.decrypted"
+
+
+
+
+
+
+
+
+
+
+    std_enc_ctrl(0x0B, 0x0100, 0x0103);
+    std_enc_ctrl(0x0B, 0x0000, 0x0100);
+    std_enc_ctrl(0x0B, 0x0100, 0x0104);
+    std_enc_ctrl(0x0B, 0x0004, 0x0300);
+    std_enc_ctrl(0x0B, 0x0001, 0x0302);
+    std_enc_ctrl(0x0B, 0x0008, 0x0308);
+    std_enc_ctrl(0x0B, 0x0001, 0x030A);
+    std_enc_ctrl(0x0B, 0x0004, 0x0304);
+    std_enc_ctrl(0x0B, 0x0040, 0x0306);
+    std_enc_ctrl(0x0B, 0x0000, 0x0104);
+    std_enc_ctrl(0x0B, 0x0100, 0x0104);
+
+    if (g_camera.width == 800) {
+        std_enc_ctrl(0x0B, 0x0060, 0x0344);
+        std_enc_ctrl(0x0B, 0x0CD9, 0x0348);
+        std_enc_ctrl(0x0B, 0x0036, 0x0346);
+        std_enc_ctrl(0x0B, 0x098F, 0x034A);
+        std_enc_ctrl(0x0B, 0x07C7, 0x3040);
+    } else if (g_camera.width == 1600) {
+        std_enc_ctrl(0x0B, 0x009C, 0x0344);
+        std_enc_ctrl(0x0B, 0x0D19, 0x0348);
+        std_enc_ctrl(0x0B, 0x0068, 0x0346);
+        std_enc_ctrl(0x0B, 0x09C5, 0x034A);
+        std_enc_ctrl(0x0B, 0x06C3, 0x3040);
+    } else {
+        std_enc_ctrl(0x0B, 0x00E8, 0x0344);
+        std_enc_ctrl(0x0B, 0x0DA7, 0x0348);
+        std_enc_ctrl(0x0B, 0x009E, 0x0346);
+        std_enc_ctrl(0x0B, 0x0A2D, 0x034A);
+        std_enc_ctrl(0x0B, 0x0241, 0x3040);
+    }
+    std_enc_ctrl(0x0B, 0x0000, 0x0400);
+    std_enc_ctrl(0x0B, 0x0010, 0x0404);
+    
+#define INDEX_WIDTH         0x034C
+#define INDEX_HEIGHT        0x034E
+    //std_enc_ctrl(0x0B, 0x0CC0, 0x034C)
+    std_enc_ctrl(0x0B, g_camera.width, INDEX_WIDTH);
+    //std_enc_ctrl(0x0B, 0x0990, 0x034E)
+    std_enc_ctrl(0x0B, g_camera.height, INDEX_HEIGHT);
+    
+    if (g_camera.width == 800) {
+        std_enc_ctrl(0x0B, 0x0384, 0x300A);
+        std_enc_ctrl(0x0B, 0x0960, 0x300C);
+    } else if (g_camera.width == 1600) {
+        std_enc_ctrl(0x0B, 0x0640, 0x300A);
+        std_enc_ctrl(0x0B, 0x0FA0, 0x300C);
+    } else {
+        std_enc_ctrl(0x0B, 0x0B4B, 0x300A);
+        std_enc_ctrl(0x0B, 0x1F40, 0x300C);
+    }
+    
+    std_enc_ctrl(0x0B, 0x0000, 0x0104);
+    std_enc_ctrl(0x0B, 0x0301, 0x31AE);
+    std_enc_ctrl(0x0B, 0x0805, 0x3064);
+    std_enc_ctrl(0x0B, 0x0071, 0x3170);
+    std_enc_ctrl(0x0B, 0x10DE, 0x301A);
+    std_enc_ctrl(0x0B, 0x0000, 0x0100);
+    std_enc_ctrl(0x0B, 0x0010, 0x0306);
+    std_enc_ctrl(0x0B, 0x0100, 0x0100);
+    
+    if (g_camera.width == 800) {
+        std_enc_ctrl(0x0B, 0x06D6, 0x3012);
+        std_enc_ctrl(0x0B, 0x06D6, 0x3012);
+    } else if (g_camera.width == 1600) {
+        std_enc_ctrl(0x0B, 0x041A, 0x3012);
+        std_enc_ctrl(0x0B, 0x041A, 0x3012);
+    } else {
+        std_enc_ctrl(0x0B, 0x020D, 0x3012);
+        std_enc_ctrl(0x0B, 0x020D, 0x3012);
+    }
     std_enc_ctrl(0x0B, 0x0100, 0x0104);
     std_enc_ctrl(0x0B, 0x11C5, 0x3056);
     std_enc_ctrl(0x0B, 0x11CF, 0x3058);
@@ -785,12 +880,29 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
+	if (1) {
+        g_camera.width = 800;
+        g_camera.height = 600;
+    }
+    if (0) {
+        g_camera.width = 1600;
+        g_camera.height = 1200;
+    }
+    if (0) {
+        g_camera.width = 3264;
+        g_camera.height = 2448;
+    }
+	
 	//download_ram();
 	if (dev_init()) {
 	    printf("Failed to initialize camera\n");
     	shutdown();
 	    return 1;
 	}
+	
+
+    printf("Capturing %ux%u\n", g_camera.width, g_camera.height);
+
 	//It tries to dump string a bunch of times
 	//capture();
 	capture_async();

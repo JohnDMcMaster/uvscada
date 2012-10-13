@@ -15,10 +15,9 @@ def rright16(i, n):
 
 key = int(f.readline().split(',')[1], 0)
 check = rright16(key, 4)
-#check = 0xAC16
-print 'key: 0x%04X' % key
-print 'check: 0x%04X' % check
-#sys.exit(1)
+if 0:
+    print 'key: 0x%04X' % key
+    print 'check: 0x%04X' % check
 
 def decrypt16(i):
     return i ^ check

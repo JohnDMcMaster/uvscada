@@ -89,18 +89,21 @@ def hexdump(data, prefix = ''):
 
 
 def decode_mu800():
-    if 0:
+    if 1:
         width = 800
         height = 600
-    if 1:
+    if 0:
+        width = 1600
+        height = 1200
+    if 0:
         width = 3264
         height = 2448
-        
+    print 'Decoding %ux%u' % (width, height)
 
     f = open(image_in, "r")
     
     # First frame or two are dark
-    f.read(width * height * 2 + width * 0 + 0)
+    f.read(width * height * 0 + width * 514 + 736)
         
     image = None
     first_loop = True
@@ -207,7 +210,7 @@ def decode_mu800():
                 B = 0
                 image.putpixel((x + 1, y + 1), (R, G, B))
                 
-        if 1:
+        if 0:
             print 'Displaying image (%u bytes)' % len(bin)
             image.show()
             return
