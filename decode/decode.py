@@ -6,26 +6,132 @@ Slightly darker stripe one pixel in
 Essentially along the red pixels
 '''
 
-try:
-    import psyco
-    psyco.full()
-except ImportError:
-    pass
-
 import Image
 import sys
 import time
-import os
 
 image_in = None
 if len(sys.argv) > 1:
-    image_in = sys.argv[1]
+	image_in = sys.argv[1]
 if image_in is None:
-    image_in = "image.bin"
+	image_in = "image.bin"
 image_out = None
 if len(sys.argv) > 2:
-    image_out = sys.argv[2]
+	image_out = sys.argv[2]
 
+def decode_orig():
+	width = 640
+	height = 480 * 3
+	net_size = width * height * 3
+
+	print 'Net size: %d\n' % net_size
+
+	f = open(image_in, "r")
+	image = Image.new("RGB", (width, height), "White")
+
+	for y in range(0, height):
+		for x in range(0, width):
+			# putpixel(self, (x, y), (R, G, B))
+			R = ord(f.read(1))
+			G = ord(f.read(1))
+			B = ord(f.read(1))
+			image.putpixel((x, y), (R, G, B))
+
+	'''
+	for y in range(0, 40):
+		for x in range(0, 40):
+			image.putpixel((x, y), (255, 255, 255))
+	'''
+
+	if image_out:
+		image.write(image_out)
+	else:
+		image.show()
+	time.sleep(3)
+
+def decode2():
+	width = 640
+	height = 480 * 3
+
+	f = open(image_in, "r")
+	image = Image.new("RGB", (width, height), "White")
+
+	for y in range(0, height):
+		for x in range(0, width):
+			# putpixel(self, (x, y), (R, G, B))
+			#R = ord(f.read(1))
+			R = 0
+			G = ord(f.read(1))
+			#B = ord(f.read(1))
+			B = 0
+			image.putpixel((x, y), (R, G, B))
+
+	#image.show()
+	#time.sleep(3)
+	#image.save(
+
+
+def decode_SGBRG8():
+	'''
+	Require interpolation
+	Read two lines at a time
+	'''
+	width = 640
+	#width = 642
+	height = 480
+	
+	
+	f = open(image_in, "r")
+	
+	# Skip offset
+	#f.read(254)
+	f.read(640 / 2 + 300)
+	f.read(640 * 480 * 2)
+		
+	image = None
+	while True:
+		image = Image.new("RGB", (width, height), "White")
+		for y in range(0, height, 2):
+			# GBGB
+			# RGRG
+			line0 = f.read(width)
+			#line0 = f.read(width)
+			#line0 = f.read(width)
+		
+			line1 = f.read(width)
+			#line1 = f.read(width)
+			#line1 = f.read(width)
+		
+			if y < 0:
+				print '%03u start: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y, ord(line0[0]), ord(line0[1]), ord(line0[2]), ord(line0[3]))
+				print '%03u start: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y + 1, ord(line1[0]), ord(line1[1]), ord(line1[2]), ord(line1[3]))
+			if y < 0:
+				b = 640 - 4
+				print '%03u   end: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y, ord(line0[b + 0]), ord(line0[b + 1]), ord(line0[b + 2]), ord(line0[b + 3]))
+				print '%03u   end: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y + 1, ord(line1[b + 0]), ord(line1[b + 1]), ord(line1[b + 2]), ord(line1[b + 3]))
+
+		
+			for x in range(0, width):
+				R = ord(line1[x])
+				G = ord(line0[x])
+				# make even
+				B = ord(line0[x - (x % 2)])
+				if image:
+					image.putpixel((x, y), (R, G, B))
+			for x in range(0, width):
+				R = ord(line1[x])
+				# Make odd
+				G = ord(line1[x - (x % 2) + 1])
+				# make even
+				B = ord(line0[x - (x % 2)])
+				if image:
+					image.putpixel((x, y + 1), (R, G, B))
+		if image:
+			image.show()
+			break
+		print
+		print
+		print
 
 def hexdump(data, prefix = ''):
 	'''
@@ -36,7 +142,6 @@ def hexdump(data, prefix = ''):
 	'''
 	import sys
 	
-	size = len(data)
 	g_bytesPerRow = 16
 	g_bytesPerHalfRow = 8
 
@@ -65,8 +170,8 @@ def hexdump(data, prefix = ''):
 		i = 0
 
 		sys.stdout.write(prefix)
-		pos = hexdumpHalfRow(data, pos)
-		pos = hexdumpHalfRow(data, pos)
+		pos = hexdumpHalfRow(data, size, pos)
+		pos = hexdumpHalfRow(data, size, pos)
 
 		sys.stdout.write("|")
 
@@ -74,12 +179,10 @@ def hexdump(data, prefix = ''):
 		i = row_start
 		while i < row_start + g_bytesPerRow and i < size:
 			c = data[i]
-			def isprint(c):
-			    return c >= ' ' and c <= '~'
 			if isprint(c):
-				sys.stdout.write("%c" % c)
+				sys.stdout.write("%c", c)
 			else:
-				sys.stdout.write("%c" % '.')
+				sys.stdout.write("%c", '.')
 			i += 1
 		while i < row_start + g_bytesPerRow:
 			sys.stdout.write(" ")
@@ -87,128 +190,85 @@ def hexdump(data, prefix = ''):
 
 		sys.stdout.write("|\n")
 
+def decode_as_sensor():
+	'''
+	Require interpolation
+	Read two lines at a time
+	'''
+	width = 640
+	#width = 642
+	height = 480
+	
+	
+	f = open(image_in, "r")
+	
+	# Skip offset
+	#f.read(640 / 2)
+	#f.read(640)
+	#f.read(640 / 2 + 300)
+	f.read(640 * 480 * 2)
+		
+	image = None
+	while True:
+		image = Image.new("RGB", (width, height), "White")
+		for y in range(0, height, 2):
+			# GBGB
+			# RGRG
+			line0 = f.read(width)
+			#line0 = f.read(width)
+			#line0 = f.read(width)
+		
+			line1 = f.read(width)
+			#line1 = f.read(width)
+			#line1 = f.read(width)
+		
+			
+		
+			if y < 0:
+				print '%03u start: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y, ord(line0[0]), ord(line0[1]), ord(line0[2]), ord(line0[3]))
+				print '%03u start: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y + 1, ord(line1[0]), ord(line1[1]), ord(line1[2]), ord(line1[3]))
+			if y < 0:
+				b = 640 - 4
+				print '%03u   end: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y, ord(line0[b + 0]), ord(line0[b + 1]), ord(line0[b + 2]), ord(line0[b + 3]))
+				print '%03u   end: 0x%02X, 0x%02X, 0x%02X, 0x%02X' % (y + 1, ord(line1[b + 0]), ord(line1[b + 1]), ord(line1[b + 2]), ord(line1[b + 3]))
 
-def decode_mu800():
-    width = 800
-    height = 600
+			if False:
+				temp = line0
+				line0 = line1
+				line1 = temp
+		
+			for x in range(0, width):
+				R = 0
+				if x % 2 == 0:
+					G = 0
+					B = ord(line1[x])
+				else:
+					G = ord(line1[x])
+					B = 0
+					
+				if image:
+					image.putpixel((x, y), (R, G, B))
+			for x in range(0, width):
+				B = 0
+				if x % 2 == 0:
+					R = 0
+					G = ord(line0[x])
+				else:
+					R = ord(line0[x])
+					G = 0
+				
+				if image:
+					image.putpixel((x, y + 1), (R, G, B))
+		if image:
+			image.show()
+			break
+		print
+		print
+		print
 
-    f = open(image_in, "r")
-    
-    # First frame or two are dark
-    f.read(width * height * 18 + width * 0 + 0)
-        
-    image = None
-    first_loop = True
-    # no need to reallocate each loop
-    image = Image.new("RGB", (width, height), "Yellow")
-    frame = 0
-    while True:
-        frame += 1
-        bin = ''
-        print 'Rendering frame %d...' % frame
-        for y in range(0, height, 2):
-            # GBGB
-            # RGRG
-            line0 = f.read(width)
-            bin += line0
-            line1 = f.read(width)
-            bin += line1
-        
-            if y == 0:
-                print 'Line 0:'
-                hexdump(line0, '  ')
-        
-            if y % (height / 100) == 0:
-                print 'Rendering y = %d / %d...' % (y, height)
-        
-            '''
-            Assume
-            BGBGBG...
-            GRGRGR...
-            Since 16 bits / pix step 4 to skip over adjacent pixels
-            '''
-            '''
-            for x in range(0, width, 4):
-                R = 0
-                G = 0
-                B = int((ord(line0[x]) << 8) + ord(line0[x + 1]) / 256.0)
-                #image.putpixel((x / 2 + 0, y + 0), (R, G, B))
-            for x in range(2, width, 4):
-                R = 0
-                G = int((ord(line0[x]) << 8) + ord(line0[x + 1]) / 256.0)
-                B = 0
-                image.putpixel((x / 2 + 1, y + 0), (R, G, B))
-            for x in range(0, width, 4):
-                R = 0
-                G = int((ord(line1[x]) << 8) + ord(line1[x + 1]) / 256.0)
-                B = 0
-                image.putpixel((x / 2 + 0, y + 1), (R, G, B))
-            for x in range(2, width, 4):
-                R = int((ord(line1[x]) << 8) + ord(line1[x + 1]) / 256.0)
-                G = 0
-                B = 0
-                #image.putpixel((x / 2 + 1, y + 1), (R, G, B))
-            '''
-
-            '''
-            Best looking image so far
-            for x in range(0, width, 4):
-                R = 0
-                B = 0
-                G = int(((ord(line0[x]) << 8) + ord(line0[x + 1])) / 256.0)
-                image.putpixel((x, y), (R, G, B))
-            for x in range(2, width, 4):
-                R = int(((ord(line0[x]) << 8) + ord(line0[x + 1])) / 256.0)
-                B = 0
-                G = 0
-                image.putpixel((x + 1, y), (R, G, B))
-            for x in range(0, width, 4):
-                R = 0
-                B = int(((ord(line1[x]) << 8) + ord(line1[x + 1])) / 256.0)
-                G = 0
-                image.putpixel((x, y + 1), (R, G, B))
-            for x in range(2, width, 4):
-                R = 0
-                B = 0
-                G = int(((ord(line1[x]) << 8) + ord(line1[x + 1])) / 256.0)
-                image.putpixel((x + 1, y + 1), (R, G, B))
-            '''
-
-            '''
-            GRGRGR...
-            BGBGBG...
-            '''
-            for x in range(0, width, 2):
-                R = 0
-                G = ord(line0[x + 0])
-                B = 0
-                image.putpixel((x + 0, y + 0), (R, G, B))
-            for x in range(0, width, 2):
-                R = ord(line0[x + 1])
-                G = 0
-                B = 0
-                image.putpixel((x + 1, y + 0), (R, G, B))
-            for x in range(0, width, 2):
-                R = 0
-                G = 0
-                B = ord(line1[x + 0])
-                image.putpixel((x + 0, y + 1), (R, G, B))
-            for x in range(0, width, 2):
-                R = 0
-                G = ord(line1[x + 1])
-                B = 0
-                image.putpixel((x + 1, y + 1), (R, G, B))
-                
-        if 1:
-            print 'Displaying image (%u bytes)' % len(bin)
-            image.show()
-            return
-        else:
-            print 'Saving image'
-            image.save('frame_%04d.png' % frame)
-            print 'Saving binary'
-            open('frame_%04d.bin' % frame, 'w').write(bin)
-            return
-decode_mu800()
+#decode_orig()
+#decode2()
+#decode_SGBRG8()
+decode_as_sensor()
 
 
