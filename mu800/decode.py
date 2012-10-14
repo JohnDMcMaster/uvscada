@@ -105,7 +105,7 @@ def decode_mu800():
     # First frame or two are dark
     # 800x600 is unpredictable
     #f.read(width * height * 1 + width * 514 + 736)
-    f.read(width * height * 2 + width * 0 + 0)
+    f.read(width * height * 3 + width * 0 + 0)
         
     image = None
     first_loop = True
@@ -216,6 +216,7 @@ def decode_mu800():
             print 'Displaying image (%u bytes)' % len(bin)
             image.save('image.png')
             image.show()
+            open('image-single.bin', 'w').write(bin)
             return
         else:
             print 'Saving image'

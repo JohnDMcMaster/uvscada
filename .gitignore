@@ -10,4 +10,5 @@ testdata
 *.png
 captures
 test
+*.pyc
 

@@ -8,8 +8,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "hexdump.cpp"
-
 #define DEFAULT_TIMEOUT     500
 #define N_FRAMES            4
 
@@ -46,6 +44,7 @@ Bit 7:     Direction, ignored for
 //Always in
 #define DATA_EP     (VIDEO_ENDPOINT | LIBUSB_ENDPOINT_IN)
 
+#define N_TRANSFERS     16
 
 typedef struct {
     /*
@@ -58,30 +57,89 @@ typedef struct {
     uint16_t key;
     struct libusb_device_handle *handle;
     struct libusb_device *dev;
+
+    unsigned char *async_buff;
+    size_t async_buff_sz;
+    unsigned int async_buff_pos;
+    unsigned int active_urbs;
+    
+    bool error;
+
+    struct libusb_transfer *transfers[N_TRANSFERS];    
 } camera_t;
 camera_t g_camera = {
     width: 3264,
     height: 2448,
 };
 
-bool g_verbose = true;
+static bool g_verbose = true;
 
+typedef void (*simple_cb_t)(void);
+typedef void (*mu800_image_cb_t)(const uint8_t *raw, size_t width, size_t height);
 
-libusb_device_handle *locate_camera( void );
+/*
+Library functions / public API
+*/
+extern "C" {
+int mu800_init(void);
+int mu800_dev_init(void);
+void mu800_shutdown();
+uint8_t *mu800_image(void);
+int mu800_resolution(unsigned int width, unsigned int height);
+void mu800_verbose(bool verbose);
 
+void mu800_test(void);
+void mu800_simple_cb_test(simple_cb_t cb);
+void mu800_cb_test(mu800_image_cb_t cb);
+}
 
-void shutdown() {
+void mu800_test(void) {
+    printf("Test print\n");
+}
+
+void mu800_simple_cb_test(simple_cb_t cb) {
+    printf("C: simple cb dispatching\n");
+    fflush(stdout);
+    cb();
+    printf("C: simple cb dispatched\n");
+    fflush(stdout);
+}
+
+void mu800_cb_test(mu800_image_cb_t cb) {
+    printf("Test cb dispatching\n");
+    cb((const uint8_t *)"hello pretty", 123, 456);
+    printf("Test cb dispatched\n");
+}
+
+static libusb_device_handle *locate_camera( void );
+static void camera_exit(int rc);
+static const char* libusb_error_name 	( 	int  	error_code	);
+static unsigned int camera_bulk_read(int ep, void *bytes, int size);
+static unsigned int camera_bulk_write(int ep, void *bytes, int size);
+static unsigned int camera_control_message(int requesttype, int request,
+		int value, int index, uint8_t *bytes, int size);
+static int validate_read(void *expected, size_t expected_size, void *actual, size_t actual_size, const char *msg);
+static void capture();
+static void capture_async_cb(struct libusb_transfer *transfer);
+static int capture_async();
+static double cur_time(void);
+static int val_reply(const uint8_t *reply, size_t size);
+static int validate_device( int vendor_id, int product_id );
+static libusb_device_handle *locate_camera( void );
+static void relocate_camera();
+
+void mu800_shutdown() {
 	if (g_camera.handle) {
 		libusb_close(g_camera.handle);
 	}
 }
 
-void camera_exit(int rc) {
-    shutdown();
+static void camera_exit(int rc) {
+    mu800_shutdown();
 	exit(1);
 }
 
-const char* libusb_error_name 	( 	int  	error_code	) {
+static const char* libusb_error_name 	( 	int  	error_code	) {
     switch (error_code) {
 	case LIBUSB_SUCCESS:
 	    return "LIBUSB_SUCCESS";
@@ -201,12 +259,6 @@ int validate_read(void *expected, size_t expected_size, void *actual, size_t act
 	}
 	if (memcmp(expected, actual, expected_size)) {
 	    printf("%s: regions do not match\n", msg);
-	    if (g_verbose) {
-		    printf("  Actual:\n");
-		    UVDHexdumpCore(actual, expected_size, "    ", false, 0);
-		    printf("  Expected:\n");
-		    UVDHexdumpCore(expected, expected_size, "    ", false, 0);
-	    }
 		return -1;
 	}
 	if (g_verbose) {
@@ -215,73 +267,10 @@ int validate_read(void *expected, size_t expected_size, void *actual, size_t act
 	return 0;
 }
 
-//#include "fx2.cpp"
-
-
-const char *g_image_file_out = "image.bin";
-
-void capture() {
-	unsigned int n_read = 0;
-	int rc_tmp = 0;
-
-	char *buff = NULL;
-	unsigned int buff_pos = 0;
-	
-	unsigned int to_read = g_camera.width * g_camera.height * N_FRAMES;
-	//800x600 size
-	//const size_t buff_sz = 16384;
-	//having issues..use something shorter
-	const size_t buff_sz = TRANSFER_BUFF_SZ;
-	printf("Going to read %d, single read buffer size %d\n", to_read, buff_sz);
-	buff = (char *)malloc(to_read + buff_sz);
-	if (buff == NULL) {
-		printf("out of mem\n");
-		camera_exit(1);
-	}
-	memset(buff, 0x00, to_read + buff_sz);
-	fflush(stdout);
-	int count = 0;
-	unsigned int last_total = 0;
-	/*
-	Assuming RGB24 encoding @ 640 X 480 need 640 * 480 * 3 = 921600
-	*/
-	while (buff_pos < to_read) {
-		++count;
-		n_read = camera_bulk_read(DATA_EP, buff + buff_pos, buff_sz);
-		//printf("read %d\n", n_read);
-		buff_pos += n_read;
-		last_total += n_read;
-		if (last_total > 1000000) {
-			//printf("Got %u\n", last_total);
-			last_total = 0;
-		}
-	}
-	
-	//Log to file
-	FILE *file = fopen(g_image_file_out, "wb");
-	if (!file) {
-		perror("fopen");
-		camera_exit(1);
-	}
-	rc_tmp = fwrite(buff, 1, to_read, file);
-	if (rc_tmp != (int)to_read) {
-		printf("got %d expected %d\n", to_read, rc_tmp);
-		camera_exit(1);
-	}
-	printf("Done!\n");
-}
-
-unsigned char *g_async_buff = NULL;
-size_t g_async_buff_sz = 0;
-unsigned int g_async_buff_pos = 0;
-bool g_should_stall = false;
-bool g_have_stalled = false;
-unsigned int active_urbs = 0;
-
 void capture_async_cb(struct libusb_transfer *transfer) {
     int rc = -1;
     int to_copy = 0;
-    int remaining = g_async_buff_sz - g_async_buff_pos;
+    int remaining = g_camera.async_buff_sz - g_camera.async_buff_pos;
     /*
     Doc says that libusb is single threaded
     Assuming that I don't need to lock here
@@ -291,16 +280,9 @@ void capture_async_cb(struct libusb_transfer *transfer) {
         if (transfer->status == LIBUSB_TRANSFER_CANCELLED) {
             return;
         }
-        if (g_should_stall) {
-            --active_urbs;
-            if (active_urbs) {
-                printf("out of URBs, final code\n", transfer->status);
-                exit(1);
-            }
-            goto resubmit;
-        }
         printf("Transfer failed w/ code %u\n", transfer->status);
-        exit(1);
+        g_camera.error = true;
+        return;
     }
     
     if (transfer->actual_length > remaining) {
@@ -309,20 +291,8 @@ void capture_async_cb(struct libusb_transfer *transfer) {
         to_copy = transfer->actual_length;
     }
     
-	memcpy(g_async_buff + g_async_buff_pos, transfer->buffer, to_copy);
-	g_async_buff_pos += to_copy;
-    
-    /*
-    The hope is that the camera will detect getting behind and do something special
-    */
-    if (g_should_stall) {
-        if (!g_have_stalled && g_async_buff_pos >= g_async_buff_sz / 2) {
-            unsigned int stall_ms = 300;
-            printf("Stalling @ %u for %u ms\n", g_async_buff_pos, stall_ms);
-            usleep(stall_ms * 1000);
-            g_have_stalled = true;
-        }
-    }
+	memcpy(g_camera.async_buff + g_camera.async_buff_pos, transfer->buffer, to_copy);
+	g_camera.async_buff_pos += to_copy;
     
     //Resubmit
 resubmit:
@@ -334,40 +304,19 @@ resubmit:
     }
 }
 
-void save_buffer(void) {
-	//Log to file
-	FILE *file_out = NULL;
-	int rc = -1;
-	
-	file_out = fopen(g_image_file_out, "wb");
-	if (!file_out) {
-		perror("fopen");
-		camera_exit(1);
-	}
-	rc = fwrite(g_async_buff, 1, g_async_buff_sz, file_out);
-	if (rc != (int)g_async_buff_sz) {
-		printf("got %d expected %d\n", g_async_buff_sz, rc);
-		camera_exit(1);
-	}
-	printf("Done!\n");
-}
-
-#define N_TRANSFERS     16
-
-void capture_async() {
-    struct libusb_transfer *transfers[N_TRANSFERS];
+int capture_async() {
 	int rc = 0;
 	
-	g_async_buff_sz = g_camera.width * g_camera.height * N_FRAMES;
+	g_camera.async_buff_sz = g_camera.width * g_camera.height * N_FRAMES;
 	
     printf("Allocating main buffer...\n");
 	//Assemble everything into this buffer
-	g_async_buff = (unsigned char *)malloc(g_async_buff_sz);
-	if (g_async_buff == NULL) {
+	g_camera.async_buff = (unsigned char *)malloc(g_camera.async_buff_sz);
+	if (g_camera.async_buff == NULL) {
 		printf("out of mem\n");
-		camera_exit(1);
+		return -1;
 	}
-	memset(g_async_buff, 0x00, g_async_buff_sz);
+	memset(g_camera.async_buff, 0x00, g_camera.async_buff_sz);
 
     printf("Preparing transfers (buff size: %u)...\n", TRANSFER_BUFF_SZ);
     //And cull up some minions to drag bacon in
@@ -379,21 +328,21 @@ void capture_async() {
         
         if (buff == NULL) {
             printf("Failed to alloc transfer buffer\n");
-            exit(1);
+    		return -1;
         }
         
         transfer = libusb_alloc_transfer( 0 );
         if (transfer == NULL) {
             printf("Failed to alloc transfer\n");
-            exit(1);
+    		return -1;
         }
         
-        transfers[i] = transfer;
+        g_camera.transfers[i] = transfer;
         libusb_fill_bulk_transfer( transfer,
 		    g_camera.handle, DATA_EP,
 		    buff, buff_sz,
 		    capture_async_cb, NULL, DEFAULT_TIMEOUT );
-        ++active_urbs;
+        ++g_camera.active_urbs;
     }
     
     /*
@@ -403,7 +352,7 @@ void capture_async() {
     printf("Ready to roll, submitting transfers\n");
     fflush(stdout);
     for (unsigned int i = 0; i < N_TRANSFERS; ++i) {
-        struct libusb_transfer *transfer = transfers[i];
+        struct libusb_transfer *transfer = g_camera.transfers[i];
     	int rc = -1;
     	
     	//printf("Submitting transfer\n"); fflush(stdout);
@@ -412,12 +361,12 @@ void capture_async() {
         if (rc) {
             printf("Failed to submit transfer: %s (%d)\n",
                     libusb_error_name(rc) , rc); fflush(stdout);
-            exit(1);
+            return -1;
         }
 	}
 	
 	printf("Rolling\n");
-	while (g_async_buff_pos < g_async_buff_sz) {
+	while (g_camera.async_buff_pos < g_camera.async_buff_sz && !g_camera.error) {
 		struct timeval tv;
 		tv.tv_sec  = 0;
 		tv.tv_usec = 1000;
@@ -425,17 +374,17 @@ void capture_async() {
 		rc = libusb_handle_events_timeout(NULL, &tv); 
 		if (rc < 0) {
 		    printf("failed to handle events\n");
-			exit(1);
+			return -1;
 		}
 	}
 	
 	printf("Buffer full!\n");
 	
 	printf("Releasing transfers...\n");
-	printf("%u / %u transfers still alive\n", active_urbs, N_TRANSFERS);
+	printf("%u / %u transfers still alive\n", g_camera.active_urbs, N_TRANSFERS);
 	//Be a little nice
     for (unsigned int i = 0; i < N_TRANSFERS; ++i) {
-        struct libusb_transfer *transfer = transfers[i];
+        struct libusb_transfer *transfer = g_camera.transfers[i];
 
 		rc = libusb_cancel_transfer(transfer);
 		if (rc < 0) {
@@ -443,9 +392,6 @@ void capture_async() {
 	    }
 	    free(transfer->buffer);
 	}
-
-	printf("Saving buffer...\n");
-	save_buffer();
 }
 
 double cur_time(void) {
@@ -467,7 +413,7 @@ int val_reply(const uint8_t *reply, size_t size) {
     return 0;
 }
 
-int dev_init() {
+int mu800_dev_init() {
 #define std_ctrl(_request, _value, _index) do {\
     if (val_reply(buff, camera_control_message(0xC0, _request, _value, _index, buff, 1))) { \
         printf("Failed req(0xC0, 0x%02X, 0x%04X, 0x%04X\n", _request, _value, _index);\
@@ -729,7 +675,7 @@ int dev_init() {
         std_enc_ctrl(0x0B, 0x105C, 0x305C);
     }
     //Gain: mixed
-    if (0) {
+    if (1) {
         /*
         0x1000 seems to be completely off
         Still a reasonable image at 0x10FF
@@ -747,27 +693,12 @@ int dev_init() {
         Image faintly visible at FF01
         Very faint at 0x01FF, 0xFF01
         */
-        std_enc_ctrl(0x0B, 0x01FF, INDEX_GAIN_GTOP);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_B);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_GBOT);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_R);
+        std_enc_ctrl(0x0B, 0x11C5, INDEX_GAIN_GTOP);
+        std_enc_ctrl(0x0B, 0x11CF, INDEX_GAIN_B);
+        std_enc_ctrl(0x0B, 0x11ED, INDEX_GAIN_GBOT);
+        std_enc_ctrl(0x0B, 0x11C5, INDEX_GAIN_R);
     }
-    if (1) {
-        /*
-        0x68 = 1.0 * m, m = 0x68
-        
-        
-        */
-        double gain = 1.5;
-        unsigned int gain_offset = gain * 
-#define GAIN_BASE           0x1000
-#define GAIN_MAX            0x01FF
-        
-        std_enc_ctrl(0x0B, 0x01FF, INDEX_GAIN_GTOP);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_B);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_GBOT);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_R);
-    }    
+    
     
     
     
@@ -906,56 +837,47 @@ void relocate_camera() {
 	}
 }
 
-void usage() {
-	printf("mu800 [options]\n");
-	printf("Options:\n");
-	printf("-s: dump strings\n");
+uint8_t *mu800_image(void) {
+    unsigned int keep_index = N_FRAMES - 1;
+    
+    //If something went wrong last time try again
+    g_camera.error = false;
+    printf("Capturing %u %ux%u frames\n", N_FRAMES, g_camera.width, g_camera.height);
+
+	//It tries to dump string a bunch of times
+	//capture();
+    double start = cur_time();
+	capture_async();
+    double end = cur_time();
+    printf("Captured in %f sec\n", end - start);
+    
+    if (g_camera.async_buff_sz != g_camera.async_buff_pos) {
+        printf("failed to capture data, buff size %u != pos %u\n", g_camera.async_buff_sz, g_camera.async_buff_pos);
+        return NULL;
+    }
+    
+    return g_camera.async_buff + keep_index * g_camera.width * g_camera.height;
 }
 
-int main(int argc, char **argv) {	
-	bool should_dump_strings = false;
-	int rc_tmp = 0;
-	
-	opterr = 0;
-	while (true) {
-		int c = getopt(argc, argv, "h?vsr:");
-		
-		if (c == -1) {
-			break;
-		}
-		
-		switch (c)
-		{
-			case 'h':
-			case '?':
-				usage();
-				exit(1);
-				break;
-			
-			case 'v':
-				g_verbose = true;
-				break;
-			
-			case 's':
-				should_dump_strings = true;
-				break;
+void mu800_verbose(bool verbose) {
+    g_verbose = verbose;
+}
 
-			case 'r':
-			    //FIXME: select resolution
-				break;
-				
-			default:
-				printf("Unknown argument %c\n", c);
-				usage();
-				exit(1);
-		}
-	}
+int mu800_resolution(unsigned int width, unsigned int height) {
+    if (!(800 == width && 600 == height
+            || 1600 == width && 1200 == height
+            || 3264 == width && 2448 == height)) {
+        printf("Bad resolution %ux%u\n", width, height);
+        return -1;
+    }
+    g_camera.width = width;
+    g_camera.height = height;
+    return 0;
+}
 
-    //FIXME: do somehting for more than 1 fn...
-    for ( ; optind < argc; optind++) {
-		g_image_file_out = argv[optind];
-	}
-
+int mu800_init(void) {
+    int rc_tmp  = -1;
+    
 	libusb_init(NULL);
 	//Prints out *lots* of information on how it found it
 	libusb_set_debug(NULL, 4);
@@ -987,36 +909,16 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	if (0) {
-        g_camera.width = 800;
-        g_camera.height = 600;
-    }
-    if (1) {
-        g_camera.width = 1600;
-        g_camera.height = 1200;
-    }
-    if (0) {
-        g_camera.width = 3264;
-        g_camera.height = 2448;
-    }
+	//mu800_resolution(800, 600);
+	mu800_resolution(1600, 1200);
+	//mu800_resolution(3264, 2448);
 	
 	//download_ram();
-	if (dev_init()) {
+	if (mu800_dev_init()) {
 	    printf("Failed to initialize camera\n");
-    	shutdown();
+    	mu800_shutdown();
 	    return 1;
 	}
-	
-
-    printf("Capturing %u %ux%u frames\n", N_FRAMES, g_camera.width, g_camera.height);
-
-	//It tries to dump string a bunch of times
-	//capture();
-    double start = cur_time();
-	capture_async();
-    double end = cur_time();
-    printf("Captured in %f sec\n", end - start);
-	shutdown();
 	
 	return 0;
 }
