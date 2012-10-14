@@ -744,45 +744,63 @@ int dev_init() {
     
     
     
+    
+    
     std_enc_ctrl(0x0B, 0x0100, 0x0104);
     
+    
+    
+    
+    
+//Range 0x1000 (nothing) to 0x11FF (highest)
+#define GAIN_BASE           0x1000
+#define GAIN_MAX            0x01FF
+#define INDEX_GAIN_GTOP     0x3056
+#define INDEX_GAIN_B        0x3058
+#define INDEX_GAIN_R        0x305A
+#define INDEX_GAIN_GBOT     0x305C
     /*
     Gain registers
     Suspect related to the RGB or possibly bayer filter
     Bayer would explain the duplicate 11C5
     Yep, created screenshot to illu
     */
+    //Gain: 3.0
     if (0) {
-        //Gain: 3.0
         std_enc_ctrl(0x0B, 0x11C5, 0x3056);
         std_enc_ctrl(0x0B, 0x11CF, 0x3058);
         std_enc_ctrl(0x0B, 0x11ED, 0x305A);
         std_enc_ctrl(0x0B, 0x11C5, 0x305C);
     }
+    //Gain: 1.0
     if (0) {
-        //Gain: 1.0
         std_enc_ctrl(0x0B, 0x105C, 0x3056);
         std_enc_ctrl(0x0B, 0x1068, 0x3058);
         std_enc_ctrl(0x0B, 0x10C8, 0x305A);
         std_enc_ctrl(0x0B, 0x105C, 0x305C);
     }
+    //Gain: mixed
     if (1) {
         /*
         0x1000 seems to be completely off
         Still a reasonable image at 0x10FF
+        Seems to be modular, at 0x12FF it looked like 0x10FF
+            Sure enough 0x1200 was blank
+            Set the two green channels phased by 0x200 as above and indistinguishable
         */
-        //Gain: mixed
-        //G top
-        std_enc_ctrl(0x0B, 0x1000, 0x3056);
-        //Going to guess red...
-        std_enc_ctrl(0x0B, 0x1000, 0x3058);
-        //G bottom
-        std_enc_ctrl(0x0B, 0x1000, 0x305A);
-        //Going to guess blue...
-        std_enc_ctrl(0x0B, 0x10FF, 0x305C);
+        std_enc_ctrl(0x0B, 0x1000, INDEX_GAIN_GTOP);
+        std_enc_ctrl(0x0B, 0x1000, INDEX_GAIN_B);
+        std_enc_ctrl(0x0B, 0x1000, INDEX_GAIN_GBOT);
+        std_enc_ctrl(0x0B, 0x11FF, INDEX_GAIN_R);
     }
     
+    
+    
+    
+    
+    
     std_enc_ctrl(0x0B, 0x0000, 0x0104);
+
 
     //Omitted this by accident, does not work without it
     camera_control_message(0x40, 0x01, 0x0003, 0x000F, NULL, 0);
