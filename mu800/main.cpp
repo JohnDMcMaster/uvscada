@@ -6,8 +6,12 @@
 #include <string.h>
 #include <string>
 #include <stdlib.h>
+#include <time.h>
 
 #include "hexdump.cpp"
+
+#define DEFAULT_TIMEOUT     500
+#define N_FRAMES            4
 
 /*
 The original:
@@ -117,7 +121,7 @@ unsigned int camera_bulk_read(int ep, void *bytes, int size) {
     
 	//int libusb_bulk_read(usb_dev_handle *dev, int ep, char *bytes, int size,
 	//	int timeout);
-	int rc_tmp = libusb_bulk_transfer(g_camera.handle, ep, (unsigned char *)bytes, size, &actual_length, 500);
+	int rc_tmp = libusb_bulk_transfer(g_camera.handle, ep, (unsigned char *)bytes, size, &actual_length, DEFAULT_TIMEOUT);
 	
 	if (rc_tmp < 0) {
 		perror("ERROR");
@@ -134,7 +138,7 @@ unsigned int camera_bulk_read(int ep, void *bytes, int size) {
 
 unsigned int camera_bulk_write(int ep, void *bytes, int size) {
     int actual_length = 0;
-	int rc_tmp =  libusb_bulk_transfer(g_camera.handle, ep, (unsigned char *)bytes, size, &actual_length, 500);
+	int rc_tmp =  libusb_bulk_transfer(g_camera.handle, ep, (unsigned char *)bytes, size, &actual_length, DEFAULT_TIMEOUT);
 	
 	if (rc_tmp < 0) {
 		perror("ERROR");
@@ -182,7 +186,7 @@ unsigned int camera_control_message(int requesttype, int request,
 		__u8 request, __u8 requesttype, __u16 value, __u16 index,
 		void *data, __u16 size, int timeout);
 	*/
-	rc_tmp = libusb_control_transfer(g_camera.handle, requesttype, request, value, index, (unsigned char *)bytes, size, 500);
+	rc_tmp = libusb_control_transfer(g_camera.handle, requesttype, request, value, index, (unsigned char *)bytes, size, DEFAULT_TIMEOUT);
 	if (rc_tmp < 0) {
 		printf("failed\n");
 		exit(1);
@@ -223,7 +227,7 @@ void capture() {
 	char *buff = NULL;
 	unsigned int buff_pos = 0;
 	
-	unsigned int to_read = g_camera.width * g_camera.height * 4;
+	unsigned int to_read = g_camera.width * g_camera.height * N_FRAMES;
 	//800x600 size
 	//const size_t buff_sz = 16384;
 	//having issues..use something shorter
@@ -268,7 +272,7 @@ void capture() {
 }
 
 unsigned char *g_async_buff = NULL;
-const size_t g_async_buff_sz = 0;
+size_t g_async_buff_sz = 0;
 unsigned int g_async_buff_pos = 0;
 bool g_should_stall = false;
 bool g_have_stalled = false;
@@ -354,7 +358,7 @@ void capture_async() {
     struct libusb_transfer *transfers[N_TRANSFERS];
 	int rc = 0;
 	
-	g_async_buff_sz = g_camera.width * g_camera.height * 4;
+	g_async_buff_sz = g_camera.width * g_camera.height * N_FRAMES;
 	
     printf("Allocating main buffer...\n");
 	//Assemble everything into this buffer
@@ -388,7 +392,7 @@ void capture_async() {
         libusb_fill_bulk_transfer( transfer,
 		    g_camera.handle, DATA_EP,
 		    buff, buff_sz,
-		    capture_async_cb, NULL, 500 );
+		    capture_async_cb, NULL, DEFAULT_TIMEOUT );
         ++active_urbs;
     }
     
@@ -442,6 +446,13 @@ void capture_async() {
 
 	printf("Saving buffer...\n");
 	save_buffer();
+}
+
+double cur_time(void) {
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    
+    return t.tv_sec + t.tv_usec / 1000000.0;
 }
 
 //Return true if returned exactly {0x80}s
@@ -652,21 +663,125 @@ int dev_init() {
     std_enc_ctrl(0x0B, 0x0010, 0x0306);
     std_enc_ctrl(0x0B, 0x0100, 0x0100);
     
-    if (g_camera.width == 800) {
+    
+    
+    /*
+    Took the same time at 100 ms vs 350 ms exposure (2.0 seconds)
+    At 700 it took about 2.57 seconds
+    3 seconds at 1200
+        Had to increase URB timeout...
+    Test
+        Capturing 16 1600x1200 frames
+        Captured in 13.278530 sec
+        
+        30720000 bytes (30MiB)
+        30MB / 13.28 sec = 2.314 MB / sec
+        
+        13.279 / 16 = 0.83 sec / frame
+        How does this compare to exposure of 1200 ms?
+        My captures times have been pretty non-linear...not going to worry about it
+    */
+    float exposure_ms = 350;
+    uint16_t wValue = 0;
+    if (g_camera.width == 1200) {
+        /*
+        First was at default exposure of 350 ms
+        6d6 => 1750
+        
         std_enc_ctrl(0x0B, 0x06D6, 0x3012);
         std_enc_ctrl(0x0B, 0x06D6, 0x3012);
+        */
+        /*
+        This was approx 101 ms
+        1fb => 507
+        When the mouse is moved over the slider it says 740
+            Not either...
+        
+        std_enc_ctrl(0x0B, 0x01FB, 0x3012);
+        std_enc_ctrl(0x0B, 0x01FB, 0x3012);
+
+        507 * 350/101 = 1757
+        Winner!  Its linear
+        m = 5
+        0x6d6 / 0x1fb = 3.45
+
+        1750 =  m * 350
+        
+        In theory from 0 to  0xFFFF / 5 = 13107 ms
+        */
+        wValue = exposure_ms * 5;
     } else if (g_camera.width == 1600) {
-        std_enc_ctrl(0x0B, 0x041A, 0x3012);
-        std_enc_ctrl(0x0B, 0x041A, 0x3012);
+        /*
+        350:
+            std_enc_ctrl(0x0B, 0x041A, 0x3012);
+            std_enc_ctrl(0x0B, 0x041A, 0x3012);
+        101:
+            std_enc_ctrl(0x0B, 0x0130, 0x3012);
+            std_enc_ctrl(0x0B, 0x0130, 0x3012);
+        0x41a / 0x130 = 3.45
+        Same ratio
+        41a => 1050
+    
+        1050 =  m * 350, m = 1050/350 = 3
+        Hmm was expecting that it might have some linear relationship to resolution...
+        */
+        wValue = exposure_ms * 3;
     } else {
+        /*
         std_enc_ctrl(0x0B, 0x020D, 0x3012);
         std_enc_ctrl(0x0B, 0x020D, 0x3012);
+        
+        0x020d => 525
+        525 = m * 350 => m = 525 / 350 = 1.5
+        */
+        wValue = exposure_ms * 1.5;
     }
+    //Wonder if theres a good reason for sending it twice
+    std_enc_ctrl(0x0B, wValue, 0x3012);
+    std_enc_ctrl(0x0B, wValue, 0x3012);
+    
+    
+    
+    
+    
     std_enc_ctrl(0x0B, 0x0100, 0x0104);
-    std_enc_ctrl(0x0B, 0x11C5, 0x3056);
-    std_enc_ctrl(0x0B, 0x11CF, 0x3058);
-    std_enc_ctrl(0x0B, 0x11ED, 0x305A);
-    std_enc_ctrl(0x0B, 0x11C5, 0x305C);
+    
+    /*
+    Gain registers
+    Suspect related to the RGB or possibly bayer filter
+    Bayer would explain the duplicate 11C5
+    Yep, created screenshot to illu
+    */
+    if (0) {
+        //Gain: 3.0
+        std_enc_ctrl(0x0B, 0x11C5, 0x3056);
+        std_enc_ctrl(0x0B, 0x11CF, 0x3058);
+        std_enc_ctrl(0x0B, 0x11ED, 0x305A);
+        std_enc_ctrl(0x0B, 0x11C5, 0x305C);
+    }
+    if (0) {
+        //Gain: 1.0
+        std_enc_ctrl(0x0B, 0x105C, 0x3056);
+        std_enc_ctrl(0x0B, 0x1068, 0x3058);
+        std_enc_ctrl(0x0B, 0x10C8, 0x305A);
+        std_enc_ctrl(0x0B, 0x105C, 0x305C);
+    }
+    if (1) {
+        /*
+        0x1000 seems to be completely off
+        Still a reasonable image at 0x10FF
+        */
+        //Gain: mixed
+        //G top
+        std_enc_ctrl(0x0B, 0x1000, 0x3056);
+        //Going to guess red...
+        std_enc_ctrl(0x0B, 0x1000, 0x3058);
+        //G bottom
+        std_enc_ctrl(0x0B, 0x1000, 0x305A);
+        //Going to guess blue...
+        std_enc_ctrl(0x0B, 0x10FF, 0x305C);
+    }
+    
     std_enc_ctrl(0x0B, 0x0000, 0x0104);
 
     //Omitted this by accident, does not work without it
@@ -880,11 +995,11 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	
-	if (1) {
+	if (0) {
         g_camera.width = 800;
         g_camera.height = 600;
     }
-    if (0) {
+    if (1) {
         g_camera.width = 1600;
         g_camera.height = 1200;
     }
@@ -901,11 +1016,14 @@ int main(int argc, char **argv) {
 	}
 	
 
-    printf("Capturing %ux%u\n", g_camera.width, g_camera.height);
+    printf("Capturing %u %ux%u frames\n", N_FRAMES, g_camera.width, g_camera.height);
 
 	//It tries to dump string a bunch of times
 	//capture();
+    double start = cur_time();
 	capture_async();
+    double end = cur_time();
+    printf("Captured in %f sec\n", end - start);
 	shutdown();
 	
 	return 0;
