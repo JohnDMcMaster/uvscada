@@ -26,6 +26,7 @@ unload:
 	rmmod touptek
 
 install:
+	modprobe gspca_main
 	insmod ./touptek.ko
 
 uninstall:
