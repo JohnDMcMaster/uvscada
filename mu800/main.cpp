@@ -182,7 +182,7 @@ unsigned int camera_control_message(int requesttype, int request,
         )
 		
 	kernel
-	extern int libusb_control_msg(struct libusb_device *dev, unsigned int pipe,
+	extern int usb_control_msg(struct libusb_device *dev, unsigned int pipe,
 		__u8 request, __u8 requesttype, __u16 value, __u16 index,
 		void *data, __u16 size, int timeout);
 	*/
