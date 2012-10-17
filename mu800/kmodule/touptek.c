@@ -4,6 +4,9 @@
  *
  * Copyright (C) 2012 John McMaster <JohnDMcMaster@gmail.com>
  *
+ * Thanks to Sean O'Sullivan / the Rensselaer Center for Open Source
+ * Software (RCOS) for helping me learn kernel development
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -52,10 +55,10 @@ MODULE_DESCRIPTION("ToupTek UCMOS / Amscope MU microscope camera driver");
 MODULE_LICENSE("GPL");
 
 //#define sdbg(...)
-#define sdbg( _format, ... ) printk( KERN_INFO "touptek:%u DBG: " _format "\n", __LINE__, ## __VA_ARGS__ )
+#define sdbg( _format, ... ) printk( KERN_INFO "touptek DBG:%u: " _format "\n", __LINE__, ## __VA_ARGS__ )
 
-#define sdinfo( _format, ... ) printk( KERN_INFO "touptek:%u: " _format "\n", __LINE__, ## __VA_ARGS__ )
-#define sdalert( _format, ... ) printk( KERN_ALERT "touptek:%u: " _format "\n", __LINE__, ## __VA_ARGS__ )
+#define sdinfo( _format, ... ) printk( KERN_INFO "touptek INFO:%u: " _format "\n", __LINE__, ## __VA_ARGS__ )
+#define sdalert( _format, ... ) printk( KERN_INFO "touptek ALERT:%u: " _format "\n", __LINE__, ## __VA_ARGS__ )
 
 
 /* specific webcam descriptor */
@@ -76,24 +79,28 @@ static const struct ctrl sd_ctrls[] = {
 int do_reg_write(struct gspca_dev *dev, int wValue, int wIndex);
 
 static const struct v4l2_pix_format vga_mode[] = {
+	/*
 	{800, 600,
 		PIX_FMT,
 		V4L2_FIELD_NONE,
 		.bytesperline = 800,
 		.sizeimage = 800 * 600,
 		.colorspace = COLORSPACE},
+	*/
 	{1600, 1200,
 		PIX_FMT,
 		V4L2_FIELD_NONE,
 		.bytesperline = 1600,
 		.sizeimage = 1600 * 1200,
 		.colorspace = V4L2_COLORSPACE_SRGB},
+	/*
 	{3264, 2448,
 		PIX_FMT,
 		V4L2_FIELD_NONE,
 		.bytesperline = 3264,
 		.sizeimage = 3264 * 2448,
 		.colorspace = V4L2_COLORSPACE_SRGB},
+	*/
 };
 
 #if MAX_NURBS < 4
@@ -102,8 +109,10 @@ static const struct v4l2_pix_format vga_mode[] = {
 
 #define reg_write(_value, _index) do { \
     int _rc = do_reg_write(dev, _value, _index ); \
-    if (_rc) \
+    if (_rc) { \
+        sdbg("failed"); \
         return _rc; \
+    } \
 } while(0)
 
 int val_reply(const char *reply, int rc)
@@ -123,13 +132,24 @@ int val_reply(const char *reply, int rc)
     return 0;
 }
 
+#define chk_ptr(_ptr) do { \
+    if (_ptr == NULL) { \
+        sdalert("Bad pointer"); \
+        return -EFAULT;\
+    } \
+} while (0)
+
 int do_reg_write(struct gspca_dev *dev, int wValue, int wIndex)
 {
     char buff[1];
     int rc;
     
+    chk_ptr(dev);
+    
     rc = usb_control_msg(dev->dev, usb_rcvctrlpipe(dev->dev, 0),
             0x0B, 0xC0, wValue, wIndex, buff, 1, 500);
+    sdbg("Sent bRequest=0x0C, bValue=0x0B, wValue=0x%04X, wIndex=0x%04X, rc = %d, ret = {0x%02X}",
+            wValue, wIndex, rc, buff[0]);
     if (rc < 0) {
         sdalert("Failed reg_write(0x0B, 0xC0, 0x%04X, 0x%04X) w/ rc %d",
                 wValue, wIndex, rc);
@@ -146,6 +166,8 @@ int do_reg_write(struct gspca_dev *dev, int wValue, int wIndex)
 int width(struct gspca_dev *dev) {
      const struct v4l2_pix_format *cam_mode = dev->cam.cam_mode;
      
+    chk_ptr(dev);
+    
     //is this needed?
     if (cam_mode == NULL) {
         sdalert("it can happen");
@@ -157,6 +179,8 @@ int width(struct gspca_dev *dev) {
 int height(struct gspca_dev *dev) {
      const struct v4l2_pix_format *cam_mode = dev->cam.cam_mode;
      
+    chk_ptr(dev);
+    
     //is this needed?
     if (cam_mode == NULL) {
         sdalert("it can happen");
@@ -168,6 +192,8 @@ int height(struct gspca_dev *dev) {
 int size(struct gspca_dev *dev) {
      const struct v4l2_pix_format *cam_mode = dev->cam.cam_mode;
      
+    chk_ptr(dev);
+    
     //is this needed?
     if (cam_mode == NULL) {
         sdalert("it can happen");
@@ -179,15 +205,20 @@ int size(struct gspca_dev *dev) {
 int set_exposure(struct gspca_dev *dev, unsigned int exposure_ms)
 {
     uint16_t wValue;
+    unsigned int w;
     
-    if (width(dev) == 1200) {
+    chk_ptr(dev);
+    w = width(dev);
+    
+    if (w == 800) {
         wValue = exposure_ms * 5;
-    } else if (width(dev) == 1600) {
+    } else if (w == 1600) {
         wValue = exposure_ms * 3;
-    } else if (width(dev) == 3264) {
+    } else if (w == 3264) {
         wValue = exposure_ms * 3 / 2;
     } else {
-        return -EPERM;
+        sdbg("Invalid width %u", w);
+        return -EINVAL;
     }
     //Wonder if theres a good reason for sending it twice
     reg_write(wValue, INDEX_EXPOSURE);
@@ -198,11 +229,14 @@ int set_exposure(struct gspca_dev *dev, unsigned int exposure_ms)
 
 int set_gain(struct gspca_dev *dev)
 {
+    chk_ptr(dev);
+    
     //TODO: add argument to configure
-    reg_write(0x1100, INDEX_GAIN_GTOP);
-    reg_write(0x11FF, INDEX_GAIN_B);
-    reg_write(0x1100, INDEX_GAIN_GBOT);
-    reg_write(0x11FF, INDEX_GAIN_R);
+    //These are white balanced settings for "3.0" on a particular setup
+    reg_write(0x11C5, INDEX_GAIN_GTOP);
+    reg_write(0x11CF, INDEX_GAIN_B);
+    reg_write(0x11ED, INDEX_GAIN_GBOT);
+    reg_write(0x11C5, INDEX_GAIN_R);
     
     return 0;
 }
@@ -211,8 +245,15 @@ int set_gain(struct gspca_dev *dev)
 int configure_encrypted(struct gspca_dev *dev)
 {
     unsigned int rc;
+    unsigned int w;
     
+    chk_ptr(dev);
+    w = width(dev);
+    
+    sdbg("Encrypted begin, w = %u", w);
     reg_write(0x0100, 0x0103);
+    sdbg("Past first packet");
+    
     reg_write(0x0000, 0x0100);
     reg_write(0x0100, 0x0104);
     reg_write(0x0004, 0x0300);
@@ -224,26 +265,27 @@ int configure_encrypted(struct gspca_dev *dev)
     reg_write(0x0000, 0x0104);
     reg_write(0x0100, 0x0104);
 
-    if (width(dev) == 800) {
+    if (w == 800) {
         reg_write(0x0060, 0x0344);
         reg_write(0x0CD9, 0x0348);
         reg_write(0x0036, 0x0346);
         reg_write(0x098F, 0x034A);
         reg_write(0x07C7, 0x3040);
-    } else if (width(dev) == 1600) {
+    } else if (w == 1600) {
         reg_write(0x009C, 0x0344);
         reg_write(0x0D19, 0x0348);
         reg_write(0x0068, 0x0346);
         reg_write(0x09C5, 0x034A);
         reg_write(0x06C3, 0x3040);
-    } else if (width(dev) == 3264) {
+    } else if (w == 3264) {
         reg_write(0x00E8, 0x0344);
         reg_write(0x0DA7, 0x0348);
         reg_write(0x009E, 0x0346);
         reg_write(0x0A2D, 0x034A);
         reg_write(0x0241, 0x3040);
     } else {
-        return -EPERM;
+        sdbg("bad width %u", w);
+        return -EINVAL;
     }
     reg_write(0x0000, 0x0400);
     reg_write(0x0010, 0x0404);
@@ -259,17 +301,18 @@ int configure_encrypted(struct gspca_dev *dev)
     }
     reg_write(rc, INDEX_HEIGHT);
     
-    if (width(dev) == 800) {
+    if (w == 800) {
         reg_write(0x0384, 0x300A);
         reg_write(0x0960, 0x300C);
-    } else if (width(dev) == 1600) {
+    } else if (w == 1600) {
         reg_write(0x0640, 0x300A);
         reg_write(0x0FA0, 0x300C);
-    } else if (width(dev) == 3264) {
+    } else if (w == 3264) {
         reg_write(0x0B4B, 0x300A);
         reg_write(0x1F40, 0x300C);
     } else {
-        return -EPERM;
+        sdbg("bad width %u", w);
+        return -EINVAL;
     }
     
     reg_write(0x0000, 0x0104);
@@ -283,6 +326,7 @@ int configure_encrypted(struct gspca_dev *dev)
     
     rc = set_exposure(dev, 350);
     if (rc) {
+        sdbg("Failed to set exposure");
         return rc;
     }
         
@@ -290,10 +334,13 @@ int configure_encrypted(struct gspca_dev *dev)
     
     rc = set_gain(dev);
     if (rc) {
+        sdbg("Failed to set gain");
         return rc;
     }
     
     reg_write(0x0000, 0x0104);
+    
+    sdbg("Encrypted end");
     
     return 0;
 }
@@ -303,6 +350,10 @@ int configure(struct gspca_dev *dev)
     uint8_t buff[4];
     unsigned int rc;
 
+    chk_ptr(dev);
+    
+    sdbg("Beginning configure");
+    
     /*
     First driver sets a sort of encryption key
     A number of futur requests of this type have wValue and wIndex encrypted
@@ -373,6 +424,8 @@ int configure(struct gspca_dev *dev)
     //Omitted this by accident, does not work without it
     rc = usb_control_msg(dev->dev, usb_sndctrlpipe(dev->dev, 0),
             0x01, 0x40, 0x0003, 0x000F, NULL, 0, 500);
+
+    sdbg("Configure complete");
     
     return 0;
 }
@@ -381,15 +434,20 @@ int configure(struct gspca_dev *dev)
 static int sd_config(struct gspca_dev *dev,
 			const struct usb_device_id *id)
 {
+    chk_ptr(dev);
+    
 	sdbg("sd_config start");
 	dev->cam.cam_mode = vga_mode;
 	dev->cam.nmodes = ARRAY_SIZE(vga_mode);
+	sdbg("cam modes size: %d", dev->cam.nmodes);
 
-	//FIXME: this might be able to simplify this driver
-	//...err how does it work without URBs?
+    sdbg("Input flags: 0x%08X", dev->cam.input_flags);
+    //Yes we want URBs and we want them now!
 	dev->cam.no_urb_create = 0;
-	//presumably above ignores this
-	dev->cam.bulk_nurbs = 2;
+	//TODO: considering increasing much higher
+	//Without frame sync we need to make sure we never drop
+	dbg("Max nurbs: %d", MAX_NURBS);
+	dev->cam.bulk_nurbs = 4;
 	//Largest size the windows driver uses
 	dev->cam.bulk_size = 0x4000;
 	//Def need to use bulk transfers
@@ -398,6 +456,7 @@ static int sd_config(struct gspca_dev *dev,
 	//shouldn't really matter
 	//oh yes it does...reversing skips the first element since otherwise why would be reverse
 	dev->cam.reverse_alts = 0;
+	sdbg("n alts: %d", dev->nbalt);
 	sdbg("sd_config end");
 	return 0;
 }
@@ -408,6 +467,8 @@ static int sd_start(struct gspca_dev *dev)
 	struct sd *sd = NULL;
     int rc;
 
+    chk_ptr(dev);
+    
 	sdbg("sd_start() begin");
 	
 	sd = (struct sd *)dev;
@@ -419,7 +480,7 @@ static int sd_start(struct gspca_dev *dev)
 	    return rc;
 	}
 
-	sdbg("sd_start() end");
+	sdbg("sd_start() end, status %d", dev->usb_err);
 
 	return dev->usb_err;
 }
@@ -429,13 +490,26 @@ static void sd_pkt_scan(struct gspca_dev *dev,
 			int len)		/* iso packet length */
 {
 	struct sd *sd = (struct sd *)dev;
-	size_t frame_sz = size(dev);
+	size_t frame_sz;
+		
+    if (dev == NULL) {
+        sdalert("Bad pointer (dev)");
+        return;
+    }
+    if (data == NULL) {
+        sdalert("Bad pointer (data)");
+        return;
+    }
+    
+    //XXX: this might not be interrupt safe
+    //sdbg("sd_pkt_scan");
+	frame_sz = size(dev);
 
 	//if a frame is in progress see if we can finish it off
 	if (sd->this_f + len >= frame_sz) {
 		unsigned int remainder = frame_sz - sd->this_f;
-		sdbg("Completing frame, so far %u + %u new >= %u frame size just getting the last %u of %u",
-				sd->this_f, len, frame_sz, remainder, frame_sz);
+		//sdbg("Completing frame, so far %u + %u new >= %u frame size just getting the last %u of %u",
+		//i		sd->this_f, len, frame_sz, remainder, frame_sz);
 		//Completed a frame
 		gspca_frame_add(dev, LAST_PACKET,
 				data, remainder);
@@ -450,13 +524,13 @@ static void sd_pkt_scan(struct gspca_dev *dev,
 	}
 	if (len > 0) {
 		if (sd->this_f == 0) {
-			sdbg("start frame w/ %u bytes", len);
+			//sdbg("start frame w/ %u bytes", len);
 			//memset(data, 0xFF, len);
 			gspca_frame_add(dev, FIRST_PACKET,
 					data, len);
 		} else {
-			sdbg("continue frame w/ %u new bytes w/ %u so far of needed %u",
-			        len, sd->this_f, frame_sz);
+			//sdbg("continue frame w/ %u new bytes w/ %u so far of needed %u",
+			//        len, sd->this_f, frame_sz);
 			gspca_frame_add(dev, INTER_PACKET,
 					data, len);
 		}
@@ -470,6 +544,8 @@ static int sd_init(struct gspca_dev *dev)
 {
 	sdbg("sd_init");
 
+    chk_ptr(dev);
+    
 	return 0;
 }
 
@@ -497,10 +573,14 @@ static int sd_probe(struct usb_interface *intf,
 			const struct usb_device_id *id)
 {
 	int rc = 0;
+
+    chk_ptr(intf);
+    chk_ptr(id);
+
 	sdbg("sd_probe start, alt 0x%p", intf->cur_altsetting);
 	rc = gspca_dev_probe(intf, id, &sd_desc, sizeof(struct sd),
 				THIS_MODULE);
-	sdbg("sd_probe done");
+	sdbg("sd_probe done, rc %d", rc);
 	return rc;
 }
 
@@ -523,13 +603,13 @@ static int __init sd_mod_init(void)
 	ret = usb_register(&sd_driver);
 	if (ret < 0)
 		return ret;
-	info("registered");
+	sdinfo("registered");
 	return 0;
 }
 static void __exit sd_mod_exit(void)
 {
 	usb_deregister(&sd_driver);
-	info("deregistered");
+	sdinfo("deregistered");
 }
 
 module_init(sd_mod_init);

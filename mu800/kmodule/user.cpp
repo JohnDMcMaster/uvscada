@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 #include <string>
 
 /*
@@ -20,12 +21,12 @@
 //May need to change the internal kernel buffering
 #define WIN_BUFF_SZ			0x1400
 //char buff[WIN_BUFF_SZ];
-char buff[0x400];
+char buff[800 * 600];
 
 int main( int argc, char **argv ) {
 	int fd = 0;
 	FILE *out = NULL;
-	std::string dev = "/dev/uvscopetek0";
+	std::string dev = "/dev/video0";
 	std::string out_file_name = "out.bin";
 	
 	if (argc > 1) {
@@ -45,27 +46,35 @@ int main( int argc, char **argv ) {
 		perror("fopen");
 		exit(1);
 	}
+	printf("Open OK\n");
 	
-	unsigned int to_read = 640 * 480 * 3 * 4;
+	unsigned int to_read = 800 * 600 * 4;
 	unsigned n_written = 0;
 	while (to_read) {
-		unsigned int this_read = to_read;
-		if (this_read > sizeof(buff)) {
-			this_read = sizeof(buff);
+		unsigned int this_read = sizeof(buff);
+		
+		if (this_read > to_read) {
+		    this_read = to_read;
 		}
+		
+    	printf("Read size %d\n", this_read);
 		int rc = read(fd, &buff, this_read);
+		int err = errno;
 		if (rc < 0) {
 			perror("read");
+	    	printf("read rc %d, errno: %d\n", rc, err);
 			exit(1);
 		}
-		if (rc != to_read) {
+		if (rc != this_read) {
 			printf("WARNING: wanted %d got %d, may have wrong frame size\n",
-					rc, to_read );
+					this_read, rc );
+			break;
 		}
 		if ((unsigned)rc > this_read || (unsigned)rc > to_read) {
 			printf("WTF? %d %d %d\n", rc, this_read, to_read);
 			//exit(1);
 			rc = to_read;
+			break;
 		}
 		//printf("read %d bytes (%d / %d)\n", rc, i, limit);
 		to_read -= rc;

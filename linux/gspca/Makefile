@@ -11,7 +11,7 @@ KDIR:=/lib/modules/$(shell uname -r)/build
 EXTRA_CFLAGS += -I$(KDIR)/drivers/usb/serial -Wall -Werror
 #CFLAGS +=  -g
 EXTRA_CFLAGS += -g
-
+EXTRA_CFLAGS += -DGSPCA_DEBUG
 
 # Comment/uncomment the following line to disable/enable debugging
 DEBUG = y

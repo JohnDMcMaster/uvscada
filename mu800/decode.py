@@ -89,15 +89,33 @@ def hexdump(data, prefix = ''):
 
 
 def decode_mu800():
+
+    file_size = statinfo = os.stat(image_in).st_size
+    print 'File size: %u' % file_size
     if 1:
+        if 1:
+            width = 800
+            height = 600
+        if 0:
+            width = 1600
+            height = 1200
+        if 0:
+            width = 3264
+            height = 2448
+    elif file_size == 800 * 600:
+        print 'File matches 800X600'
         width = 800
         height = 600
-    if 1:
+    elif file_size == 1600 * 1200:
+        print 'File matches 1600X1200'
         width = 1600
         height = 1200
-    if 0:
+    elif file_size == 3264 * 2448:
         width = 3264
         height = 2448
+    else:
+        raise Exception('Failed to ID file dimension')
+        
     print 'Decoding %ux%u' % (width, height)
 
     f = open(image_in, "r")
@@ -105,7 +123,7 @@ def decode_mu800():
     # First frame or two are dark
     # 800x600 is unpredictable
     #f.read(width * height * 1 + width * 514 + 736)
-    f.read(width * height * 3 + width * 0 + 0)
+    f.read(width * height * 2 + width * 0 + 0)
         
     image = None
     first_loop = True

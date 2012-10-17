@@ -5,10 +5,10 @@ GZIP=gzip
 MKDIR=mkdir
 
 #KDIR:=/lib/modules/$(shell uname -r)/build
-KDIR:=/home/mcmaster/document/build/linux/linux-2.6.34.8
+KDIR:=/home/mcmaster/document/build/linux/linux-2.6.34.13
 
 #EXTRA_CFLAGS += -I$(KDIR)/include/config/usb
-EXTRA_CFLAGS += -I/home/mcmaster/document/build/linux/linux-3.1/drivers/media/video/gspca/
+EXTRA_CFLAGS += -I$(KDIR)/drivers/media/video/gspca
 EXTRA_CFLAGS += -Wall -Werror
 
 obj-m:=touptek.o
