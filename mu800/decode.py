@@ -153,59 +153,6 @@ def decode_mu800():
                 print 'Rendering y = %d / %d...' % (y, height)
         
             '''
-            Assume
-            BGBGBG...
-            GRGRGR...
-            Since 16 bits / pix step 4 to skip over adjacent pixels
-            '''
-            '''
-            for x in range(0, width, 4):
-                R = 0
-                G = 0
-                B = int((ord(line0[x]) << 8) + ord(line0[x + 1]) / 256.0)
-                #image.putpixel((x / 2 + 0, y + 0), (R, G, B))
-            for x in range(2, width, 4):
-                R = 0
-                G = int((ord(line0[x]) << 8) + ord(line0[x + 1]) / 256.0)
-                B = 0
-                image.putpixel((x / 2 + 1, y + 0), (R, G, B))
-            for x in range(0, width, 4):
-                R = 0
-                G = int((ord(line1[x]) << 8) + ord(line1[x + 1]) / 256.0)
-                B = 0
-                image.putpixel((x / 2 + 0, y + 1), (R, G, B))
-            for x in range(2, width, 4):
-                R = int((ord(line1[x]) << 8) + ord(line1[x + 1]) / 256.0)
-                G = 0
-                B = 0
-                #image.putpixel((x / 2 + 1, y + 1), (R, G, B))
-            '''
-
-            '''
-            Best looking image so far
-            for x in range(0, width, 4):
-                R = 0
-                B = 0
-                G = int(((ord(line0[x]) << 8) + ord(line0[x + 1])) / 256.0)
-                image.putpixel((x, y), (R, G, B))
-            for x in range(2, width, 4):
-                R = int(((ord(line0[x]) << 8) + ord(line0[x + 1])) / 256.0)
-                B = 0
-                G = 0
-                image.putpixel((x + 1, y), (R, G, B))
-            for x in range(0, width, 4):
-                R = 0
-                B = int(((ord(line1[x]) << 8) + ord(line1[x + 1])) / 256.0)
-                G = 0
-                image.putpixel((x, y + 1), (R, G, B))
-            for x in range(2, width, 4):
-                R = 0
-                B = 0
-                G = int(((ord(line1[x]) << 8) + ord(line1[x + 1])) / 256.0)
-                image.putpixel((x + 1, y + 1), (R, G, B))
-            '''
-
-            '''
             GRGRGR...
             BGBGBG...
             '''

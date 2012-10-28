@@ -749,8 +749,8 @@ int dev_init() {
         */
         std_enc_ctrl(0x0B, 0x01FF, INDEX_GAIN_GTOP);
         std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_B);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_GBOT);
         std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_R);
+        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_GBOT);
     }
     if (1) {
         /*
@@ -765,8 +765,8 @@ int dev_init() {
         
         std_enc_ctrl(0x0B, 0x01FF, INDEX_GAIN_GTOP);
         std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_B);
-        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_GBOT);
         std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_R);
+        std_enc_ctrl(0x0B, 0x1100, INDEX_GAIN_GBOT);
     }    
     
     

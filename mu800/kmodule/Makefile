@@ -17,7 +17,7 @@ default:
 	$(MAKE) -C $(KDIR) $(EXTRA_CFLAGS) SUBDIRS=$(PWD) modules
 
 clean:
-	$(RM) *.mod.c *.o *.ko .*.cmd *~ Modules.* modules.* *.symvers
+	$(RM) -rf *.mod.c *.o *.ko .*.cmd *~ Modules.* modules.* *.symvers .tmp_versions
 
 load:
 	insmod touptek.ko

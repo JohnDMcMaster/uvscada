@@ -38,9 +38,11 @@
 #define INDEX_WIDTH         0x034C
 #define INDEX_HEIGHT        0x034E
     
-//Range 0x1000 (nothing) to 0x11FF (highest)
-//At least thats what the win driver does...
-//in pratice you can crank it up much higher
+/*
+Range 0x1000 (nothing) to 0x11FF (highest)
+At least thats what the win driver does...
+in pratice you can crank it up much higher
+*/
 #define GAIN_BASE           0x1000
 #define GAIN_MAX            0x01FF
 #define INDEX_GAIN_GTOP     0x3056
@@ -64,19 +66,110 @@ MODULE_LICENSE("GPL");
 /* specific webcam descriptor */
 struct sd {
 	struct gspca_dev gspca_dev;	/* !! must be the first item */
-	//How many bytes this frame
+	/* How many bytes this frame */
 	unsigned int this_f;
+	//Bytes to throw away to complete a sync
+	unsigned int sync_consume;
+    
+    /*
+    Device has separate gains for each Bayer quadrant
+    V4L supports master gain which is referenced to G1/G2 and supplies
+    individual balance controls for R/B
+    */
+	u16 global_gain, red_bal, blue_bal;
+	/* In ms */
+	unsigned int exposure;
 };
+
+static int sd_setredbalance(struct gspca_dev *gspca_dev, s32 val);
+static int sd_getredbalance(struct gspca_dev *gspca_dev, s32 *val);
+static int sd_setbluebalance(struct gspca_dev *gspca_dev, s32 val);
+static int sd_getbluebalance(struct gspca_dev *gspca_dev, s32 *val);
+static int sd_setgain(struct gspca_dev *gspca_dev, s32 val);
+static int sd_getgain(struct gspca_dev *gspca_dev, s32 *val);
+static int sd_setexposure(struct gspca_dev *gspca_dev, s32 val);
+static int sd_getexposure(struct gspca_dev *gspca_dev, s32 *val);
+static int set_exposure(struct gspca_dev *dev);
+static int set_gain(struct gspca_dev *dev);
 
 /* V4L2 controls supported by the driver */
 static const struct ctrl sd_ctrls[] = {
-    //FIXME: add gain and exposure controls
+	{
+	    {
+		.id      = V4L2_CID_EXPOSURE,
+		.type    = V4L2_CTRL_TYPE_INTEGER,
+		.name    = "Exposure",
+		.minimum = 0,
+		/* Mostly limited by URB timeouts */
+		.maximum = 800,
+		.step    = 1,
+#define EXPOSURE_DEFAULT        350
+		.default_value = EXPOSURE_DEFAULT,
+	    },
+	    .set = sd_setexposure,
+	    .get = sd_getexposure,
+	},
+	/*
+	Defaults for gain 1.0
+	TODO: "suggested" gain is non-linear, model it
+
+
+    touptek DBG:368: gain G1: 0x105C
+    touptek DBG:369: gain G2: 0x105C
+    touptek DBG:370: gain B: 0x10C7
+    touptek DBG:371: gain R: 0x1067
+	*/
+	{
+	    {
+		.id      = V4L2_CID_GAIN,
+		.type    = V4L2_CTRL_TYPE_INTEGER,
+		.name    = "Gain",
+		.minimum = 0,
+		.maximum = GAIN_MAX,
+		.step    = 1,
+#define GAIN_DEFAULT 0x005C
+		.default_value = GAIN_DEFAULT,
+	    },
+	    .set = sd_setgain,
+	    .get = sd_getgain,
+	},
+	{
+	    {
+		.id	 = V4L2_CID_BLUE_BALANCE,
+		.type	 = V4L2_CTRL_TYPE_INTEGER,
+		.name	 = "Blue Balance",
+		.minimum = 0,
+		.maximum = GAIN_MAX,
+		.step	 = 1,
+//blue = sd->global_gain * sd->blue_bal / GAIN_MAX;
+//0x68 = GAIN_DEFAULT * x / GAIN_MAX
+//0x68 * GAIN_MAX / GAIN_DEFAULT = x
+#define BLUE_DEFAULT (0x68 * GAIN_MAX / GAIN_DEFAULT)
+		.default_value = BLUE_DEFAULT,
+	    },
+	    .set = sd_setbluebalance,
+	    .get = sd_getbluebalance,
+	},
+	{
+	    {
+		.id	 = V4L2_CID_RED_BALANCE,
+		.type	 = V4L2_CTRL_TYPE_INTEGER,
+		.name	 = "Red Balance",
+		.minimum = 0,
+		.maximum = GAIN_MAX,
+		.step	 = 1,
+#define RED_DEFAULT (0xC8 * GAIN_MAX / GAIN_DEFAULT)
+		.default_value = RED_DEFAULT,
+	    },
+	    .set = sd_setredbalance,
+	    .get = sd_getredbalance,
+	},
 };
 
-#define PIX_FMT		V4L2_PIX_FMT_SGBRG8
+#define PIX_FMT		V4L2_PIX_FMT_SGRBG8
 #define COLORSPACE  V4L2_COLORSPACE_SRGB
 
-int do_reg_write(struct gspca_dev *dev, int wValue, int wIndex);
+int do_reg_write(struct gspca_dev *gspca_dev, int wValue, int wIndex);
 
 static const struct v4l2_pix_format vga_mode[] = {
 	/*
@@ -108,7 +201,7 @@ static const struct v4l2_pix_format vga_mode[] = {
 #endif
 
 #define reg_write(_value, _index) do { \
-    int _rc = do_reg_write(dev, _value, _index ); \
+    int _rc = do_reg_write(gspca_dev, _value, _index ); \
     if (_rc) { \
         sdbg("failed"); \
         return _rc; \
@@ -139,14 +232,14 @@ int val_reply(const char *reply, int rc)
     } \
 } while (0)
 
-int do_reg_write(struct gspca_dev *dev, int wValue, int wIndex)
+int do_reg_write(struct gspca_dev *gspca_dev, int wValue, int wIndex)
 {
     char buff[1];
     int rc;
     
-    chk_ptr(dev);
+    chk_ptr(gspca_dev);
     
-    rc = usb_control_msg(dev->dev, usb_rcvctrlpipe(dev->dev, 0),
+    rc = usb_control_msg(gspca_dev->dev, usb_rcvctrlpipe(gspca_dev->dev, 0),
             0x0B, 0xC0, wValue, wIndex, buff, 1, 500);
     sdbg("Sent bRequest=0x0C, bValue=0x0B, wValue=0x%04X, wIndex=0x%04X, rc = %d, ret = {0x%02X}",
             wValue, wIndex, rc, buff[0]);
@@ -163,12 +256,10 @@ int do_reg_write(struct gspca_dev *dev, int wValue, int wIndex)
     return 0;
 }
 
-int width(struct gspca_dev *dev) {
-     const struct v4l2_pix_format *cam_mode = dev->cam.cam_mode;
+int width(struct gspca_dev *gspca_dev) {
+     const struct v4l2_pix_format *cam_mode = gspca_dev->cam.cam_mode;
      
-    chk_ptr(dev);
-    
-    //is this needed?
+    /* is this needed? */
     if (cam_mode == NULL) {
         sdalert("it can happen");
         return -EIO;
@@ -176,12 +267,10 @@ int width(struct gspca_dev *dev) {
     return cam_mode->width;
 }
 
-int height(struct gspca_dev *dev) {
-     const struct v4l2_pix_format *cam_mode = dev->cam.cam_mode;
+int height(struct gspca_dev *gspca_dev) {
+     const struct v4l2_pix_format *cam_mode = gspca_dev->cam.cam_mode;
      
-    chk_ptr(dev);
-    
-    //is this needed?
+    /* is this needed? */
     if (cam_mode == NULL) {
         sdalert("it can happen");
         return -EIO;
@@ -189,12 +278,12 @@ int height(struct gspca_dev *dev) {
     return cam_mode->height;
 }
 
-int size(struct gspca_dev *dev) {
-     const struct v4l2_pix_format *cam_mode = dev->cam.cam_mode;
+int size(struct gspca_dev *gspca_dev) {
+     const struct v4l2_pix_format *cam_mode = gspca_dev->cam.cam_mode;
      
-    chk_ptr(dev);
+    chk_ptr(gspca_dev);
     
-    //is this needed?
+    /* is this needed? */
     if (cam_mode == NULL) {
         sdalert("it can happen");
         return -EIO;
@@ -202,53 +291,164 @@ int size(struct gspca_dev *dev) {
     return cam_mode->sizeimage;
 }
 
-int set_exposure(struct gspca_dev *dev, unsigned int exposure_ms)
+static int sd_setexposure(struct gspca_dev *gspca_dev, s32 val)
 {
+	struct sd *sd = (struct sd *) gspca_dev;
+
+	sd->exposure = val;
+	if (gspca_dev->streaming)
+		return set_exposure(gspca_dev);
+	return 0;
+}
+
+static int sd_getexposure(struct gspca_dev *gspca_dev, s32 *val)
+{
+	struct sd *sd = (struct sd *) gspca_dev;
+	*val = sd->exposure;
+	return 0;
+}
+
+static int sd_setgain(struct gspca_dev *gspca_dev, s32 val)
+{
+	struct sd *sd = (struct sd *) gspca_dev;
+
+	sd->global_gain = val;
+	if (gspca_dev->streaming)
+		return set_gain(gspca_dev);
+	return 0;
+}
+
+static int sd_getgain(struct gspca_dev *gspca_dev, s32 *val)
+{
+	struct sd *sd = (struct sd *) gspca_dev;
+	*val = sd->global_gain;
+	return 0;
+}
+
+int set_exposure(struct gspca_dev *gspca_dev)
+{
+	struct sd *sd = (struct sd *)gspca_dev;
     uint16_t wValue;
     unsigned int w;
     
-    chk_ptr(dev);
-    w = width(dev);
+    chk_ptr(gspca_dev);
+    w = width(gspca_dev);
     
-    if (w == 800) {
-        wValue = exposure_ms * 5;
-    } else if (w == 1600) {
-        wValue = exposure_ms * 3;
-    } else if (w == 3264) {
-        wValue = exposure_ms * 3 / 2;
-    } else {
+    if (w == 800)
+        wValue = sd->exposure * 5;
+    else if (w == 1600)
+        wValue = sd->exposure * 3;
+    else if (w == 3264)
+        wValue = sd->exposure * 3 / 2;
+    else {
         sdbg("Invalid width %u", w);
         return -EINVAL;
     }
-    //Wonder if theres a good reason for sending it twice
+    sdbg("exposure: 0x%04X", wValue);
+    /* Wonder if theres a good reason for sending it twice */
     reg_write(wValue, INDEX_EXPOSURE);
     reg_write(wValue, INDEX_EXPOSURE);
     
     return 0;
 }
 
-int set_gain(struct gspca_dev *dev)
+int set_gain(struct gspca_dev *gspca_dev)
 {
-    chk_ptr(dev);
+    /*
+    Inspired by mt9v011.c's set_balance
+    TODO: the gain is actually non-linear, characterize it and get 
+    */
+	struct sd *sd = (struct sd *)gspca_dev;
+	u16 green1_gain, green2_gain, blue_gain, red_gain;
     
-    //TODO: add argument to configure
-    //These are white balanced settings for "3.0" on a particular setup
-    reg_write(0x11C5, INDEX_GAIN_GTOP);
-    reg_write(0x11CF, INDEX_GAIN_B);
-    reg_write(0x11ED, INDEX_GAIN_GBOT);
-    reg_write(0x11C5, INDEX_GAIN_R);
+    chk_ptr(gspca_dev);
+    /*
+    Green is always lower because there are twice as many pixels
+    Want all the colors to move up at least somewhat together
+    TODO: should bake GAIN_BASE into global gain?
+    */
+	green1_gain = GAIN_BASE + sd->global_gain;
+	green2_gain = GAIN_BASE + sd->global_gain;
+	//Only 9 bit, should not overflow
+	blue_gain = GAIN_BASE + sd->global_gain * sd->blue_bal / GAIN_MAX;
+	red_gain = GAIN_BASE + sd->global_gain * sd->red_bal / GAIN_MAX;
+
+    /*
+    //Gain 1.0
+    if (1) {
+        green1_gain = 0x105C;
+        blue_gain = 0x1068;
+        red_gain = 0x10C8;
+        green2_gain = 0x105C;
+    }
+    //Gain 3.0
+    if (1) {
+        green1_gain = 0x11C5;
+        blue_gain = 0x11CF;
+        red_gain = 0x11ED;
+        green2_gain = 0x11C5;
+    }
+    */
+
+    sdbg("gain G1 (0x%04X): 0x%04X (source 0x%04X, default: 0x%04X)",
+            INDEX_GAIN_GTOP, green1_gain, sd->global_gain, GAIN_DEFAULT);
+    sdbg("gain B (0x%04X): 0x%04X (source 0x%04X, default 0x%04X)",
+            INDEX_GAIN_B, blue_gain, sd->blue_bal, BLUE_DEFAULT);
+    sdbg("gain R (0x%04X): 0x%04X (source 0x%04X, default 0x%04X)",
+            INDEX_GAIN_R, red_gain, sd->red_bal, RED_DEFAULT);
+    sdbg("gain G2 (0x%04X): 0x%04X",
+            INDEX_GAIN_GBOT, green2_gain);
+    
+    reg_write(green1_gain, INDEX_GAIN_GTOP);
+    reg_write(blue_gain, INDEX_GAIN_B);
+    reg_write(red_gain, INDEX_GAIN_R);
+    reg_write(green2_gain, INDEX_GAIN_GBOT);
     
     return 0;
 }
 
-//Packets that were encrypted
-int configure_encrypted(struct gspca_dev *dev)
+static int sd_setredbalance(struct gspca_dev *gspca_dev, s32 val)
+{
+	struct sd *sd = (struct sd *) gspca_dev;
+
+	sd->red_bal = val;
+	if (gspca_dev->streaming)
+		return set_gain(gspca_dev);
+	return 0;
+}
+
+static int sd_getredbalance(struct gspca_dev *gspca_dev, s32 *val)
+{
+	struct sd *sd = (struct sd *) gspca_dev;
+	*val = sd->red_bal;
+	return 0;
+}
+
+static int sd_setbluebalance(struct gspca_dev *gspca_dev, s32 val)
+{
+	struct sd *sd = (struct sd *) gspca_dev;
+
+	sd->blue_bal = val;
+	if (gspca_dev->streaming)
+		return set_gain(gspca_dev);
+	return 0;
+}
+
+static int sd_getbluebalance(struct gspca_dev *gspca_dev, s32 *val)
+{
+	struct sd *sd = (struct sd *) gspca_dev;
+	*val = sd->blue_bal;
+	return 0;
+}
+
+/* Packets that were encrypted, no idea if the grouping is significant */
+int configure_encrypted(struct gspca_dev *gspca_dev)
 {
     unsigned int rc;
     unsigned int w;
     
-    chk_ptr(dev);
-    w = width(dev);
+    chk_ptr(gspca_dev);
+    w = width(gspca_dev);
     
     sdbg("Encrypted begin, w = %u", w);
     reg_write(0x0100, 0x0103);
@@ -290,12 +490,12 @@ int configure_encrypted(struct gspca_dev *dev)
     reg_write(0x0000, 0x0400);
     reg_write(0x0010, 0x0404);
     
-    rc = width(dev);
+    rc = width(gspca_dev);
     if (rc < 0) {
         return rc;
     }
     reg_write(rc, INDEX_WIDTH);
-    rc = height(dev);
+    rc = height(gspca_dev);
     if (rc < 0) {
         return rc;
     }
@@ -324,7 +524,8 @@ int configure_encrypted(struct gspca_dev *dev)
     reg_write(0x0010, 0x0306);
     reg_write(0x0100, 0x0100);
     
-    rc = set_exposure(dev, 350);
+    sdbg("Setting exposure");
+    rc = set_exposure(gspca_dev);
     if (rc) {
         sdbg("Failed to set exposure");
         return rc;
@@ -332,7 +533,8 @@ int configure_encrypted(struct gspca_dev *dev)
         
     reg_write(0x0100, 0x0104);
     
-    rc = set_gain(dev);
+    sdbg("Setting gain");
+    rc = set_gain(gspca_dev);
     if (rc) {
         sdbg("Failed to set gain");
         return rc;
@@ -345,12 +547,12 @@ int configure_encrypted(struct gspca_dev *dev)
     return 0;
 }
 
-int configure(struct gspca_dev *dev)
+int configure(struct gspca_dev *gspca_dev)
 {
     uint8_t buff[4];
     unsigned int rc;
 
-    chk_ptr(dev);
+    chk_ptr(gspca_dev);
     
     sdbg("Beginning configure");
     
@@ -364,7 +566,7 @@ int configure(struct gspca_dev *dev)
         XOR encrypt/decrypt is symmetrical
     By setting 0 we XOR with 0 and the shifting and XOR drops out
     */
-    rc = usb_control_msg(dev->dev, usb_rcvctrlpipe(dev->dev, 0),
+    rc = usb_control_msg(gspca_dev->dev, usb_rcvctrlpipe(gspca_dev->dev, 0),
             0x16, 0xC0, 0x0000, 0x0000, buff, 2, 500);
     if (val_reply(buff, rc)) {
         sdalert("failed key req");
@@ -384,28 +586,28 @@ int configure(struct gspca_dev *dev)
     Ignore: I want to work with their hardware, not clone it
     */
     
-    rc = usb_control_msg(dev->dev, usb_sndctrlpipe(dev->dev, 0),
+    rc = usb_control_msg(gspca_dev->dev, usb_sndctrlpipe(gspca_dev->dev, 0),
             0x01, 0x40, 0x0001, 0x000F, NULL, 0, 500);
     if (rc < 0) {
         sdalert("failed to replay packet 176 w/ rc %d\n", rc);
         return rc;
     }
     
-    rc = usb_control_msg(dev->dev, usb_sndctrlpipe(dev->dev, 0),
+    rc = usb_control_msg(gspca_dev->dev, usb_sndctrlpipe(gspca_dev->dev, 0),
             0x01, 0x40, 0x0000, 0x000F, NULL, 0, 500);
     if (rc < 0) {
         sdalert("failed to replay packet 178 w/ rc %d\n", rc);
         return rc;
     }
 
-    rc = usb_control_msg(dev->dev, usb_sndctrlpipe(dev->dev, 0),
+    rc = usb_control_msg(gspca_dev->dev, usb_sndctrlpipe(gspca_dev->dev, 0),
             0x01, 0x40, 0x0001, 0x000F, NULL, 0, 500);
     if (rc < 0) {
         sdalert("failed to replay packet 180 w/ rc %d\n", rc);
         return rc;
     }
     
-    rc = usb_control_msg(dev->dev, usb_rcvctrlpipe(dev->dev, 0),
+    rc = usb_control_msg(gspca_dev->dev, usb_rcvctrlpipe(gspca_dev->dev, 0),
             0x20, 0xC0, 0x0000, 0x0000, buff, 4, 500);
     if (rc != 4 || memcmp((char[]){0xE6, 0x0D, 0x00, 0x00}, buff, 4)) {
         sdalert("failed to replay packet 182 w/ rc %d\n", rc);
@@ -417,12 +619,12 @@ int configure(struct gspca_dev *dev)
     
     /* Large (EEPROM?) read, skip it since no idea what to do with it */
     
-    rc = configure_encrypted(dev);
+    rc = configure_encrypted(gspca_dev);
     if (rc)
         return rc;
 
-    //Omitted this by accident, does not work without it
-    rc = usb_control_msg(dev->dev, usb_sndctrlpipe(dev->dev, 0),
+    /* Omitted this by accident, does not work without it */
+    rc = usb_control_msg(gspca_dev->dev, usb_sndctrlpipe(gspca_dev->dev, 0),
             0x01, 0x40, 0x0003, 0x000F, NULL, 0, 500);
 
     sdbg("Configure complete");
@@ -431,68 +633,80 @@ int configure(struct gspca_dev *dev)
 }
 
 /* this function is called at probe time */
-static int sd_config(struct gspca_dev *dev,
+static int sd_config(struct gspca_dev *gspca_dev,
 			const struct usb_device_id *id)
 {
-    chk_ptr(dev);
+    chk_ptr(gspca_dev);
     
 	sdbg("sd_config start");
-	dev->cam.cam_mode = vga_mode;
-	dev->cam.nmodes = ARRAY_SIZE(vga_mode);
-	sdbg("cam modes size: %d", dev->cam.nmodes);
+	gspca_dev->cam.cam_mode = vga_mode;
+	gspca_dev->cam.nmodes = ARRAY_SIZE(vga_mode);
+	sdbg("cam modes size: %d", gspca_dev->cam.nmodes);
 
-    sdbg("Input flags: 0x%08X", dev->cam.input_flags);
-    //Yes we want URBs and we want them now!
-	dev->cam.no_urb_create = 0;
-	//TODO: considering increasing much higher
-	//Without frame sync we need to make sure we never drop
+    sdbg("Input flags: 0x%08X", gspca_dev->cam.input_flags);
+    /* Yes we want URBs and we want them now! */
+	gspca_dev->cam.no_urb_create = 0;
+	/*
+	TODO: considering increasing much higher
+	Without frame sync we need to make sure we never drop
+	*/
 	dbg("Max nurbs: %d", MAX_NURBS);
-	dev->cam.bulk_nurbs = 4;
-	//Largest size the windows driver uses
-	dev->cam.bulk_size = 0x4000;
-	//Def need to use bulk transfers
-	dev->cam.bulk = 1;
+	gspca_dev->cam.bulk_nurbs = 4;
+	/* Largest size the windows driver uses */
+	gspca_dev->cam.bulk_size = 0x4000;
+	/* Def need to use bulk transfers */
+	gspca_dev->cam.bulk = 1;
 	
-	//shouldn't really matter
-	//oh yes it does...reversing skips the first element since otherwise why would be reverse
-	dev->cam.reverse_alts = 0;
-	sdbg("n alts: %d", dev->nbalt);
+	/*
+	shouldn't really matter
+	oh yes it does...reversing skips the first element since otherwise why would be reverse
+	*/
+	gspca_dev->cam.reverse_alts = 0;
+	sdbg("n alts: %d", gspca_dev->nbalt);
 	sdbg("sd_config end");
 	return 0;
 }
 
 /* -- start the camera -- */
-static int sd_start(struct gspca_dev *dev)
+static int sd_start(struct gspca_dev *gspca_dev)
 {
-	struct sd *sd = NULL;
+	struct sd *sd = (struct sd *)gspca_dev;
     int rc;
 
-    chk_ptr(dev);
+    chk_ptr(gspca_dev);
     
 	sdbg("sd_start() begin");
 	
-	sd = (struct sd *)dev;
 	sd->this_f = 0;
 	
-	rc = configure(dev);
-	if (rc) {
+	rc = configure(gspca_dev);
+	if (rc < 0) {
 	    sdalert("Failed configure");
 	    return rc;
 	}
+	//First two frames have messed up gains
+	//Drop them to avoid special cases in user apps
+	rc = size(gspca_dev);
+	if (rc < 0) {
+	    sdbg("Failed size");
+	    return rc;
+    }
+	sd->sync_consume = 2 * rc;
+    sdbg("Dropping %u bytes at init", sd->sync_consume);
 
-	sdbg("sd_start() end, status %d", dev->usb_err);
+	sdbg("sd_start() end, status %d", gspca_dev->usb_err);
 
-	return dev->usb_err;
+	return gspca_dev->usb_err;
 }
 
-static void sd_pkt_scan(struct gspca_dev *dev,
+static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 			u8 *data,		/* isoc packet */
 			int len)		/* iso packet length */
 {
-	struct sd *sd = (struct sd *)dev;
+	struct sd *sd = (struct sd *)gspca_dev;
 	size_t frame_sz;
 		
-    if (dev == NULL) {
+    if (gspca_dev == NULL) {
         sdalert("Bad pointer (dev)");
         return;
     }
@@ -503,7 +717,21 @@ static void sd_pkt_scan(struct gspca_dev *dev,
     
     //XXX: this might not be interrupt safe
     //sdbg("sd_pkt_scan");
-	frame_sz = size(dev);
+	frame_sz = size(gspca_dev);
+
+    //Drop data as needed for sync
+	if (sd->sync_consume) {
+		sdbg("Got %u of %u needed to sync", len, sd->sync_consume );
+		if (len < sd->sync_consume) {
+			sd->sync_consume -= len;
+			len = 0;
+		} else {
+		    data += sd->sync_consume;
+			len -= sd->sync_consume;
+			sd->sync_consume = 0; 
+			sdbg("Sync'd, %u data left, frame has %u", len, sd->this_f);
+		}
+	}
 
 	//if a frame is in progress see if we can finish it off
 	if (sd->this_f + len >= frame_sz) {
@@ -511,7 +739,7 @@ static void sd_pkt_scan(struct gspca_dev *dev,
 		//sdbg("Completing frame, so far %u + %u new >= %u frame size just getting the last %u of %u",
 		//i		sd->this_f, len, frame_sz, remainder, frame_sz);
 		//Completed a frame
-		gspca_frame_add(dev, LAST_PACKET,
+		gspca_frame_add(gspca_dev, LAST_PACKET,
 				data, remainder);
 		len -= remainder;
 		data += remainder;
@@ -526,12 +754,12 @@ static void sd_pkt_scan(struct gspca_dev *dev,
 		if (sd->this_f == 0) {
 			//sdbg("start frame w/ %u bytes", len);
 			//memset(data, 0xFF, len);
-			gspca_frame_add(dev, FIRST_PACKET,
+			gspca_frame_add(gspca_dev, FIRST_PACKET,
 					data, len);
 		} else {
 			//sdbg("continue frame w/ %u new bytes w/ %u so far of needed %u",
 			//        len, sd->this_f, frame_sz);
-			gspca_frame_add(dev, INTER_PACKET,
+			gspca_frame_add(gspca_dev, INTER_PACKET,
 					data, len);
 		}
 		sd->this_f += len;
@@ -540,11 +768,18 @@ static void sd_pkt_scan(struct gspca_dev *dev,
 
 /* this function is called at probe and resume time */
 
-static int sd_init(struct gspca_dev *dev)
+static int sd_init(struct gspca_dev *gspca_dev)
 {
+	struct sd *sd = (struct sd *)gspca_dev;
+	
+    chk_ptr(gspca_dev);
 	sdbg("sd_init");
 
-    chk_ptr(dev);
+    /* Setting at init allows one app to adjust and another take pictures */
+    sd->exposure = EXPOSURE_DEFAULT;
+    sd->global_gain = GAIN_DEFAULT;
+    sd->red_bal = RED_DEFAULT;
+    sd->blue_bal = BLUE_DEFAULT;
     
 	return 0;
 }
@@ -603,7 +838,7 @@ static int __init sd_mod_init(void)
 	ret = usb_register(&sd_driver);
 	if (ret < 0)
 		return ret;
-	sdinfo("registered");
+	sdinfo("registered (1)");
 	return 0;
 }
 static void __exit sd_mod_exit(void)
