@@ -75,18 +75,6 @@ class MC(Controller):
 		Maybe all I need are some pullups / pulldowns
 		'''
 		self.off()
-		
-	def inches(self):
-		for axis in self.axes:
-			axis.inches()
-		
-	def mm(self):
-		for axis in self.axes:
-			axis.mm()
-
-	def um(self):
-		for axis in self.axes:
-			axis.um()
 	
 	def off(self):
 		self.usbio.set_relay(2, False)

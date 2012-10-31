@@ -45,7 +45,8 @@ class USBIO:
 	def try_open(self, device):
 		self.device = device
 		self.serial = serial.Serial(self.device, 9600, timeout=1)	
-			
+		if self.serial is None:
+			raise IOError('Can not connect to serial')
 	'''
 	Read the version of the USB_IO device firmware.
 	~ver~            ...............send to USB_IO

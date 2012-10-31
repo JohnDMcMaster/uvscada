@@ -60,6 +60,7 @@ class Measurement:
 		
 	def cpf_conversion(self):
 		# Convert particles / (0.01 ft**3) to particles / ft**3
+		# (as used in FED-STD-209E)
 		return 1 / 0.01
 	
 	def small_cpm(self):
@@ -70,6 +71,7 @@ class Measurement:
 		
 	def cpm_conversion(self):
 		# Convert particles / (0.01 ft**3) to particles / m**3
+		# 3531.466672149
 		return 1 / (0.01 * ((12.0 * 25.4 / 1000.0)**3))
 	
 	def valid(self):
