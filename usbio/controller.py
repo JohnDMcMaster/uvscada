@@ -12,15 +12,19 @@ class Controller:
         self.y = None
         self.z = None
         self.axes = []
+        self.axesd = {}
 
     def build_axes(self):
         self.axes = []
         if self.x:
             self.axes.append(self.x)
+            self.axesd[self.x.name] = self.x
         if self.y:
             self.axes.append(self.y)
+            self.axesd[self.y.name] = self.y
         if self.z:
             self.axes.append(self.z)
+            self.axesd[self.z.name] = self.z
 
     def inches(self):
         for axis in self.axes:
@@ -44,6 +48,15 @@ class Controller:
     def on(self):
         pass
 
+    def stop(self):
+        '''Gracefully stop the system at next interrupt point'''
+        for axis in self.axes:
+            axis.stop()
+
+    def estop(self):
+        '''Halt the system ASAP, possibly losing precision/position'''
+        for axis in self.axes:
+            axis.estop()
 
 class MockController(Controller):
     def __init__(self):

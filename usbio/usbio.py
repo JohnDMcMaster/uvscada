@@ -37,7 +37,7 @@ class USBIO:
 				except:
 					print 'Failed to open %s' % s
 					continue
-			if self.device is None:
+			if self.serial is None:
 				raise Exception("Failed to find a suitable device")
 		else:
 			self.try_open(device)

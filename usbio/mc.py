@@ -35,7 +35,7 @@ from usbio import USBIO
 VERSION = 0.0
 
 from optparse import OptionParser
-from axis import Axis
+from axis import Axis, MCAxis
 from controller import Controller
 
 # Klinger / Micro-controle driver
@@ -50,19 +50,22 @@ class MC(Controller):
 		Controller.__init__(self)
 		
 		self.usbio = USBIO()
-		print 'opened USBIO okay'
+		print 'opened some USBIO okay'
+		if self.usbio.serial is None:
+			raise Exception("USBIO missing serial")
+		
 		#self.usbio.set_relay(2, True)
 		#print 'debug break'
 		#sys.exit(1)
 		
-		self.x = Axis('X', self, 0, 1)
-		self.y = Axis('Y', self, 2, 3)
-		self.z = Axis('Z', self, 4, 5)
+		self.x = MCAxis('X', self, 0, 1)
+		self.y = MCAxis('Y', self, 2, 3)
+		self.z = MCAxis('Z', self, 4, 5)
 		
 		self.axes = [self.x, self.y, self.z]
 		
 		for axis in self.axes:
-			axis.do_forward(True)
+			axis.forward(True)
 		#self.inches()
 		self.um()
 		# enforce some initial state?
