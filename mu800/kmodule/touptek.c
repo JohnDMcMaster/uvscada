@@ -22,6 +22,19 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
+
+/*
+blue gain 199: looks good
+    touptek DBG:420: gain G1/G2 (0x3056): 0x105C (source 0x005C, default: 0x005C)
+    touptek DBG:433: gain B (0x3058): 0x107F (source 0x00C7, default 0x0042)
+    touptek DBG:442: gain R (0x305A): 0x10C7 (source 0x018F, default 0x018F)
+blue gain 200: turns yellow
+    touptek DBG:420: gain G1/G2 (0x3056): 0x105C (source 0x005C, default: 0x005C)
+    touptek DBG:433: gain B (0x3058): 0x1080 (source 0x00C8, default 0x0042)
+    touptek DBG:442: gain R (0x305A): 0x10C7 (source 0x018F, default 0x018F)
+
+*/
+
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/init.h>
@@ -43,6 +56,28 @@ Range 0x1000 (nothing) to 0x11FF (highest)
 At least thats what the win driver does...
 in pratice you can crank it up much higher
 */
+/*
+Blue gain needs ability to go much higher than red
+
+//Gain 1.0
+if (1) {
+    green1_gain = 0x105C;
+    //Ratio = 0x068 / 0x05C = 1.1304347826086956
+    blue_gain = 0x1068;
+    //Ratio = 0x0c8 / 0x05C = 2.1739130434782608
+    red_gain = 0x10C8;
+    green2_gain = 0x105C;
+}
+//Gain 3.0
+if (1) {
+    green1_gain = 0x11C5;
+    //Ratio = 0x1CF / 0x1C5 = 1.0220750551876379
+    blue_gain = 0x11CF;
+    //Ratio = 0x1ED / 0x1C5 = 1.0883002207505519
+    red_gain = 0x11ED;
+    green2_gain = 0x11C5;
+}
+*/
 #define GAIN_BASE           0x1000
 #define GAIN_MAX            0x01FF
 #define INDEX_GAIN_GTOP     0x3056
@@ -55,6 +90,10 @@ in pratice you can crank it up much higher
 MODULE_AUTHOR("John McMaster");
 MODULE_DESCRIPTION("ToupTek UCMOS / Amscope MU microscope camera driver");
 MODULE_LICENSE("GPL");
+
+static int drop_frames = 0;
+module_param(drop_frames, int, S_IRUGO);
+
 
 //#define sdbg(...)
 #define sdbg( _format, ... ) printk( KERN_INFO "touptek DBG:%u: " _format "\n", __LINE__, ## __VA_ARGS__ )
@@ -90,7 +129,7 @@ static int sd_getgain(struct gspca_dev *gspca_dev, s32 *val);
 static int sd_setexposure(struct gspca_dev *gspca_dev, s32 val);
 static int sd_getexposure(struct gspca_dev *gspca_dev, s32 *val);
 static int set_exposure(struct gspca_dev *dev);
-static int set_gain(struct gspca_dev *dev);
+static int set_gain(struct gspca_dev *dev, int set);
 
 /* V4L2 controls supported by the driver */
 static const struct ctrl sd_ctrls[] = {
@@ -109,16 +148,6 @@ static const struct ctrl sd_ctrls[] = {
 	    .set = sd_setexposure,
 	    .get = sd_getexposure,
 	},
-	/*
-	Defaults for gain 1.0
-	TODO: "suggested" gain is non-linear, model it
-
-
-    touptek DBG:368: gain G1: 0x105C
-    touptek DBG:369: gain G2: 0x105C
-    touptek DBG:370: gain B: 0x10C7
-    touptek DBG:371: gain R: 0x1067
-	*/
 	{
 	    {
 		.id      = V4L2_CID_GAIN,
@@ -141,15 +170,43 @@ static const struct ctrl sd_ctrls[] = {
 		.minimum = 0,
 		.maximum = GAIN_MAX,
 		.step	 = 1,
-//blue = sd->global_gain * sd->blue_bal / GAIN_MAX;
-//0x68 = GAIN_DEFAULT * x / GAIN_MAX
-//0x68 * GAIN_MAX / GAIN_DEFAULT = x
-#define BLUE_DEFAULT (0x68 * GAIN_MAX / GAIN_DEFAULT)
+/*
+touptek DBG:396: gain B (0x3058): 0x1067 (source 0x0241, default 0x0241)
+#define GAIN_DEFAULT 0x005C
+#define GAIN_MAX            0x01FF
+
+Goal: want 0x68 = 0x5C * x
+x = 1.1304347826086956
+The fundamental problem is that can't represent above the global gain
+
+
+G = global
+R = (red + global) / 2 * max
+B = (blue + global) / 2 * max
+
+Desirable characteristics:
+-Its possible to get red/blue gain above global (~green) gain, maybe twice as much
+-Other gains are directly proportional to global gain
+-R/B ideally are in range {0:0x1FF}
+*/
+
+/*
+blue_gain = sd->global_gain + 3 * ((uint32_t)sd->global_gain) * sd->blue_bal / GAIN_MAX / 2;
+0x68 = GAIN_DEFAULT + 3 * GAIN_DEFAULT * BLUE_DEFAULT / GAIN_MAX / 2
+0x68 = GAIN_DEFAULT (1 + 3 * BLUE_DEFAULT / GAIN_MAX / 2)
+0x68 / GAIN_DEFAULT = 1 + 3 * BLUE_DEFAULT / GAIN_MAX / 2
+0x68 / GAIN_DEFAULT - 1 = 3 * BLUE_DEFAULT / GAIN_MAX / 2
+GAIN_MAX * 2 * (0x68 / GAIN_DEFAULT - 1) / 3 = BLUE_DEFAULT
+*/
+#define BLUE_DEFAULT (1 * (0x68 * GAIN_MAX / GAIN_DEFAULT - GAIN_MAX) / 1)
 		.default_value = BLUE_DEFAULT,
 	    },
 	    .set = sd_setbluebalance,
 	    .get = sd_getbluebalance,
 	},
+	/*
+    touptek DBG:398: gain R (0x305A): 0x10C7 (source 0x0456, default 0x0456)
+	*/
 	{
 	    {
 		.id	 = V4L2_CID_RED_BALANCE,
@@ -158,13 +215,19 @@ static const struct ctrl sd_ctrls[] = {
 		.minimum = 0,
 		.maximum = GAIN_MAX,
 		.step	 = 1,
-#define RED_DEFAULT (0xC8 * GAIN_MAX / GAIN_DEFAULT)
+/*
+red_gain = sd->global_gain + ((uint32_t)sd->global_gain) * sd->red_bal / GAIN_MAX;
+Substituting for components in blue gain...
+GAIN_MAX * (0xC8 / GAIN_DEFAULT - 1) = RED_DEFAULT
+*/
+#define RED_DEFAULT (2 * (0xc8 * GAIN_MAX / GAIN_DEFAULT - GAIN_MAX) / 3)
 		.default_value = RED_DEFAULT,
 	    },
 	    .set = sd_setredbalance,
 	    .get = sd_getredbalance,
 	},
 };
+
 
 #define PIX_FMT		V4L2_PIX_FMT_SGRBG8
 #define COLORSPACE  V4L2_COLORSPACE_SRGB
@@ -179,21 +242,19 @@ static const struct v4l2_pix_format vga_mode[] = {
 		.bytesperline = 800,
 		.sizeimage = 800 * 600,
 		.colorspace = COLORSPACE},
-	*/
 	{1600, 1200,
 		PIX_FMT,
 		V4L2_FIELD_NONE,
 		.bytesperline = 1600,
 		.sizeimage = 1600 * 1200,
 		.colorspace = V4L2_COLORSPACE_SRGB},
-	/*
+	*/
 	{3264, 2448,
 		PIX_FMT,
 		V4L2_FIELD_NONE,
 		.bytesperline = 3264,
 		.sizeimage = 3264 * 2448,
 		.colorspace = V4L2_COLORSPACE_SRGB},
-	*/
 };
 
 #if MAX_NURBS < 4
@@ -314,7 +375,7 @@ static int sd_setgain(struct gspca_dev *gspca_dev, s32 val)
 
 	sd->global_gain = val;
 	if (gspca_dev->streaming)
-		return set_gain(gspca_dev);
+		return set_gain(gspca_dev, 1);
 	return 0;
 }
 
@@ -352,57 +413,54 @@ int set_exposure(struct gspca_dev *gspca_dev)
     return 0;
 }
 
-int set_gain(struct gspca_dev *gspca_dev)
+int set_gain(struct gspca_dev *gspca_dev, int set)
 {
     /*
     Inspired by mt9v011.c's set_balance
     TODO: the gain is actually non-linear, characterize it and get 
     */
 	struct sd *sd = (struct sd *)gspca_dev;
-	u16 green1_gain, green2_gain, blue_gain, red_gain;
+	u16 green_gain, blue_gain, red_gain;
     
     chk_ptr(gspca_dev);
     /*
     Green is always lower because there are twice as many pixels
+    even despite blue's lower response curve
     Want all the colors to move up at least somewhat together
     TODO: should bake GAIN_BASE into global gain?
     */
-	green1_gain = GAIN_BASE + sd->global_gain;
-	green2_gain = GAIN_BASE + sd->global_gain;
-	//Only 9 bit, should not overflow
-	blue_gain = GAIN_BASE + sd->global_gain * sd->blue_bal / GAIN_MAX;
-	red_gain = GAIN_BASE + sd->global_gain * sd->red_bal / GAIN_MAX;
-
-    /*
-    //Gain 1.0
-    if (1) {
-        green1_gain = 0x105C;
-        blue_gain = 0x1068;
-        red_gain = 0x10C8;
-        green2_gain = 0x105C;
-    }
-    //Gain 3.0
-    if (1) {
-        green1_gain = 0x11C5;
-        blue_gain = 0x11CF;
-        red_gain = 0x11ED;
-        green2_gain = 0x11C5;
-    }
-    */
-
-    sdbg("gain G1 (0x%04X): 0x%04X (source 0x%04X, default: 0x%04X)",
-            INDEX_GAIN_GTOP, green1_gain, sd->global_gain, GAIN_DEFAULT);
+	green_gain = GAIN_BASE + sd->global_gain;
+    sdbg("gain G1/G2 (0x%04X): 0x%04X (source 0x%04X, default: 0x%04X)",
+            INDEX_GAIN_GTOP, green_gain, sd->global_gain, GAIN_DEFAULT);
+	
+	/*
+	2 + 9 + 9 = 20 bits max, make sure enough room in intermediate result
+	Blue scaled {1..2.5}x green, red scaled {1..2.0}x green.  See notes at top
+	*/
+	blue_gain = sd->global_gain + 1 * ((uint32_t)sd->global_gain) * sd->blue_bal / GAIN_MAX / 1;
+	if (blue_gain > GAIN_MAX) {
+	    sdbg("Blue gain overflowd 0x%04X w/ value 0x%04X, truncating", GAIN_MAX, blue_gain);
+	    blue_gain = GAIN_MAX;
+	}
+	blue_gain += GAIN_BASE;
     sdbg("gain B (0x%04X): 0x%04X (source 0x%04X, default 0x%04X)",
             INDEX_GAIN_B, blue_gain, sd->blue_bal, BLUE_DEFAULT);
+	
+	red_gain = sd->global_gain + 3 * ((uint32_t)sd->global_gain) * sd->red_bal / GAIN_MAX / 2;
+    if (red_gain > GAIN_MAX) {
+	    sdbg("Red gain overflowd 0x%04X w/ value 0x%04X, truncating", GAIN_MAX, red_gain);
+	    red_gain = GAIN_MAX;
+	}
+	red_gain += GAIN_BASE;
     sdbg("gain R (0x%04X): 0x%04X (source 0x%04X, default 0x%04X)",
             INDEX_GAIN_R, red_gain, sd->red_bal, RED_DEFAULT);
-    sdbg("gain G2 (0x%04X): 0x%04X",
-            INDEX_GAIN_GBOT, green2_gain);
     
-    reg_write(green1_gain, INDEX_GAIN_GTOP);
-    reg_write(blue_gain, INDEX_GAIN_B);
-    reg_write(red_gain, INDEX_GAIN_R);
-    reg_write(green2_gain, INDEX_GAIN_GBOT);
+    if (set) {
+        reg_write(green_gain, INDEX_GAIN_GTOP);
+        reg_write(blue_gain, INDEX_GAIN_B);
+        reg_write(red_gain, INDEX_GAIN_R);
+        reg_write(green_gain, INDEX_GAIN_GBOT);
+    }
     
     return 0;
 }
@@ -413,7 +471,7 @@ static int sd_setredbalance(struct gspca_dev *gspca_dev, s32 val)
 
 	sd->red_bal = val;
 	if (gspca_dev->streaming)
-		return set_gain(gspca_dev);
+		return set_gain(gspca_dev, 1);
 	return 0;
 }
 
@@ -430,7 +488,7 @@ static int sd_setbluebalance(struct gspca_dev *gspca_dev, s32 val)
 
 	sd->blue_bal = val;
 	if (gspca_dev->streaming)
-		return set_gain(gspca_dev);
+		return set_gain(gspca_dev, 1);
 	return 0;
 }
 
@@ -534,7 +592,7 @@ int configure_encrypted(struct gspca_dev *gspca_dev)
     reg_write(0x0100, 0x0104);
     
     sdbg("Setting gain");
-    rc = set_gain(gspca_dev);
+    rc = set_gain(gspca_dev, 1);
     if (rc) {
         sdbg("Failed to set gain");
         return rc;
@@ -650,7 +708,7 @@ static int sd_config(struct gspca_dev *gspca_dev,
 	TODO: considering increasing much higher
 	Without frame sync we need to make sure we never drop
 	*/
-	dbg("Max nurbs: %d", MAX_NURBS);
+	sdbg("Max nurbs: %d", MAX_NURBS);
 	gspca_dev->cam.bulk_nurbs = 4;
 	/* Largest size the windows driver uses */
 	gspca_dev->cam.bulk_size = 0x4000;
@@ -691,7 +749,11 @@ static int sd_start(struct gspca_dev *gspca_dev)
 	    sdbg("Failed size");
 	    return rc;
     }
-	sd->sync_consume = 2 * rc;
+    /*
+    First two frames are dark, dropping eases many apps
+    but hurts others due to the delay
+    */
+	sd->sync_consume = drop_frames * rc;
     sdbg("Dropping %u bytes at init", sd->sync_consume);
 
 	sdbg("sd_start() end, status %d", gspca_dev->usb_err);
@@ -721,7 +783,7 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 
     //Drop data as needed for sync
 	if (sd->sync_consume) {
-		sdbg("Got %u of %u needed to sync", len, sd->sync_consume );
+		//sdbg("Got %u of %u needed to sync", len, sd->sync_consume );
 		if (len < sd->sync_consume) {
 			sd->sync_consume -= len;
 			len = 0;
@@ -780,6 +842,8 @@ static int sd_init(struct gspca_dev *gspca_dev)
     sd->global_gain = GAIN_DEFAULT;
     sd->red_bal = RED_DEFAULT;
     sd->blue_bal = BLUE_DEFAULT;
+    //Dummy calculation to print gains
+    set_gain(gspca_dev, 0);
     
 	return 0;
 }
