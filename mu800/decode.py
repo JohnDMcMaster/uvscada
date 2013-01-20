@@ -10,7 +10,8 @@ try:
     import psyco
     psyco.full()
 except ImportError:
-    pass
+    print 'Note: failed to import psyco'
+
 
 import Image
 import sys
@@ -93,13 +94,13 @@ def decode_mu800():
     file_size = statinfo = os.stat(image_in).st_size
     print 'File size: %u' % file_size
     if 1:
-        if 1:
+        if 0:
             width = 800
             height = 600
         if 0:
             width = 1600
             height = 1200
-        if 0:
+        if 1:
             width = 3264
             height = 2448
     elif file_size == 800 * 600:

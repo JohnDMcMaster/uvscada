@@ -5,10 +5,14 @@ GZIP=gzip
 MKDIR=mkdir
 
 #KDIR:=/lib/modules/$(shell uname -r)/build
-KDIR:=/home/mcmaster/document/build/linux/linux-2.6.34.13
-
 #EXTRA_CFLAGS += -I$(KDIR)/include/config/usb
+
+KDIR:=/home/mcmaster/document/build/linux/linux-2.6.34.13
 EXTRA_CFLAGS += -I$(KDIR)/drivers/media/video/gspca
+
+#KDIR:=/home/mcmaster/document/build/linux/linux-source-3.2.0
+#EXTRA_CFLAGS += -I$(KDIR)/drivers/media/video/gspca
+
 EXTRA_CFLAGS += -Wall -Werror
 
 obj-m:=touptek.o
@@ -34,13 +38,19 @@ uninstall:
 
 .PHONY: default clean load unload install uninstall dist
 
-go: default
-	-rmmod touptek
-	insmod ./touptek.ko
-	#-dd if=/dev/touptek0  of=dump.bin count=1024
-	#hexdump -C dump.bin
-	#dmesg |tail
-	mplayer /dev/touptek0 -rawvideo format=rgb24:w=1600:h=1200 -demuxer rawvideo
+go:
+	make clean
+	make
+	make uninstall
+	make install
+
+#go: default
+#	-rmmod touptek
+#	insmod ./touptek.ko
+#	#-dd if=/dev/touptek0  of=dump.bin count=1024
+#	#hexdump -C dump.bin
+#	#dmesg |tail
+#	mplayer /dev/touptek0 -rawvideo format=rgb24:w=1600:h=1200 -demuxer rawvideo
 
 run: default user
 	-rmmod touptek

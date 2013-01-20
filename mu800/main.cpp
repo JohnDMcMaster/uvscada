@@ -759,7 +759,6 @@ int dev_init() {
         
         */
         double gain = 1.5;
-        unsigned int gain_offset = gain * 
 #define GAIN_BASE           0x1000
 #define GAIN_MAX            0x01FF
         
