@@ -58,9 +58,9 @@ class MC(Controller):
 		#print 'debug break'
 		#sys.exit(1)
 		
-		self.x = MCAxis('X', self, 0, 1)
-		self.y = MCAxis('Y', self, 2, 3)
-		self.z = MCAxis('Z', self, 4, 5)
+		self.x = MCAxis('X', self, 0, 1, invert_dir=True)
+		self.y = MCAxis('Y', self, 2, 3, invert_dir=False)
+		self.z = MCAxis('Z', self, 4, 5, invert_dir=False)
 		
 		self.axes = [self.x, self.y, self.z]
 		

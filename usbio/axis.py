@@ -130,6 +130,22 @@ class MCAxis(Axis):
 		self._stop = threading.Event()
 		self._estop = threading.Event()
 		
+	def forever_pos(self):
+		'''Go forever in the positive direction until stopped'''
+		while not self._stop.is_set():
+			if self._estop.is_set():
+				return
+			self.step(10)
+		self._stop.clear()
+		
+	def forever_neg(self):
+		'''Go forever in the negative direction until stopped'''
+		while not self._stop.is_set():
+			if self._estop.is_set():
+				return
+			self.step(-10)
+		self._stop.clear()
+	
 	def stop(self):
 		self._stop.set()
 
@@ -138,6 +154,9 @@ class MCAxis(Axis):
 	
 	def unestop(self):
 		self._estop.clear()
+		
+	def unstop(self):
+		self._stop.clear()
 		
 	def step(self, steps):
 		self.forward(steps > 0)
@@ -159,7 +178,7 @@ class MCAxis(Axis):
 			self.usbio.set_gpio(self.step_pin, False)
 
 		self.net += steps
-		print '%s net %f um (%d steps)' % (self.name, self.net / self.steps_per_unit, self.net)	
+		#print '%s net %f um (%d steps)' % (self.name, self.net / self.steps_per_unit, self.net)	
 
 	def forward(self, is_forward = True):
 		if self.is_forward == is_forward:
