@@ -1,0 +1,62 @@
+TS: Tucsen
+ST: ScopeTek
+AM: Amscope
+TT: ToupTek
+
+Device                      MP  VID:PID     Family      Source
+AM MD400E                       04B4:E035   Scopetek    stonedrv
+Auto Focus Controller           0547:1010   Touptek     toupcam.inf
+AM MD900		                0547:4454   Scopetek    stonedrv
+AM MD800E		                0547:4D33   Scopetek    stonedrv
+AM MD900E		                0547:4D35   Scopetek    stonedrv
+AM MD900E		                0547:4D53   Scopetek    stonedrv
+ST DCM800, AM MD1800		    0547:4D88   Scopetek    stonedrv
+ST DCM900?, AM MD1900		    0547:4D90   Scopetek    stonedrv
+ST DCM130, AM MD600/MD600E      0547:5130   Scopetek    stonedrv (MD600E), http://www.oplenic.com/faq.asp?page=7 (DCM130, MD600)
+AM MD900		                0547:5257   Scopetek    stonedrv
+AM MD700                        0547:5258   Scopetek    stonedrv
+TT UCMOS10000KPA                0547:6010   Touptek     toupcam.inf
+TT UCMOS14000KPA                0547:6014   Touptek     toupcam.inf
+TT UCMOS00350KPA                0547:6035   Touptek     toupcam.inf
+TT UCMOS01300KPA                0547:6130   Touptek     toupcam.inf
+TT UCMOS01300KMA                0547:6131   Touptek     toupcam.inf
+TT UCMOS02000KPA                0547:6200   Touptek     toupcam.inf
+TT UCMOS03100KPA                0547:6310   Touptek     toupcam.inf
+TT UCMOS05100KPA                0547:6510   Touptek     toupcam.inf
+TT UCMOS05100KMA                0547:6511   Touptek     toupcam.inf
+TT UCMOS08000KPA                0547:6800   Touptek     toupcam.inf
+TT UCMOS08000KPB, AM MU800      0547:6801   Touptek     toupcam.inf, JM has one
+TT UCMOS09000KPA                0547:6900   Touptek     toupcam.inf
+TT UCMOS09000KPB                0547:6901   Touptek     toupcam.inf
+TT UHCCD01400KMA                0547:7140   Touptek     toupcam.inf
+TT UHCCD01400KMB                0547:7141   Touptek     toupcam.inf
+TT UHCCD02000KMA                0547:7200   Touptek     toupcam.inf
+TT UHCCD03150KMA                0547:7315   Touptek     toupcam.inf
+TT UHCCD00800KMA                0547:7800   Touptek     toupcam.inf
+TT UHCCD00800KPA                0547:8080   Touptek     toupcam.inf
+TT UHCCD01400KPA                0547:8140   Touptek     toupcam.inf
+TT EXCCD01400KPA                0547:8141   Touptek     toupcam.inf
+TT UHCCD02000KPA                0547:8200   Touptek     toupcam.inf
+TT UHCCD02000KPB                0547:8201   Touptek     toupcam.inf
+TT UHCCD03100KPA                0547:8310   Touptek     toupcam.inf
+TT UHCCD03150KPA                0547:8315   Touptek     toupcam.inf
+TT UHCCD05000KPA                0547:8500   Touptek     toupcam.inf
+TT UHCCD05100KPA                0547:8510   Touptek     toupcam.inf
+TT UHCCD06000KPA                0547:8600   Touptek     toupcam.inf
+TT UHCCD08000KPA                0547:8800   Touptek     toupcam.inf
+AM MD700E		                0547:9020   Scopetek    stonedrv
+?		                        0547:92A0   Unknown     Jeff
+TS 10.0 MP                      0547:a003   Unknown     Ashlesh
+TS IS1000, 10.0 MP              0547:C003   Tucsen      tucsen.inf, JM has one
+TS IS500                        0547:C004   Tucsen      tucsen.inf
+TS TCA-5.0BWLE                  0547:C006   Tucsen      tucsen.inf
+TS IS300                        0547:C007   Tucsen      tucsen.inf
+TS IS130                        0547:C008   Tucsen      tucsen.inf
+TS TCC-5.0                      0547:D001   Tucsen      tucsen.inf
+TS TM-6                         0547:D002   Tucsen      tucsen.inf
+TS TCC-1.4LICE                  0547:D004   Tucsen      tucsen.inf
+TS TCC-1.4HICE                  0547:D006   Tucsen      tucsen.inf
+TS TCC-1.4CHICE                 0547:D009   Tucsen      tucsen.inf
+
+
+
