@@ -1,15 +1,15 @@
 '''
-IO Pin   		Function
-IO_08   		IO8/Relay2  
-IO7        		IO_07
-IO_09  			IO9/Relay1    
+IO Pin           Function
+IO_08           IO8/Relay2  
+IO7                IO_07
+IO_09              IO9/Relay1    
 IO6/Counter0    IO_06               
-IO_0A   		IOA/ADC4          
-IO_05  			IO5/ADC3                
-IO_0B   		IOB/ADC5          
-IO_04  			IO4/ADC2
-IO_0C   		IOC/ADC6
-IO_03 			IO3/ADC1
+IO_0A           IOA/ADC4          
+IO_05              IO5/ADC3                
+IO_0B           IOB/ADC5          
+IO_04              IO4/ADC2
+IO_0C           IOC/ADC6
+IO_03             IO3/ADC1
 IO_0D           IO_02
 IOD/ADC7        IO2/ADC0
 IO_0E           IO_01
@@ -24,204 +24,211 @@ import time
 
 VERSION = 0.0
 
+class Timeout(Exception):
+    pass
+
 class USBIO:
-	# wtf is acm
-	def __init__(self, device = None):
-		self.serial = None
-		if device is None:
-			for s in ("/dev/ttyACM0", "/dev/ttyS5", "COM12"):
-				try:
-					self.try_open(s)
-					print 'Opened %s okay' % s
-					break
-				except:
-					print 'Failed to open %s' % s
-					continue
-			if self.serial is None:
-				raise Exception("Failed to find a suitable device")
-		else:
-			self.try_open(device)
+    # wtf is acm
+    def __init__(self, device=None, debug=False):
+        self.serial = None
+        self.debug = debug
+        if device is None:
+            for s in ("/dev/ttyACM0", "/dev/ttyS5", "COM12"):
+                try:
+                    self.try_open(s)
+                    print 'Opened %s okay' % s
+                    break
+                except IOError:
+                    print 'Failed to open %s' % s
+                    continue
+            if self.serial is None:
+                raise IOError("Failed to find a suitable device")
+        else:
+            self.try_open(device)
 
-	def try_open(self, device):
-		self.device = device
-		self.serial = serial.Serial(self.device, 9600, timeout=1)	
-		if self.serial is None:
-			raise IOError('Can not connect to serial')
-	'''
-	Read the version of the USB_IO device firmware.
-	~ver~            ...............send to USB_IO
-	~VER:3.8~       ...............Receive from USB_IO
-	16 Digital Input/Output Ports: IO0~IOF
-	~out0=1~ ..................send to USB_IO (IO0=`1`)
-	~OK~           ..................Receive from USB_IO
-	~outA=0~ ..................Send to USB_IO (IOA=`0`)
-	~OK~           ..................Receive from USB_IO
-	~osta9~ .......................Read the state of OUT_09
-	~OUTES9=1~        ............Receive from USB_IO (OUT_09 state)
-	~osta2~ .......................Read the state of OUT_02
-	~OUTES2=0~        ............Receive from USB_IO (OUT_02 state)
-	~in6~         ..................Send to USB_IO
-	~in6=0~       ..................Receive from USB_IO (IO6=`0`)
-	~inA~         ..................Send to USB_IO
-	~inA=1~       ..................Receive from USB_IO (IOA=`1`)
-	'''
-	
-	
-	
-	# Raw
-	def send_core(self, bytes_in):
-		bytes = '~' + bytes_in + '~'
-		#print 'Sending: %s' % bytes
-		self.serial.write(bytes)
-	
-	def recv(self):
-		# Sync until first ~
-		while True:
-			c = self.serial.read()
-			if c == '~':
-				break
-		
-		# Read until ~
-		ret = ''
-		while True:
-			c = self.serial.read()
-			if c == '~':
-				break
-			ret += c
-		
-		return ret
-		
-	def flush_rx(self):
-		return
-		try:
-			while len(self.serial.read(1)) > 0:
-				#print 'waiting...'
-				pass
-		except:
-			pass
-	
-	def send(self, bytes_out):
-		self.send_core(bytes_out)
-		reply = self.recv()
-		if not reply == "OK":
-			raise Exception("EEE!") 
-		
-	def send_recv(self, bytes_out):
-		self.send_core(bytes_out)
-		return self.recv()
-	
-	def get_version(self):
-		return self.send_recv("ver")
+    def try_open(self, device):
+        self.device = device
+        self.serial = serial.Serial(self.device, 9600, timeout=1)    
+        if self.serial is None:
+            raise IOError('Can not connect to serial')
+        # Clean out any leftover transactions from last run
+        # hmm but we have blocking set        
+        # self.flush_rx()
+        
+    '''
+    Read the version of the USB_IO device firmware.
+    ~ver~            ...............send to USB_IO
+    ~VER:3.8~       ...............Receive from USB_IO
+    16 Digital Input/Output Ports: IO0~IOF
+    ~out0=1~ ..................send to USB_IO (IO0=`1`)
+    ~OK~           ..................Receive from USB_IO
+    ~outA=0~ ..................Send to USB_IO (IOA=`0`)
+    ~OK~           ..................Receive from USB_IO
+    ~osta9~ .......................Read the state of OUT_09
+    ~OUTES9=1~        ............Receive from USB_IO (OUT_09 state)
+    ~osta2~ .......................Read the state of OUT_02
+    ~OUTES2=0~        ............Receive from USB_IO (OUT_02 state)
+    ~in6~         ..................Send to USB_IO
+    ~in6=0~       ..................Receive from USB_IO (IO6=`0`)
+    ~inA~         ..................Send to USB_IO
+    ~inA=1~       ..................Receive from USB_IO (IOA=`1`)
+    '''
+    
+    
+    
+    def recv(self):
+        # Sync until first ~
+        if self.debug:
+            print 'recv: waiting for opening ~'
+        for _i in xrange(5):
+            c = self.serial.read(1)
+            if self.debug:
+                print 'recv open wait: got %s' % (c,)
+            if c == '~':
+                break
+        else:
+            raise Timeout('Timed out waiting for opening ~')
+        
+        if self.debug:
+            print 'recv: waiting for closing ~'
+        # Read until ~
+        ret = ''
+        for _i in xrange(60):
+            c = self.serial.read(1)
+            if c == '~':
+                break
+            ret += c
+        else:
+            raise Timeout('Timed out waiting for closing ~')
+        
+        if self.debug:
+            print 'recv: returning: %s' % (ret,)
+        return ret
+        
+    def flush_rx(self):
+        return
+        try:
+            while len(self.serial.read()) > 0:
+                #print 'waiting...'
+                pass
+        except:
+            pass
+    
+    def send(self, bytes_out):
+        out = '~' + bytes_out + '~'
+        if self.debug:
+            print 'USBIO DEBUG: sending: %s' % (out,)
+        self.serial.write(out)
+        # Always expect a reply
+        return self.recv()
+        
+    def version(self):
+        return self.send("ver")
 
-	def set_gpio(self, index, is_on):
-		'''index valid 0-15'''
-		# Eliminate none and other corner cases
-		if is_on:
-			is_on = 1
-		else:
-			is_on = 0
-		
-		
-		#self.serial.flush()
-		self.send_core("out%X=%d" % (index, is_on))
-		#self.serial.flush()
-		#self.flush_rx()
-		self.recv()
-	
-	def set_relay(self, relay_id, is_on):
-		if relay_id == 1:
-			self.set_gpio(9, is_on)
-		elif relay_id == 2:
-			self.set_gpio(8, is_on)
-		else:
-			raise Exception("bad relay id")
+    def set_gpio(self, index, is_on):
+        '''index valid 0-15'''
+        is_on = 1 if is_on else 0
+        #self.serial.flush()
+        reply = self.send("out%X=%d" % (index, is_on))
+        #self.serial.flush()
+        #self.flush_rx()
+        if reply != "OK":
+            raise Exception("Expected OK but got %s" % (reply,)) 
+    
+    def set_relay(self, relay_id, is_on):
+        if relay_id == 1:
+            self.set_gpio(9, is_on)
+        elif relay_id == 2:
+            self.set_gpio(8, is_on)
+        else:
+            raise Exception("bad relay id")
 
 def str2bool(arg_value):
-	arg_value = arg_value.lower()
-	if arg_value == "false" or arg_value == "0" or arg_value == "no" or arg_value == "off":
-		return False
-	else:
-		return True
+    arg_value = arg_value.lower()
+    if arg_value == "false" or arg_value == "0" or arg_value == "no" or arg_value == "off":
+        return False
+    else:
+        return True
 
 def help():
-	print 'usbio version %s' % VERSION
-	print 'Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>'
-	print 'Usage:'
-	print 'usbio [options] [<port> <state>]'
-	print 'Options:'
-	print '--help: this message'
+    print 'usbio version %s' % VERSION
+    print 'Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>'
+    print 'Usage:'
+    print 'usbio [options] [<port> <state>]'
+    print 'Options:'
+    print '--help: this message'
 
 if __name__ == "__main__":
-	port = None
-	state = True
-	raw_index = 0
-	
-	for arg_index in range (1, len(sys.argv)):
-		arg = sys.argv[arg_index]
-		arg_key = None
-		arg_value = None
-		if arg.find("--") == 0:
-			arg_value_bool = True
-			if arg.find("=") > 0:
-				arg_key = arg.split("=")[0][2:]
-				arg_value = arg.split("=")[1]
-				arg_value_bool = str2bool(arg_value)
-			else:
-				arg_key = arg[2:]
-				
-			if arg_key == "help":
-				help()
-				sys.exit(0)
-			elif arg_key == "port":
-				port = arg_value
-			elif arg_key == "state":
-				state = arg_value_bool
-			else:
-				log('Unrecognized argument: %s' % arg)
-				help()
-				sys.exit(1)
-		else:
-			arg_bool = str2bool(arg)
+    port = None
+    state = True
+    raw_index = 0
+    
+    for arg_index in range (1, len(sys.argv)):
+        arg = sys.argv[arg_index]
+        arg_key = None
+        arg_value = None
+        if arg.find("--") == 0:
+            arg_value_bool = True
+            if arg.find("=") > 0:
+                arg_key = arg.split("=")[0][2:]
+                arg_value = arg.split("=")[1]
+                arg_value_bool = str2bool(arg_value)
+            else:
+                arg_key = arg[2:]
+                
+            if arg_key == "help":
+                help()
+                sys.exit(0)
+            elif arg_key == "port":
+                port = arg_value
+            elif arg_key == "state":
+                state = arg_value_bool
+            else:
+                log('Unrecognized argument: %s' % arg)
+                help()
+                sys.exit(1)
+        else:
+            arg_bool = str2bool(arg)
 
-			if arg == "false" or arg == "0" or arg == "no":
-				arg_bool = False
+            if arg == "false" or arg == "0" or arg == "no":
+                arg_bool = False
 
-			raw_index += 1
-			if raw_index == 1:
-				port = arg
-			elif raw_index == 2:
-				state = arg_bool
-	
-	usbio = USBIO()
-	
-	i = 0
-	import time
-	
-	for i in range(20):
-		usbio.set_gpio(0, True)
-		usbio.set_gpio(0, False)	
-		
-	sys.exit(1)
-	
-	while True:
-		i += 1
-		print i
-		usbio.set_gpio(0, True)
-		usbio.set_gpio(0, False)
-		#time.sleep(0.05)
-	
-	if port is None:
-		print 'port must be specified'
-		help()
-		sys.exit(1)
-	
-	port = port.upper()
-	if port == "RELAY1":
-		usbio.set_relay(1, state)
-	elif port == "RELAY2":
-		usbio.set_relay(2, state)
-	else:
-		print 'bad port: %s' % port
-		help()
-		sys.exit(1)
+            raw_index += 1
+            if raw_index == 1:
+                port = arg
+            elif raw_index == 2:
+                state = arg_bool
+    
+    usbio = USBIO()
+    
+    i = 0
+    import time
+    
+    for i in range(20):
+        usbio.set_gpio(0, True)
+        usbio.set_gpio(0, False)    
+        
+    sys.exit(1)
+    
+    while True:
+        i += 1
+        print i
+        usbio.set_gpio(0, True)
+        usbio.set_gpio(0, False)
+        #time.sleep(0.05)
+    
+    if port is None:
+        print 'port must be specified'
+        help()
+        sys.exit(1)
+    
+    port = port.upper()
+    if port == "RELAY1":
+        usbio.set_relay(1, state)
+    elif port == "RELAY2":
+        usbio.set_relay(2, state)
+    else:
+        print 'bad port: %s' % port
+        help()
+        sys.exit(1)
 
