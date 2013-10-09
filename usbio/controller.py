@@ -7,7 +7,8 @@ import threading
 
 # no real interfaces really defined yet...
 class Controller:
-    def __init__(self):
+    def __init__(self, debug=False):
+        self.debug = debug
         self.x = None
         self.y = None
         self.z = None
@@ -59,9 +60,8 @@ class Controller:
             axis.estop()
 
 class MockController(Controller):
-    def __init__(self):
-        print Controller
-        Controller.__init__(self)
+    def __init__(self, debug=False):
+        Controller.__init__(self, debug=debug)
         self.x = DummyAxis('X')
         self.y = DummyAxis('Y')
         self.axes = [self.x, self.y]

@@ -45,15 +45,17 @@ class USBIO:
                 raise IOError("Failed to find a suitable device")
         else:
             self.try_open(device)
+        
+        # Clear old data
+        if self.debug:
+            print 'Flushing %d chars' % self.serial.inWaiting()
+        self.serial.flushInput()
 
     def try_open(self, device):
         self.device = device
-        self.serial = serial.Serial(self.device, 9600, timeout=1)    
+        self.serial = serial.Serial(port=self.device, baudrate=9600, timeout=1, writeTimeout=1)    
         if self.serial is None:
             raise IOError('Can not connect to serial')
-        # Clean out any leftover transactions from last run
-        # hmm but we have blocking set        
-        # self.flush_rx()
         
     '''
     Read the version of the USB_IO device firmware.
@@ -79,18 +81,18 @@ class USBIO:
     def recv(self):
         # Sync until first ~
         if self.debug:
-            print 'recv: waiting for opening ~'
-        for _i in xrange(5):
+            print 'USBIO DEBUG: recv: waiting for opening ~'
+        for _i in xrange(3):
             c = self.serial.read(1)
             if self.debug:
-                print 'recv open wait: got %s' % (c,)
+                print 'USBIO DEBUG: recv open wait: got "%s", wait: %d' % (c, self.serial.inWaiting())
             if c == '~':
                 break
         else:
             raise Timeout('Timed out waiting for opening ~')
         
         if self.debug:
-            print 'recv: waiting for closing ~'
+            print 'USBIO DEBUG: recv: waiting for closing ~'
         # Read until ~
         ret = ''
         for _i in xrange(60):
@@ -102,25 +104,26 @@ class USBIO:
             raise Timeout('Timed out waiting for closing ~')
         
         if self.debug:
-            print 'recv: returning: %s' % (ret,)
+            print 'USBIO DEBUG: recv: returning: "%s"' % (ret,)
         return ret
         
-    def flush_rx(self):
-        return
-        try:
-            while len(self.serial.read()) > 0:
-                #print 'waiting...'
-                pass
-        except:
-            pass
-    
     def send(self, bytes_out):
         out = '~' + bytes_out + '~'
         if self.debug:
             print 'USBIO DEBUG: sending: %s' % (out,)
+            if self.serial.inWaiting():
+                raise Exception('At send %d chars waiting' % self.serial.inWaiting())
         self.serial.write(out)
+        # if it doesn't get written we will not get a reply
+        self.serial.flush()
         # Always expect a reply
-        return self.recv()
+        ret = self.recv()
+        
+        if self.debug:
+            res = self.serial.read()
+            if len(res):
+                raise Exception('Orphaned: %s' % res)
+        return ret
         
     def version(self):
         return self.send("ver")
@@ -130,8 +133,6 @@ class USBIO:
         is_on = 1 if is_on else 0
         #self.serial.flush()
         reply = self.send("out%X=%d" % (index, is_on))
-        #self.serial.flush()
-        #self.flush_rx()
         if reply != "OK":
             raise Exception("Expected OK but got %s" % (reply,)) 
     

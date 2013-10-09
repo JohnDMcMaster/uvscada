@@ -46,10 +46,10 @@ class MC(Controller):
 	#DIR_FORWARD = 1
 	#DIR_REVERSE = 2
 	
-	def __init__(self):
-		Controller.__init__(self)
+	def __init__(self, debug=False):
+		Controller.__init__(self, debug=False)
 		
-		self.usbio = USBIO()
+		self.usbio = USBIO(debug=debug)
 		print 'opened some USBIO okay'
 		if self.usbio.serial is None:
 			raise Exception("USBIO missing serial")
