@@ -1,10 +1,3 @@
-import usbio
-from axis import DummyAxis
-from axis import Axis
-import Queue
-import threading
-
-
 # no real interfaces really defined yet...
 class Controller:
     def __init__(self, debug=False):
@@ -58,12 +51,3 @@ class Controller:
         '''Halt the system ASAP, possibly losing precision/position'''
         for axis in self.axes:
             axis.estop()
-
-class MockController(Controller):
-    def __init__(self, debug=False):
-        Controller.__init__(self, debug=debug)
-        self.x = DummyAxis('X')
-        self.y = DummyAxis('Y')
-        self.axes = [self.x, self.y]
-
-
