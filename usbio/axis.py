@@ -74,11 +74,11 @@ class Axis:
         '''Clear emergency stop, if any'''
         raise Exception('Required')
       
-    def forever_neg(self):
+    def forever_neg(self, done):
         '''Decrease until stopped'''
         raise Exception('Required')
           
-    def forever_pos(self):
+    def forever_pos(self, done):
         '''Increase until stopped'''
         raise Exception('Required')
 
