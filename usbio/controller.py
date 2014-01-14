@@ -1,3 +1,8 @@
+'''
+This file is part of uvscada
+Licensed under 2 clause BSD license, see COPYING for details
+'''
+
 # no real interfaces really defined yet...
 class Controller:
     def __init__(self, debug=False):

@@ -1,7 +1,6 @@
 '''
-UVNet temperature monitor (uvtemp)
-Copyright (C) 2011 John McMaster
-GUI
+This file is part of uvscada
+Licensed under 2 clause BSD license, see COPYING for details
 '''
 
 '''

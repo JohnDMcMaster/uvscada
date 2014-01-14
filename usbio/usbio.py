@@ -1,4 +1,9 @@
 '''
+This file is part of uvscada
+Licensed under 2 clause BSD license, see COPYING for details
+'''
+
+'''
 IO Pin           Function
 IO_08           IO8/Relay2  
 IO7                IO_07
