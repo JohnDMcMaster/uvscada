@@ -1,4 +1,4 @@
-from usbio.usbio import USBIO
+from uvscada.usbio import USBIO
 import time
 
 print 'Creating device'
