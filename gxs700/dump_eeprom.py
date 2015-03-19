@@ -7,6 +7,8 @@ import binascii
 import sys
 import argparse
 
+verbose = False
+
 def nulls(s, offset):
     end = s.find('\x00', offset)
     if end < 0:
@@ -57,7 +59,7 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
         f.write(''.join([c if isprint(c) else '.' for c in str(data[row_start:row_start+real_data])]))
         f.write((" " * (bytes_per_row - real_data)) + "|\n")
 
-def dump_eeprom(dev):
+def dump_eeprom(dev, verbose=False):
     '''
     Example contents:
     0000   aa 55 aa 55 42 05 00 00  3a 07 00 00 32 31 30 33  .U.UB...:...2103
@@ -81,7 +83,7 @@ def dump_eeprom(dev):
     print 'Reading EEPROM 1'
     # cap2 443-444
     res = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0000, 256)
-    if args.verbose:
+    if verbose:
         hexdump(res)
     if len(res) != 256:
         raise Exception("wanted 256 bytes but got %d" % (len(res),))
@@ -117,7 +119,7 @@ def dump_eeprom(dev):
     print 'Reading EEPROM 2'
     # cap2 445-446
     res = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0100, 256)
-    if args.verbose:
+    if verbose:
         hexdump(res)
     if len(res) != 256:
         raise Exception("wanted 256 bytes but got %d" % (len(res),))
@@ -138,7 +140,7 @@ def dump_eeprom(dev):
     print 'Reading EEPROM 3'
     # cap2 447-448
     res = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0200, 52)
-    if args.verbose:
+    if verbose:
         hexdump(res)
     if len(res) != 52:
         raise Exception("wanted 52 bytes but got %d" % (len(res),))
@@ -174,5 +176,5 @@ if __name__ == "__main__":
                 udev.getDeviceAddress(),
                 vid,
                 pid)
-            dump_eeprom(udev.open())
+            dump_eeprom(udev.open(), args.verbose)
 
