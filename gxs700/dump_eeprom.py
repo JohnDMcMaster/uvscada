@@ -28,11 +28,12 @@ def dump_eeprom(dev):
     00e0   ff ff ff ff ff ff ff ff  ff ff ff ff 46 61 69 72  ............Fair
     00f0   63 68 69 6c 64 20 49 6d  61 67 69 6e 67 00 ff ff  child Imaging...
     '''
+    print 'Reading EEPROM'
     res = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0000, 256)
     if len(res) != 256:
         raise Exception("wanted 256 bytes but got %d" % (len(res),))
     print
-    print 'Read EPROM okay'
+    print 'Read EEPROM okay'
     print 'Serial number:   %s' % nulls(res, 0x0C)
     print 'Vendor1:         %s' % nulls(res, 0x2C)
     print 'Product:         %s' % nulls(res, 0x4C)
@@ -41,12 +42,21 @@ def dump_eeprom(dev):
     print 'Date2:           %s' % nulls(res, 0xCC)
     print 'Vendor2:         %s' % nulls(res, 0xEC)
 
+pidvid2name = {
+        #(0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)'
+        (0x5328, 0x2030): 'Gendex GXS700 (post enumeration)'
+        #(0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)'
+        }
+
 if __name__ == "__main__":
     usbcontext = usb1.USBContext()
+    print 'Scanning for devices...'
     for udev in usbcontext.getDeviceList(skip_on_error=True):
         vid = udev.getVendorID()
         pid = udev.getProductID()
-        if (vid, pid) in  ((0x5328, 0x2030),):
+        if (vid, pid) in pidvid2name.keys():
+            print
+            print
             print 'Found device'
             print 'Bus %03i Device %03i: ID %04x:%04x' % (
                 udev.getBusNumber(),
