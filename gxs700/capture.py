@@ -500,7 +500,7 @@ if __name__ == "__main__":
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
     validate_read("\x01", buff, "packet 859/860")
         
-    # these repeat forever
+    # these repeat forever, about every 7 ms per loop in the original app
     i = 0
     while True:
         print
