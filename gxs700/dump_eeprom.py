@@ -4,9 +4,58 @@ import usb1
 # Bare ctype wrapper, inspired from library C header file.
 import libusb1
 import binascii
+import sys
+import argparse
 
 def nulls(s, offset):
-    return s[offset:s.find('\x00', offset)]
+    end = s.find('\x00', offset)
+    if end < 0:
+        return s[offset:]
+    else:
+        return s[offset:end]
+
+def hexdumps(*args, **kwargs):
+    '''Hexdump by returning a string'''
+    buff = StringIO.StringIO()
+    kwargs['f'] = buff
+    hexdump(*args, **kwargs)
+    return buff.getvalue()
+
+def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
+    def isprint(c):
+        return c >= ' ' and c <= '~'
+
+    bytes_per_half_row = 8
+    bytes_per_row = 16
+    data = bytearray(data)
+    data_len = len(data)
+    
+    def hexdump_half_row(start):
+        left = max(data_len - start, 0)
+        
+        real_data = min(bytes_per_half_row, left)
+
+        f.write(''.join('%02X ' % c for c in data[start:start+real_data]))
+        f.write(''.join('   '*(bytes_per_half_row-real_data)))
+        f.write(' ')
+
+        return start + bytes_per_half_row
+
+    pos = 0
+    while pos < data_len:
+        row_start = pos
+        f.write(indent)
+        if address_width:
+            f.write(('%%0%dX  ' % address_width) % pos)
+        pos = hexdump_half_row(pos)
+        pos = hexdump_half_row(pos)
+        f.write("|")
+        # Char view
+        left = data_len - row_start
+        real_data = min(bytes_per_row, left)
+
+        f.write(''.join([c if isprint(c) else '.' for c in str(data[row_start:row_start+real_data])]))
+        f.write((" " * (bytes_per_row - real_data)) + "|\n")
 
 def dump_eeprom(dev):
     '''
@@ -28,11 +77,14 @@ def dump_eeprom(dev):
     00e0   ff ff ff ff ff ff ff ff  ff ff ff ff 46 61 69 72  ............Fair
     00f0   63 68 69 6c 64 20 49 6d  61 67 69 6e 67 00 ff ff  child Imaging...
     '''
-    print 'Reading EEPROM'
+    print
+    print 'Reading EEPROM 1'
+    # cap2 443-444
     res = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0000, 256)
+    if args.verbose:
+        hexdump(res)
     if len(res) != 256:
         raise Exception("wanted 256 bytes but got %d" % (len(res),))
-    print
     print 'Read EEPROM okay'
     print 'Serial number:   %s' % nulls(res, 0x0C)
     print 'Vendor1:         %s' % nulls(res, 0x2C)
@@ -42,6 +94,61 @@ def dump_eeprom(dev):
     print 'Date2:           %s' % nulls(res, 0xCC)
     print 'Vendor2:         %s' % nulls(res, 0xEC)
 
+
+    '''
+    0000   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0010   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0020   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0030   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0040   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0050   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0060   ff ff ff ff ff ff ff ff  ff ff ff ff 73 74 35 5f  ............st5_
+    0070   66 63 63 6d 6f 73 64 20  72 31 34 2e 39 00 ff ff  fccmosd r14.9...
+    0080   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0090   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    00a0   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    00b0   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    00c0   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    00d0   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    00e0   ff ff ff ff ff ff ff ff  ff ff ff ff 31 00 ff ff  ............1...
+    00f0   ff ff ff ff 31 39 2e 35  30 30 30 00 31 39 2e 35  ....19.5000.19.5
+    '''
+    print
+    print 'Reading EEPROM 2'
+    # cap2 445-446
+    res = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0100, 256)
+    if args.verbose:
+        hexdump(res)
+    if len(res) != 256:
+        raise Exception("wanted 256 bytes but got %d" % (len(res),))
+    print 'Read EEPROM okay'
+    print 'something:       %s' % nulls(res, 0x6C)
+    print '1:               %s' % nulls(res, 0xEC)
+    print 'something:       %s' % nulls(res, 0xF4)
+    print 'something:       %s' % nulls(res, 0xFC)
+
+
+    '''
+    0000   30 30 30 00 30 2e 30 30  30 30 00 ff 37 35 00 ff  000.0.0000..75..
+    0010   ff ff ff ff 00 53 54 00  ff ff ff ff ff ff ff ff  .....ST.........
+    0020   ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  ................
+    0030   ff ff ff ff                                      ....
+    '''
+    print
+    print 'Reading EEPROM 3'
+    # cap2 447-448
+    res = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0200, 52)
+    if args.verbose:
+        hexdump(res)
+    if len(res) != 52:
+        raise Exception("wanted 52 bytes but got %d" % (len(res),))
+    print 'Read EEPROM okay'
+    print 'something:       %s' % nulls(res, 0x00)
+    print 'something:       %s' % nulls(res, 0x04)
+    print 'something:       %s' % nulls(res, 0x0C)
+    print 'something:       %s' % nulls(res, 0x15)
+
+
 pidvid2name = {
         #(0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)'
         (0x5328, 0x2030): 'Gendex GXS700 (post enumeration)'
@@ -49,6 +156,10 @@ pidvid2name = {
         }
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Replay captured USB packets')
+    parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
+    args = parser.parse_args()
+
     usbcontext = usb1.USBContext()
     print 'Scanning for devices...'
     for udev in usbcontext.getDeviceList(skip_on_error=True):
