@@ -1,3 +1,27 @@
+'''
+USB 2.0 max speed: 480 Mbps => 60 MB/s
+frame size: 4972800 bytes ~= 5 MB/s
+never going to get faster than 12 frames per second from data bottleneck
+integration time and other issues will make it actually take much longer
+
+max is about 1/3 fps
+State 2 to state 4
+    frame1.cap: 10.547345 - 10.237953 = 0.309392
+    frame2.cap: 4.093158 - 3.784668 =   0.30849
+state 4 to state 8
+    frame1.cap: 12.547843 - 10.547345 = 2.000498 seconds
+    frame2.cap: 6.092412 - 4.093158 = 1.999254 seconds
+bulk transfer
+    not checked
+from state 2 to end of bulk
+    frame1.cap: 13.221687 - 10.237953 = 2.983734
+    frame2.cap: 6.773520 - 3.784668 = 2.988852
+
+Currently this code takes about 4.7 sec to capture an image
+(with bulking taking much longer than it should)
+we should be able to get it down to at least 3
+'''
+
 # https://github.com/vpelletier/python-libusb1
 # Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
 import usb1
@@ -399,7 +423,7 @@ if __name__ == "__main__":
                 break
         else:
             raise Exception("Renumeration timed out")
-        
+        print 'Up after %0.1f sec' % (time.time() - tstart,)
     else:
         print 'Firmware load not needed'
         print 'Scanning for devices...'
@@ -560,13 +584,15 @@ if __name__ == "__main__":
     # these repeat forever, about every 7 ms per loop in the original app
     # 0x0020 seems to have a one hot encoded state machine
     i = 0
+    cap_start = None
     while True:
         print
         print 'scan %d' % i
         
         # Generated from packet 861/862
         buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-        print 'r1: %s' % binascii.hexlify(buff)
+        if args.verbose:
+            print 'r1: %s' % binascii.hexlify(buff)
         state = ord(buff)
         '''
         Observed states
@@ -577,17 +603,19 @@ if __name__ == "__main__":
         '''
         if state != 0x01:
             print 'Non-1 state: 0x%02X' % state
+            if cap_start is None:
+                cap_start = time.time()
             if state == 0x08:
                 print 'Go go go'
                 break
         
         # Generated from packet 863/864
         buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
-        print 'r2: %s' % binascii.hexlify(buff)
+        if args.verbose:
+            print 'r2: %s' % binascii.hexlify(buff)
         validate_read("\x00", buff, "packet 863/864")
 
         i = i + 1
-        time.sleep(0.5)
 
     
     # Generated from packet 783/784
@@ -610,20 +638,28 @@ if __name__ == "__main__":
     validate_read("\x12\x34", buff, "packet 791/792")
 
     def async_cb(trans):
-        print
-        print 'Got transfer'
+        if args.verbose:
+            print
+            print 'Got transfer'
         
         buf = trans.getBuffer()
-        print 'Trans len: 0x%04X' % len(buf)
+        if args.verbose:
+            print 'Trans len: 0x%04X' % len(buf)
         all_dat[0] += buf
-        print 'so far data length: %d' % len(all_dat[0])
+        if args.verbose:
+            print 'so far data length: %d' % len(all_dat[0])
         
-        if len(buf) == 0x4000 and len(all_dat[0]) < 4972800 * 2:
-            print 'resubmit'
+        '''
+        It will continue to return data but the data won't be valid
+        '''
+        if len(buf) == 0x4000 and len(all_dat[0]) < 4972800:
+            if args.verbose:
+                print 'resubmit'
             trans.submit()
         else:
             remain[0] -= 1
 
+    bulk_start = time.time()
     print 'Submitting transfers...'
     SUBMITS = 16
     for i in xrange(SUBMITS):
@@ -636,9 +672,11 @@ if __name__ == "__main__":
     remain = [SUBMITS]
     all_dat = ['']
     while remain[0]:
-        usbcontext.handleEventsTimeout(0)
-        time.sleep(0.1)
+        usbcontext.handleEventsTimeout(tv=0.1)
+    bulk_end = time.time()
     print 'All URBs handled'
+    print 'Bulk transfer in %0.1f' % (bulk_end - bulk_start,)
+    print 'Capture in %0.1f' % (bulk_end - cap_start,)
     all_dat = all_dat[0]
     print 'Data length: %d' % len(all_dat)
     open('capture.bin', 'w').write(all_dat)

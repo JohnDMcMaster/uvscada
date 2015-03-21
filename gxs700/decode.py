@@ -107,8 +107,10 @@ def decode3():
 
     height = 1850
     width = 1344
+    depth = 2
     
     print 'Decoding %ux%u' % (width, height)
+    #f.read(width*height*depth)
 
     image = None
     first_loop = True
@@ -124,7 +126,7 @@ def decode3():
         print
         print 'Rendering frame %d...' % frame
         for y in range(height):
-            line0 = f.read(width*2)
+            line0 = f.read(width*depth)
             bin += line0
         
             if y % (height / 10) == 0:
