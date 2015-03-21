@@ -772,11 +772,8 @@ pidvid2name = {
         (0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)',
         }
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Replay captured USB packets')
-    parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
-    args = parser.parse_args()
-
+def load_all():
+    ret = False
     usbcontext = usb1.USBContext()
     print 'Scanning for devices...'
     for udev in usbcontext.getDeviceList(skip_on_error=True):
@@ -794,4 +791,13 @@ if __name__ == "__main__":
             print 'Loading firmware'
             load(udev.open())
             print 'Firmware load OK'
+            ret = True
+    return ret
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Replay captured USB packets')
+    parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
+    args = parser.parse_args()
+
+    load_all()
 

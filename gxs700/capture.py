@@ -7,15 +7,17 @@ import binascii
 import sys
 import argparse
 import time
+import load_firmware
 
 from dump_eeprom import dump_eeprom
 
-def validate_read(expected, actual, msg):
+def validate_read(expected, actual, msg, ignore_errors=False):
     if expected != actual:
         print 'Failed %s' % msg
         print '  Expected; %s' % binascii.hexlify(expected,)
         print '  Actual:   %s' % binascii.hexlify(actual,)
-        raise Exception('failed validate: %s' % msg)
+        if not ignore_errors:
+            raise Exception('failed validate: %s' % msg)
 
 def replay_449_768():
     # Generated from packet 449/450
@@ -24,9 +26,15 @@ def replay_449_768():
     # Generated from packet 451/452
     buff = dev.controlRead(0xC0, 0xB0, 0x0023, 0x0000, 4)
     validate_read("\x05\x40\x07\x3A", buff, "packet 451/452")
+    '''
+    FIXME: fails verification if already ran
+    Failed packet 453/454
+      Expected; 0000
+      Actual:   0001
+    '''
     # Generated from packet 453/454
     buff = dev.controlRead(0xC0, 0xB0, 0x0003, 0x2002, 2)
-    validate_read("\x00\x00", buff, "packet 453/454")
+    validate_read("\x00\x00", buff, "packet 453/454", True)
     # Generated from packet 455/456
     buff = dev.controlRead(0xC0, 0xB0, 0x0004, 0x0000, 2)
     validate_read("\x12\x34", buff, "packet 455/456")
@@ -336,9 +344,14 @@ def replay_449_768():
     validate_read("\x00\x01", buff, "packet 757/758")
     # Generated from packet 759/760
     dev.controlWrite(0x40, 0xB0, 0x002C, 0x0000, "\x00\x64")
+    '''
+    FIXME: fails verification if already ran
+      Expected; 01
+      Actual:   02
+    '''
     # Generated from packet 761/762
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 761/762")
+    validate_read("\x01", buff, "packet 761/762", True)
     # Generated from packet 763/764
     dev.controlWrite(0x40, 0xB0, 0x0022, 0x0000, "\x05\x40\x07\x3A")
     # Generated from packet 765/766
@@ -348,6 +361,7 @@ def replay_449_768():
 
 pidvid2name = {
         #(0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)'
+        # note: load_firmware.py loads the gendex firmware
         (0x5328, 0x2030): 'Gendex GXS700 (post enumeration)'
         #(0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)'
         }
@@ -358,22 +372,40 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     usbcontext = usb1.USBContext()
-    print 'Scanning for devices...'
-    for udev in usbcontext.getDeviceList(skip_on_error=True):
-        vid = udev.getVendorID()
-        pid = udev.getProductID()
-        if (vid, pid) in pidvid2name.keys():
-            print
-            print
-            print 'Found device'
-            print 'Bus %03i Device %03i: ID %04x:%04x' % (
-                udev.getBusNumber(),
-                udev.getDeviceAddress(),
-                vid,
-                pid)
-            break
+
+    def check_device():
+        for udev in usbcontext.getDeviceList(skip_on_error=True):
+            vid = udev.getVendorID()
+            pid = udev.getProductID()
+            if (vid, pid) in pidvid2name.keys():
+                print
+                print
+                print 'Found device'
+                print 'Bus %03i Device %03i: ID %04x:%04x' % (
+                    udev.getBusNumber(),
+                    udev.getDeviceAddress(),
+                    vid,
+                    pid)
+                return udev
+        return None
+
+    print 'Checking if firmware load is needed'
+    if load_firmware.load_all():
+        print 'Waiting for device to come up'
+        tstart = time.time()
+        while time.time() - tstart < 3.0:
+            udev = check_device()
+            if udev:
+                break
+        else:
+            raise Exception("Renumeration timed out")
+        
     else:
-        raise Exception("Failed to find a device")
+        print 'Firmware load not needed'
+        print 'Scanning for devices...'
+        udev = check_device()
+        if udev is None:
+            raise Exception("Failed to find a device")
     
     dev = udev.open()
 
@@ -397,9 +429,12 @@ if __name__ == "__main__":
     # Generated from packet 777/778
     buff = dev.controlRead(0xC0, 0xB0, 0x0023, 0x0000, 4)
     validate_read("\x05\x40\x07\x3A", buff, "packet 777/778")
+    '''
+    FIXME: fails verification if already plugged in
+    '''
     # Generated from packet 779/780
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 779/780")
+    validate_read("\x01", buff, "packet 779/780", True)
     # Generated from packet 781/782
     dev.controlWrite(0x40, 0xB0, 0x0022, 0x0000, "\x05\x40\x07\x3A")
     # Generated from packet 783/784
@@ -419,7 +454,7 @@ if __name__ == "__main__":
     validate_read("\x05\x40\x07\x3A", buff, "packet 795/796")
     # Generated from packet 797/798
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 797/798")
+    validate_read("\x01", buff, "packet 797/798", True)
     # Generated from packet 799/800
     dev.controlWrite(0x40, 0xB0, 0x0022, 0x0000, "\x05\x40\x07\x3A")
     # Generated from packet 801/802
@@ -439,7 +474,7 @@ if __name__ == "__main__":
     validate_read("\x05\x40\x07\x3A", buff, "packet 813/814")
     # Generated from packet 815/816
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 815/816")
+    validate_read("\x01", buff, "packet 815/816", True)
     # Generated from packet 817/818
     dev.controlWrite(0x40, 0xB0, 0x002C, 0x0000, "\x02\xBC")
     # Generated from packet 819/820
@@ -448,24 +483,46 @@ if __name__ == "__main__":
     dev.controlWrite(0x40, 0xB0, 0x002E, 0x0000, "\x00")
     # Generated from packet 823/824
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 823/824")
+    validate_read("\x01", buff, "packet 823/824", True)
     # Generated from packet 825/826
     buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
     validate_read("\x00", buff, "packet 825/826")
     # Generated from packet 827/828
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 827/828")
+    validate_read("\x01", buff, "packet 827/828", True)
+    '''
+    wonder what this means...
+    repeatedly fails verification
+    what about other captures?
+    
+    Failed packet 829/830
+      Expected; 8700000051000000
+      Actual:   910000005b000000
+
+    Failed packet 829/830
+      Expected; 8700000051000000
+      Actual:   910000005b000000
+  
+    frame1.cap
+        validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 783/784")
+    cap1.cap
+        validate_read("\x87\x00\x00\x00\x51\x00\x00\x00", buff, "packet 829/830")
+    cap2.cap
+        validate_read("\x87\x00\x00\x00\x51\x00\x00\x00", buff, "packet 829/830")
+    '''
     # Generated from packet 829/830
     buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
     # NOTE:: req max 128 but got 8
-    validate_read("\x87\x00\x00\x00\x51\x00\x00\x00", buff, "packet 829/830")
+    # FIXME
+    validate_read("\x87\x00\x00\x00\x51\x00\x00\x00", buff, "packet 829/830", True)
     # Generated from packet 831/832
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 831/832")
+    validate_read("\x01", buff, "packet 831/832", True)
     # Generated from packet 833/834
     buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
     # NOTE:: req max 128 but got 8
-    validate_read("\x87\x00\x00\x00\x51\x00\x00\x00", buff, "packet 833/834")
+    # FIXME
+    validate_read("\x87\x00\x00\x00\x51\x00\x00\x00", buff, "packet 833/834", True)
     # Generated from packet 835/836
     buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
     validate_read("\x00", buff, "packet 835/836")
@@ -475,7 +532,7 @@ if __name__ == "__main__":
     validate_read("\x00\x05\x00\x0A\x00\x03\x00\x06\x00\x04\x00\x05", buff, "packet 837/838")
     # Generated from packet 839/840
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 839/840")
+    validate_read("\x01", buff, "packet 839/840", True)
     # Generated from packet 841/842
     buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
     validate_read("\x00", buff, "packet 841/842")
@@ -498,9 +555,10 @@ if __name__ == "__main__":
     validate_read("\x05\x40\x07\x3A", buff, "packet 857/858")
     # Generated from packet 859/860
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-    validate_read("\x01", buff, "packet 859/860")
+    validate_read("\x01", buff, "packet 859/860", True)
         
     # these repeat forever, about every 7 ms per loop in the original app
+    # 0x0020 seems to have a one hot encoded state machine
     i = 0
     while True:
         print
@@ -509,7 +567,19 @@ if __name__ == "__main__":
         # Generated from packet 861/862
         buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
         print 'r1: %s' % binascii.hexlify(buff)
-        validate_read("\x01", buff, "packet 861/862")
+        state = ord(buff)
+        '''
+        Observed states
+        -0x01: no activity
+        -0x02: short lived
+        -0x04: longer lived than 2
+        -0x08: read right before capture
+        '''
+        if state != 0x01:
+            print 'Non-1 state: 0x%02X' % state
+            if state == 0x08:
+                print 'Go go go'
+                break
         
         # Generated from packet 863/864
         buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
@@ -519,4 +589,57 @@ if __name__ == "__main__":
         i = i + 1
         time.sleep(0.5)
 
+    
+    # Generated from packet 783/784
+    buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
+    # NOTE:: req max 128 but got 8
+    validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 783/784", True)
+    # Generated from packet 785/786
+    buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
+    # NOTE:: req max 128 but got 8
+    validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 785/786", True)
+    # Generated from packet 787/788
+    buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+    validate_read("\x00", buff, "packet 787/788")
+    # Generated from packet 789/790
+    buff = dev.controlRead(0xC0, 0xB0, 0x0051, 0x0000, 28)
+    # NOTE:: req max 28 but got 12
+    validate_read("\x00\x05\x00\x0A\x00\x03\x00\x06\x00\x04\x00\x05", buff, "packet 789/790")
+    # Generated from packet 791/792
+    buff = dev.controlRead(0xC0, 0xB0, 0x0004, 0x0000, 2)
+    validate_read("\x12\x34", buff, "packet 791/792")
+
+    def async_cb(trans):
+        print
+        print 'Got transfer'
+        
+        buf = trans.getBuffer()
+        print 'Trans len: 0x%04X' % len(buf)
+        all_dat[0] += buf
+        print 'so far data length: %d' % len(all_dat[0])
+        
+        if len(buf) == 0x4000 and len(all_dat[0]) < 4972800 * 2:
+            print 'resubmit'
+            trans.submit()
+        else:
+            remain[0] -= 1
+
+    print 'Submitting transfers...'
+    SUBMITS = 16
+    for i in xrange(SUBMITS):
+        trans = dev.getTransfer()
+        trans.setBulk(0x82, 0x4000, callback=async_cb, user_data=None, timeout=1000)
+        trans.submit()
+
+    print 'Waiting for transfers to complete'
+    rx = 0
+    remain = [SUBMITS]
+    all_dat = ['']
+    while remain[0]:
+        usbcontext.handleEventsTimeout(0)
+        time.sleep(0.1)
+    print 'All URBs handled'
+    all_dat = all_dat[0]
+    print 'Data length: %d' % len(all_dat)
+    open('capture.bin', 'w').write(all_dat)
 

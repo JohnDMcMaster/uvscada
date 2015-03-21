@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 '''
-about 5 MP
-4972800
 1344 x 1850, 16 bit
+278528 pixel
+4972800 bytes
 '''
 
 try:
@@ -92,15 +92,18 @@ def hexdump(data, prefix = ''):
 
 def decode3():
     print 'constructing raw'
-    f = open('/tmp/stuff', 'w')
-    i = 0
-    for fn in sorted(glob.glob(image_in + '/*.bin')):
-        r = open(fn, 'r').read()
-        # this shows that the splotches are not correlated to packet boundaries
-        # the 0x40 thing was a misreading of wireshark captures
-        #f.write(r + '\xFF\xFF' * 16 + '\x00\x00' * 16)
-        f.write(r)
-    f = open('/tmp/stuff', 'r')
+    if 0:
+        f = open('/tmp/stuff', 'w')
+        i = 0
+        for fn in sorted(glob.glob(image_in + '/*.bin')):
+            r = open(fn, 'r').read()
+            # this shows that the splotches are not correlated to packet boundaries
+            # the 0x40 thing was a misreading of wireshark captures
+            #f.write(r + '\xFF\xFF' * 16 + '\x00\x00' * 16)
+            f.write(r)
+        f = open('/tmp/stuff', 'r')
+    else:
+        f = open(image_in, 'r')
 
     height = 1850
     width = 1344
