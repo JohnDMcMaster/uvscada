@@ -31,7 +31,7 @@ import binascii
 import sys
 import argparse
 import time
-import load_firmware
+from util import open_dev
 
 from dump_eeprom import dump_eeprom
 
@@ -383,55 +383,198 @@ def replay_449_768():
     # Generated from packet 767/768
     dev.controlWrite(0x40, 0xB0, 0x000E, 0x0000, "")
 
-pidvid2name = {
-        #(0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)'
-        # note: load_firmware.py loads the gendex firmware
-        (0x5328, 0x2030): 'Gendex GXS700 (post enumeration)'
-        #(0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)'
-        }
+def get_state(dev):
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    if args.verbose:
+        print 'r1: %s' % binascii.hexlify(buff)
+    return ord(buff)
+
+FRAME_SZ = 4972800
+
+def capture_frame(dev):
+    global bulk_start
+    
+    def async_cb(trans):
+        # shutting down
+        if not args:
+            trans.close()
+            return
+        
+        if args.verbose:
+            print
+            print 'Got transfer'
+        
+        buf = trans.getBuffer()
+        if args.verbose:
+            print 'Trans len: 0x%04X' % len(buf)
+        all_dat[0] += buf
+        if args.verbose:
+            print 'so far data length: %d' % len(all_dat[0])
+        
+        '''
+        It will continue to return data but the data won't be valid
+        '''
+        if len(buf) == 0x4000 and len(all_dat[0]) < FRAME_SZ:
+            if args.verbose:
+                print 'resubmit'
+            trans.submit()
+        else:
+            remain[0] -= 1
+
+    bulk_start = time.time()
+    print 'Submitting transfers...'
+    trans_l = []
+    all_submit = FRAME_SZ
+    i = 0
+    while all_submit > 0:
+        trans = dev.getTransfer()
+        this_submit = max(all_submit - 0x4000, all_submit)
+        this_submit = min(0x4000, this_submit)
+        trans.setBulk(0x82, this_submit, callback=async_cb, user_data=None, timeout=1000)
+        trans.submit()
+        trans_l.append(trans)
+        all_submit -= this_submit
+
+    print 'Waiting for transfers to complete'
+    rx = 0
+    remain = [len(trans_l)]
+    all_dat = ['']
+    while remain[0]:
+        usbcontext.handleEventsTimeout(tv=0.1)
+    
+    for i in xrange(len(trans_l)):
+        trans_l[i].close()
+
+    all_dat = all_dat[0]
+    return all_dat
+
+def cleanup(dev):
+    # frame3.cap
+    
+    # Generated from packet 1179/1180
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1179/1180")
+    # Generated from packet 1181/1182
+    buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+    validate_read("\x00", buff, "packet 1181/1182")
+    # Generated from packet 1183/1184
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1183/1184")
+    # Generated from packet 1185/1186
+    buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+    validate_read("\x00", buff, "packet 1185/1186")
+    # XXX: looks like info written to eprom?
+    # doesn't show up
+    # Generated from packet 1187/1188
+    dev.controlWrite(0x40, 0xB0, 0x000C, 0x0020, "\x32\x30\x31\x35\x2F\x30\x33\x2F\x31\x39\x2D\x32\x31\x3A\x34\x34"
+              "\x3A\x34\x33\x3A\x30\x38\x37")
+    # Generated from packet 1189/1190
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1189/1190")
+    # Generated from packet 1191/1192
+    buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+    validate_read("\x00", buff, "packet 1191/1192")
+    # Generated from packet 1193/1194
+    dev.controlWrite(0x40, 0xB0, 0x002C, 0x0000, "\x02\xBC")
+    # Generated from packet 1195/1196
+    dev.controlWrite(0x40, 0xB0, 0x0021, 0x0000, "\x00")
+    # Generated from packet 1197/1198
+    dev.controlWrite(0x40, 0xB0, 0x002E, 0x0000, "\x00")
+    # Generated from packet 1199/1200
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1199/1200")
+    # Generated from packet 1201/1202
+    buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+    validate_read("\x00", buff, "packet 1201/1202")
+    # Generated from packet 1203/1204
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1203/1204")
+    # Generated from packet 1205/1206
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1205/1206")
+    # Generated from packet 1207/1208
+    dev.controlWrite(0x40, 0xB0, 0x0022, 0x0000, "\x05\x40\x07\x3A")
+    # Generated from packet 1209/1210
+    dev.controlWrite(0x40, 0xB0, 0x0022, 0x0000, "\x05\x40\x07\x3A")
+    # Generated from packet 1211/1212
+    dev.controlWrite(0x40, 0xB0, 0x000E, 0x0000, "")
+    # Generated from packet 1213/1214
+    buff = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0000, 256)
+    validate_read("\xAA\x55\xAA\x55\x42\x05\x00\x00\x3A\x07\x00\x00\x32\x31\x30\x33"
+              "\x32\x33\x31\x36\x36\x33\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+              "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x46\x61\x69\x72"
+              "\x63\x68\x69\x6C\x64\x20\x49\x6D\x61\x67\x69\x6E\x67\x00\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x53\x4C\x32\x30"
+              "\x38\x30\x33\x30\x32\x2D\x47\x32\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x52\x65\x76\x20"
+              "\x4E\x52\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x37\x2F\x31\x37"
+              "\x2F\x32\x30\x31\x32\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x37\x2F\x31\x37"
+              "\x2F\x32\x30\x31\x32\x20\x31\x32\x3A\x34\x34\x00\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x46\x61\x69\x72"
+              "\x63\x68\x69\x6C\x64\x20\x49\x6D\x61\x67\x69\x6E\x67\x00\xFF\xFF", buff, "packet 1213/1214")
+    # Generated from packet 1215/1216
+    buff = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0100, 256)
+    validate_read("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x73\x74\x35\x5F"
+              "\x66\x63\x63\x6D\x6F\x73\x64\x20\x72\x31\x34\x2E\x39\x00\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x31\x00\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\x31\x39\x2E\x35\x30\x30\x30\x00\x31\x39\x2E\x35", buff, "packet 1215/1216")
+    # Generated from packet 1217/1218
+    buff = dev.controlRead(0xC0, 0xB0, 0x0010, 0x0200, 52)
+    validate_read("\x30\x30\x30\x00\x30\x2E\x30\x30\x30\x30\x00\xFF\x37\x35\x00\xFF"
+              "\xFF\xFF\xFF\xFF\x00\x53\x54\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF", buff, "packet 1217/1218")
+    # Generated from packet 1219/1220
+    buff = dev.controlRead(0xC0, 0xB0, 0x0023, 0x0000, 4)
+    validate_read("\x05\x40\x07\x3A", buff, "packet 1219/1220")
+    # Generated from packet 1221/1222
+    buff = dev.controlRead(0xC0, 0xB0, 0x0023, 0x0000, 4)
+    validate_read("\x05\x40\x07\x3A", buff, "packet 1221/1222")
+    # Generated from packet 1223/1224
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1223/1224")
+    # Generated from packet 1225/1226
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+    validate_read("\x01", buff, "packet 1225/1226")
+    # Generated from packet 1227/1228
+    buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+    validate_read("\x00", buff, "packet 1227/1228")
+    # Generated from packet 1229/1230
+    buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
+    parser.add_argument('--number', '-n', type=int, default=1, help='number to take')
     args = parser.parse_args()
 
     usbcontext = usb1.USBContext()
+    dev = open_dev(usbcontext)
 
-    def check_device():
-        for udev in usbcontext.getDeviceList(skip_on_error=True):
-            vid = udev.getVendorID()
-            pid = udev.getProductID()
-            if (vid, pid) in pidvid2name.keys():
-                print
-                print
-                print 'Found device'
-                print 'Bus %03i Device %03i: ID %04x:%04x' % (
-                    udev.getBusNumber(),
-                    udev.getDeviceAddress(),
-                    vid,
-                    pid)
-                return udev
-        return None
-
-    print 'Checking if firmware load is needed'
-    if load_firmware.load_all():
-        print 'Waiting for device to come up'
-        tstart = time.time()
-        while time.time() - tstart < 3.0:
-            udev = check_device()
-            if udev:
-                break
-        else:
-            raise Exception("Renumeration timed out")
-        print 'Up after %0.1f sec' % (time.time() - tstart,)
-    else:
-        print 'Firmware load not needed'
-        print 'Scanning for devices...'
-        udev = check_device()
-        if udev is None:
-            raise Exception("Failed to find a device")
-    
-    dev = udev.open()
+    state = get_state(dev)
+    print 'Init state: %d' % state
+    if state == 0x08:
+        print 'Flusing stale capture'
+        capture_frame(dev)
+    elif state != 0x01:
+        print 'Not idle, refusing to setup'
+        sys.exit(1)
 
     # Generated from packet 437/438
     dev.controlWrite(0x40, 0xB0, 0x0022, 0x0000, "\x05\x40\x07\x3A")
@@ -580,104 +723,95 @@ if __name__ == "__main__":
     # Generated from packet 859/860
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
     validate_read("\x01", buff, "packet 859/860", True)
-        
-    # these repeat forever, about every 7 ms per loop in the original app
-    # 0x0020 seems to have a one hot encoded state machine
-    i = 0
-    cap_start = None
-    while True:
-        print
-        print 'scan %d' % i
-        
-        # Generated from packet 861/862
-        buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-        if args.verbose:
-            print 'r1: %s' % binascii.hexlify(buff)
-        state = ord(buff)
-        '''
-        Observed states
-        -0x01: no activity
-        -0x02: short lived
-        -0x04: longer lived than 2
-        -0x08: read right before capture
-        '''
-        if state != 0x01:
-            print 'Non-1 state: 0x%02X' % state
-            if cap_start is None:
-                cap_start = time.time()
-            if state == 0x08:
-                print 'Go go go'
-                break
-        
-        # Generated from packet 863/864
-        buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
-        if args.verbose:
-            print 'r2: %s' % binascii.hexlify(buff)
-        validate_read("\x00", buff, "packet 863/864")
-
-        i = i + 1
-
     
-    # Generated from packet 783/784
-    buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
-    # NOTE:: req max 128 but got 8
-    validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 783/784", True)
-    # Generated from packet 785/786
-    buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
-    # NOTE:: req max 128 but got 8
-    validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 785/786", True)
-    # Generated from packet 787/788
-    buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
-    validate_read("\x00", buff, "packet 787/788")
-    # Generated from packet 789/790
-    buff = dev.controlRead(0xC0, 0xB0, 0x0051, 0x0000, 28)
-    # NOTE:: req max 28 but got 12
-    validate_read("\x00\x05\x00\x0A\x00\x03\x00\x06\x00\x04\x00\x05", buff, "packet 789/790")
-    # Generated from packet 791/792
-    buff = dev.controlRead(0xC0, 0xB0, 0x0004, 0x0000, 2)
-    validate_read("\x12\x34", buff, "packet 791/792")
-
-    def async_cb(trans):
-        if args.verbose:
-            print
-            print 'Got transfer'
-        
-        buf = trans.getBuffer()
-        if args.verbose:
-            print 'Trans len: 0x%04X' % len(buf)
-        all_dat[0] += buf
-        if args.verbose:
-            print 'so far data length: %d' % len(all_dat[0])
-        
-        '''
-        It will continue to return data but the data won't be valid
-        '''
-        if len(buf) == 0x4000 and len(all_dat[0]) < 4972800:
+    taken = 0
+    while taken < args.number:
+        # these repeat forever, about every 7 ms per loop in the original app
+        # 0x0020 seems to have a one hot encoded state machine
+        i = 0
+        cap_start = None
+        while True:
+            if i % 1000 == 0:
+                print
+                print 'scan %d' % i
+            
+            # Generated from packet 861/862
+            buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
             if args.verbose:
-                print 'resubmit'
-            trans.submit()
-        else:
-            remain[0] -= 1
+                print 'r1: %s' % binascii.hexlify(buff)
+            state = ord(buff)
+            '''
+            Observed states
+            -0x01: no activity
+            -0x02: short lived
+            -0x04: longer lived than 2
+            -0x08: read right before capture
+            '''
+            if state != 0x01:
+                print 'Non-1 state: 0x%02X' % state
+                if cap_start is None:
+                    cap_start = time.time()
+                if state == 0x08:
+                    print 'Go go go'
+                    break
+            
+            # Generated from packet 863/864
+            buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+            if args.verbose:
+                print 'r2: %s' % binascii.hexlify(buff)
+            validate_read("\x00", buff, "packet 863/864")
 
-    bulk_start = time.time()
-    print 'Submitting transfers...'
-    SUBMITS = 16
-    for i in xrange(SUBMITS):
-        trans = dev.getTransfer()
-        trans.setBulk(0x82, 0x4000, callback=async_cb, user_data=None, timeout=1000)
-        trans.submit()
+            i = i + 1
 
-    print 'Waiting for transfers to complete'
-    rx = 0
-    remain = [SUBMITS]
-    all_dat = ['']
-    while remain[0]:
-        usbcontext.handleEventsTimeout(tv=0.1)
-    bulk_end = time.time()
-    print 'All URBs handled'
-    print 'Bulk transfer in %0.1f' % (bulk_end - bulk_start,)
-    print 'Capture in %0.1f' % (bulk_end - cap_start,)
-    all_dat = all_dat[0]
-    print 'Data length: %d' % len(all_dat)
-    open('capture.bin', 'w').write(all_dat)
+        
+        # Generated from packet 783/784
+        buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
+        # NOTE:: req max 128 but got 8
+        validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 783/784", True)
+        # Generated from packet 785/786
+        buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
+        # NOTE:: req max 128 but got 8
+        validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 785/786", True)
+        # Generated from packet 787/788
+        buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+        validate_read("\x00", buff, "packet 787/788")
+        # Generated from packet 789/790
+        buff = dev.controlRead(0xC0, 0xB0, 0x0051, 0x0000, 28)
+        # NOTE:: req max 28 but got 12
+        validate_read("\x00\x05\x00\x0A\x00\x03\x00\x06\x00\x04\x00\x05", buff, "packet 789/790")
+        # Generated from packet 791/792
+        buff = dev.controlRead(0xC0, 0xB0, 0x0004, 0x0000, 2)
+        validate_read("\x12\x34", buff, "packet 791/792")
+
+        all_dat = capture_frame(dev)
+
+        bulk_end = time.time()
+        print 'All URBs handled'
+        print 'Bulk transfer in %0.1f' % (bulk_end - bulk_start,)
+        print 'Capture in %0.1f' % (bulk_end - cap_start,)
+        print 'Data length: %d' % len(all_dat)
+        open('capture_%03d.bin' % taken, 'w').write(all_dat)
+
+        taken += 1
+
+        cleanup(dev)
+
+        '''
+        print 'confirming idle'
+        while True:
+            # Generated from packet 861/862
+            buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
+            if args.verbose:
+                print 'r1: %s' % binascii.hexlify(buff)
+            state = ord(buff)
+            if state == 0x01:
+                print 'idle found'
+                break
+            
+            # Generated from packet 863/864
+            buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
+            if args.verbose:
+                print 'r2: %s' % binascii.hexlify(buff)
+            validate_read("\x00", buff, "packet 863/864")
+        '''
 

@@ -10,6 +10,8 @@ import libusb1
 import binascii
 import sys
 import argparse
+import time
+import util
 
 def load(dev):
     # Source data: cap1.cap
@@ -770,9 +772,12 @@ def load(dev):
 pidvid2name = {
         (0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)',
         (0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)',
+        # ooops
+        # Bus 002 Device 043: ID 04b4:8613 Cypress Semiconductor Corp. CY7C68013 EZ-USB FX2 USB 2.0 Development Kit
+        (0x04b4, 0x8613): 'CY7C68013 EZ-USB FX2 USB 2.0 Development Kit',
         }
 
-def load_all():
+def load_all(wait=False):
     ret = False
     usbcontext = usb1.USBContext()
     print 'Scanning for devices...'
@@ -792,6 +797,18 @@ def load_all():
             load(udev.open())
             print 'Firmware load OK'
             ret = True
+
+    if ret and wait:
+        print 'Waiting for device to come up'
+        tstart = time.time()
+        while time.time() - tstart < 3.0:
+            udev = util.check_device()
+            if udev:
+                break
+        else:
+            raise Exception("Renumeration timed out")
+        print 'Up after %0.1f sec' % (time.time() - tstart,)
+
     return ret
 
 if __name__ == "__main__":
