@@ -1,3 +1,26 @@
+'''
+with the bad eeprom connected it didn't register sensor ID
+however it did still do state probes
+does this mean that it would continue to work even with a wiped eeprom?
+how did I wipe it?
+
+What is EEPROM1?
+Could it be an FPGA and the bitstream is no longer loading?
+Think its a SmartFusion
+could be talking to an ARM/FPGA over SPI or something like that
+what could cause it to stop booting?
+Is there a mode pin I set?
+Wrote a bad register to it?
+ 
+
+eeprom1
+    read:  controlRead( 0xC0, 0xB0, 0x0010
+    write: 
+eeprom2
+    read:  controlRead( 0xC0, 0xB0, 0x000B
+    write: controlWrite(0x40, 0xB0, 0x000C
+'''
+
 # https://github.com/vpelletier/python-libusb1
 # Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
 import usb1
@@ -18,45 +41,6 @@ if __name__ == "__main__":
 
     usbcontext = usb1.USBContext()
     dev = open_dev(usbcontext)
-
-
-    if 0:
-        '''
-        There's some funny math around the beginning
-        its not a linear mapping
-        seems to level out after the first 0x20 bytes
-        writing to 0x10 writes to 0x0000...if large enough?
-        
-        think its supposed to be written 0x20 aligned
-        '''
-        if 0:
-            '''
-            the first 6 bytes are special
-            but I did manage to erase them before
-            00000000  FF FF FF FF FF FF 06 07  08 09 0A 0B 0C 0D 0E 0F  |................|
-            00000010  10 11 12 13 14 15 16 17  18 19 1A 1B 1C 1D 1E 1F  |................|
-            '''
-            #for i in xrange(0x100):
-            for i in xrange(0xFF):
-                print 'Write %d' % i
-                dev.controlWrite(0x40, 0xB0, 0x000C, i, chr(i) * 4)
-        if 0:
-            # does nothing
-            #dev.controlWrite(    0x40, 0xB0, 0x000C, 0x0000, "\xCC" * 0x80)
-        
-            # writes first 0x20 bytes
-            #dev.controlWrite(    0x40, 0xB0, 0x000C, 0x0010, "\xFF" * 0x80)
-            dev.controlWrite(    0x40, 0xB0, 0x000C, 0x0010, "C" * 32)
-        if 0:
-            # writes 0x20:0x3F
-            dev.controlWrite(    0x40, 0xB0, 0x000C, 0x0020, "\xDD" * 0x80)
-        if 0:
-            for i in xrange(0x2000 - 0x20, 0x2000, 0x20):
-                print 'Write 0x%04X' % i
-                dev.controlWrite(0x40, 0xB0, 0x000C, i, chr(i/0x80) * 0x20)
-        dev.controlWrite(0x40, 0xB0, 0x000C, 0x0010, "A" * 32)
-        sys.exit(1)
-
 
     # matches this
     # buff = dump_loop(0x0B, 0x80, 0x0000, dump_len, do_hexdump=(not (args.fn2 or args.all)))
