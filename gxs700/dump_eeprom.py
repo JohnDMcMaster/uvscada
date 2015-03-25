@@ -1,3 +1,7 @@
+'''
+[EEPROM Serial Number Empty]
+[Flash Serial Number Empty]
+'''
 # https://github.com/vpelletier/python-libusb1
 # Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
 import usb1
@@ -29,12 +33,12 @@ def eeprom_r(dev, addr, l):
     # gives all 0's if you request more than 0x200 bytes
     if l > 0x200:
         raise Exception("Invalid read size 0x%04X" % l)
-    res = dev.controlRead(0xC0, 0xB0, 0x0010, addr, l)
+    res = dev.controlRead(0xC0, 0xB0, 0x0010, addr, l, timeout=1000)
     if len(res) != l:
         raise Exception("requested 0x%04X bytes but got 0x%04X" % (dump_len, len(res),))
     return res
 
-def dump_loop(req, max_read, dump_addr, dump_len, do_hexdump=True):
+def dump_loop(dev, req, max_read, dump_addr, dump_len, do_hexdump=True):
     bin = ''
     to_dump = dump_len
     addr_cur = dump_addr
@@ -44,15 +48,21 @@ def dump_loop(req, max_read, dump_addr, dump_len, do_hexdump=True):
         print
         print 'Addr 0x%04X, len 0x%04X' % (addr_cur, l_this)
         
-        res = dev.controlRead(0xC0, 0xB0, req, addr_cur, l_this)
+        res = dev.controlRead(0xC0, 0xB0, req, addr_cur, l_this, timeout=1000)
         bin += res
-        if hexdump:
+        if do_hexdump:
             hexdump(res)
         if len(res) != l_this:
             print "WARNING: wanted 0x%04X bytes but got 0x%04X" % (dump_len, len(res),)
         to_dump -= l_this
         addr_cur += l_this
     return bin
+
+def read1(dev, addr, l):
+    return dump_loop(dev, 0x0010, EEPROM_RMAX, addr, l, do_hexdump=False)
+
+def read2(dev, addr, l):
+    return dump_loop(dev, 0x0000, 0x80, addr, l, do_hexdump=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
@@ -68,13 +78,13 @@ if __name__ == "__main__":
     dev = open_dev(usbcontext)
 
     print
-    print 'Reading EEPROM'
+    print 'Reading flash'
     dump_addr = int(args.addr, 0)
     if args.all:
         dump_len = 0x800
     else:
         dump_len = int(args.len, 0)
-    bin = dump_loop(0x0010, EEPROM_RMAX, dump_addr, dump_len, do_hexdump=(not (args.fn or args.all)))
+    bin = dump_loop(dev, 0x0010, EEPROM_RMAX, dump_addr, dump_len, do_hexdump=(not args.fn))
     if args.fn:
         open(args.fn, 'w').write(bin)
 
@@ -135,14 +145,14 @@ if __name__ == "__main__":
     print
     print
     print
-    print 'Secondary'
+    print 'Reading EEPROM'
 
     if args.all:
         dump_len = 0x2000
     else:
         dump_len = 0x80
     # wraps around 0x2000
-    buff = dump_loop(0x0B, 0x80, 0x0000, dump_len, do_hexdump=(not (args.fn2 or args.all)))    
+    buff = dump_loop(dev, 0x0B, 0x80, 0x0000, dump_len, do_hexdump=(not args.fn2))
     if args.fn2:
         open(args.fn2, 'w').write(buff)
 

@@ -9,7 +9,10 @@ import load_firmware
 pidvid2name = {
         #(0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)'
         # note: load_firmware.py loads the gendex firmware
-        (0x5328, 0x2030): 'Gendex GXS700 (post enumeration)'
+        (0x5328, 0x2030): 'Gendex GXS700 (post enumeration)',
+        # some sort of auto-load mode I activated by accident
+        # no fxload required
+        #(0x5328, 0x2010): 'temp',
         #(0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)'
         }
 

@@ -32,6 +32,7 @@ import sys
 import argparse
 import time
 from util import open_dev
+import os
 
 def validate_read(expected, actual, msg, ignore_errors=False):
     if expected != actual:
@@ -727,9 +728,10 @@ if __name__ == "__main__":
     fn = ''
     
     taken = 0
-    while os.path.exists('capture_%03d.bin' % taken)
-        taken += 1
-    print 'Taking first image to %s' % ('capture_%03d.bin' % taken,)
+    imagen = 0
+    while os.path.exists('capture_%03d.bin' % imagen):
+        imagen += 1
+    print 'Taking first image to %s' % ('capture_%03d.bin' % imagen,)
     
     while taken < args.number:
         # these repeat forever, about every 7 ms per loop in the original app
@@ -796,11 +798,12 @@ if __name__ == "__main__":
         print 'Bulk transfer in %0.1f' % (bulk_end - bulk_start,)
         print 'Capture in %0.1f' % (bulk_end - cap_start,)
         print 'Data length: %d' % len(all_dat)
-        fn = 'capture_%03d.bin' % taken
+        fn = 'capture_%03d.bin' % imagen
         print 'Writing %s' % fn
         open(fn, 'w').write(all_dat)
 
         taken += 1
+        imagen += 1
 
         cleanup(dev)
 

@@ -31,6 +31,8 @@ import sys
 import argparse
 from util import hexdump
 from util import open_dev
+import dump_eeprom
+import random
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
@@ -79,7 +81,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
-    if 1:
+    if 0:
         '''
         0x00 0.000t error
         0x01 0.000t error
@@ -144,4 +146,40 @@ if __name__ == "__main__":
             except libusb1.USBError:
                 print '0x%02X %0.3ft error' % (i, 0)
         sys.exit(1)
+
+
+    
+    i = 0
+    while True:
+        # /usr/local/lib/python2.7/dist-packages/usb1.py
+        print 'Iter %d' % i
+        # def controlWrite(self, request_type, request, value, index, data,
+        #request_type = random.randint(0x00, 0xFF)
+        request_type = 0x40
+        request = random.randint(0x00, 0xFF)
+        value = random.randint(0x00, 0xFF)
+        #index = 0x0000
+        index = random.randint(0x00, 0xFF)
+        
+        try:
+            try:
+                dev.controlWrite(request_type, request, value, index, 'A' * 0x20, timeout=1000)
+                print '%d %0.3ft okay' % (i, 0)
+            except libusb1.USBError:
+                print '%d %0.3ft error' % (i, 0)
+
+            r = dump_eeprom.read1(dev, 0x0000, 0x20)
+            if r != ('\xFF' * 0x20):
+                print 'Found result'
+                print 'request_type: 0x%02X' % request_type
+                print 'request: 0x%02X' % request
+                print 'value: 0x%04X' % value
+                print 'index: 0x%04X' % index
+                break
+        except libusb1.USBError as e:
+            if e.value == -7:
+                print 'LIBUSB_ERROR_TIMEOUT'
+            else:
+                raise
+        i += 1
 
