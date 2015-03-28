@@ -20,7 +20,7 @@ time.sleep(5)
 
 print 'Nuking...'
 switch(SW_HV, 1)
-time.sleep(4)
+time.sleep(3)
 
 print 'Safing...'
 switch(SW_HV, 0)

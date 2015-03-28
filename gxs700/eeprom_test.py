@@ -42,6 +42,14 @@ if __name__ == "__main__":
     usbcontext = usb1.USBContext()
     dev = open_dev(usbcontext)
 
+    '''
+    def controlWrite(self, request_type,
+                    request, value, index, data,
+                     timeout=0):
+    '''
+    print 'writing'
+    dev.controlWrite(0x40, 0xB0, 0x000F, 0x0000, 'B' * 0x100)
+    sys.exit(0)
 
     if 0:
         '''
@@ -149,37 +157,38 @@ if __name__ == "__main__":
 
 
     
-    i = 0
-    while True:
-        # /usr/local/lib/python2.7/dist-packages/usb1.py
-        print 'Iter %d' % i
-        # def controlWrite(self, request_type, request, value, index, data,
-        #request_type = random.randint(0x00, 0xFF)
-        request_type = 0x40
-        request = random.randint(0x00, 0xFF)
-        value = random.randint(0x00, 0xFF)
-        #index = 0x0000
-        index = random.randint(0x00, 0xFF)
-        
-        try:
+    if 0:
+        i = 0
+        while True:
+            # /usr/local/lib/python2.7/dist-packages/usb1.py
+            print 'Iter %d' % i
+            # def controlWrite(self, request_type, request, value, index, data,
+            #request_type = random.randint(0x00, 0xFF)
+            request_type = 0x40
+            request = random.randint(0x00, 0xFF)
+            value = random.randint(0x00, 0xFF)
+            #index = 0x0000
+            index = random.randint(0x00, 0xFF)
+            
             try:
-                dev.controlWrite(request_type, request, value, index, 'A' * 0x20, timeout=1000)
-                print '%d %0.3ft okay' % (i, 0)
-            except libusb1.USBError:
-                print '%d %0.3ft error' % (i, 0)
+                try:
+                    dev.controlWrite(request_type, request, value, index, 'A' * 0x20, timeout=1000)
+                    print '%d %0.3ft okay' % (i, 0)
+                except libusb1.USBError:
+                    print '%d %0.3ft error' % (i, 0)
 
-            r = dump_eeprom.read1(dev, 0x0000, 0x20)
-            if r != ('\xFF' * 0x20):
-                print 'Found result'
-                print 'request_type: 0x%02X' % request_type
-                print 'request: 0x%02X' % request
-                print 'value: 0x%04X' % value
-                print 'index: 0x%04X' % index
-                break
-        except libusb1.USBError as e:
-            if e.value == -7:
-                print 'LIBUSB_ERROR_TIMEOUT'
-            else:
-                raise
-        i += 1
+                r = dump_eeprom.read1(dev, 0x0000, 0x20)
+                if r != ('\xFF' * 0x20):
+                    print 'Found result'
+                    print 'request_type: 0x%02X' % request_type
+                    print 'request: 0x%02X' % request
+                    print 'value: 0x%04X' % value
+                    print 'index: 0x%04X' % index
+                    break
+            except libusb1.USBError as e:
+                if e.value == -7:
+                    print 'LIBUSB_ERROR_TIMEOUT'
+                else:
+                    raise
+            i += 1
 

@@ -559,6 +559,25 @@ def cleanup(dev):
     # Generated from packet 1229/1230
     buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
 
+class USBDbg:
+    def __init__(self, dev):
+        self.dev = dev
+
+    def controlWrite(self, request_type, request, value, index, data,
+                     timeout=0):
+        print 'DBG: controlWrite(request_type=%02X, request=%04X, value=%04X, index=%04X, data=%s, timeout=%d)' % (
+                request_type, request, value, index, binascii.hexlify(data), timeout)
+        self.dev.controlWrite(request_type, request, value, index, data, timeout)
+
+    def controlRead(self, request_type, request, value, index, length,
+                    timeout=0):
+        print 'DBG: controlRead(request_type=%02X, request=%04X, value=%04X, index=%04X, length=%04X, timeout=%d)' % (
+                request_type, request, value, index, length, timeout)
+        return self.dev.controlRead(request_type, request, value, index, length, timeout)
+
+    def getTransfer(self):
+        return self.dev.getTransfer()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
