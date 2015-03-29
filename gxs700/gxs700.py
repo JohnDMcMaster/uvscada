@@ -22,10 +22,14 @@ General notes
 FRAME_SZ = 4972800
 
 class GXS700:
-    def __init__(self, usbcontext, dev):
+    def __init__(self, usbcontext, dev, verbose=False, init=True):
+        self.verbose = verbose
         self.usbcontext = usbcontext
         self.dev = dev
         self.timeout = 0
+        self.wait_trig_cb = lambda: None
+        if init:
+            self._init()
     
     def _controlRead_mem(self, req, max_read, addr, dump_len):
         ret = ''
@@ -69,7 +73,7 @@ class GXS700:
         self.dev.controlWrite(0x40, 0xB0, 0x11, addr, chr(addr), timeout=self.timeout)
 
     def sw_trig(self):
-        '''Force taking an image without x-rays'''
+        '''Force taking an image without x-rays.  Takes a few seconds'''
         self.dev.controlWrite(0x40, 0xB0, 0x2b, 0, '\x00', timeout=self.timeout)
 
     def flash_r(self, addr, n):
@@ -245,8 +249,103 @@ class GXS700:
         return ord(self.dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1))
 
     '''
+    ***************************************************************************
     High level functionality
+    ***************************************************************************
     '''
+    
+    def _init(self):
+        state = self.state()
+        print 'Init state: %d' % state
+        if state == 0x08:
+            print 'Flusing stale capture'
+            self._cap_frame_bulk()
+        elif state != 0x01:
+            raise Exception('Not idle, refusing to setup')
+    
+        self.img_wh_w(1344, 1850)
+        
+        self.flash_sec_act(0x0000)
+    
+            
+        if self.img_wh() != (1344, 1850):
+            raise Exception("Unexpected w/h")
+        
+        '''
+        FIXME: fails verification if already ran
+        Failed packet 453/454
+          Expected; 0000
+          Actual:   0001
+        '''
+        if self.fpga_r(0x2002) != 0x0000:
+            print "WARNING: bad FPGA read"
+        
+        if self.fpga_rsig() != 0x1234:
+            raise Exception("Invalid FPGA signature")
+        
+        self._setup_fpga1()
+        
+        if self.fpga_rsig() != 0x1234:
+            raise Exception("Invalid FPGA signature")
+        
+        self._setup_fpga2()
+        
+        self.fpga_w(0x2002, 0x0001)
+        v = self.fpga_r(0x2002)
+        if v != 0x0001:
+            raise Exception("Bad FPGA read: 0x%04X" % v)
+        
+        # XXX: why did the integration time change?
+        self.int_t_w(0x0064)
+        
+        '''
+        FIXME: fails verification if already ran
+          Expected; 01
+          Actual:   02
+        '''
+        if self.state() != 1:
+            print 'WARNING: unexpected state'
+        
+        #self.img_wh_w(1344, 1850)
+        
+        self.flash_sec_act(0x0000)
+
+    
+        if self.img_wh() != (1344, 1850):
+            raise Exception("Unexpected w/h")
+        
+        '''
+        FIXME: fails verification if already plugged in
+        '''
+        if self.state() != 1:
+            print 'WARNING: unexpected state'
+    
+        self.img_wh_w(1344, 1850)
+        
+        self.flash_sec_act(0x0000)
+        
+        
+        if self.img_wh() != (1344, 1850):
+            raise Exception("Unexpected w/h")
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        self.img_wh_w(1344, 1850)
+        
+        self.flash_sec_act(0x0000)
+    
+    
+        if self.img_wh() != (1344, 1850):
+            raise Exception("Unexpected w/h")
+        
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        self.int_t_w(0x02BC)
+        
+        self.cap_mode_w(0)
     
     def _cap_frame_bulk(self):
         '''Take care of the bulk transaction prat of capturing frames'''
@@ -295,8 +394,11 @@ class GXS700:
         all_dat = all_dat[0]
         return all_dat
     
-    def cap_bin(self):
+    def _cap_bin(self):
         '''Capture a raw binary frame, waiting for trigger'''
+        
+        self.wait_trig_cb()
+        
         i = 0
         while True:
             if i % 1000 == 0:
@@ -366,7 +468,30 @@ class GXS700:
 
         return self._cap_frame_bulk()
 
-    def cap_img(self, fn):
+    def cap_binv(self, n, cap_cb, loop_cb=lambda: None):
+        self._cap_setup()
+        
+        taken = 0
+        while taken < n:
+            imgb = self._cap_bin()
+            rc = cap_cb(imgb)
+            # hack: consider doing something else
+            if rc:
+                n += 1
+            taken += 1
+            self.cap_cleanup()
+            loop_cb()
+
+        self.hw_trig_disarm()
+    
+    def cap_bin(self):
+        ret = []
+        def cb(buff):
+            ret.append(buff)
+        self.cap_binv(1, cb)
+        return ret[0]
+
+    def cap_img(self):
         '''Capture a decoded image to filename, waiting for trigger'''
         return self.decode(self.cap_bin())
 
@@ -549,3 +674,97 @@ class GXS700:
         self.fpga_wv2(0x10E8, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
         self.fpga_wv2(0x10F0, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
         self.fpga_wv2(0x10F8, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+
+    def cap_cleanup(self):
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        if self.error():
+            raise Exception('Unexpected error')
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        if self.error():
+            raise Exception('Unexpected error')
+        
+        self.eeprom_w(0x0020, "2015/03/19-21:44:43:087")
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        if self.error():
+            raise Exception('Unexpected error')
+        
+        self.int_t_w(0x02BC)
+        
+        self.cap_mode_w(0)
+    
+        self.hw_trig_arm()
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        if self.error():
+            raise Exception('Unexpected error')
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        self.img_wh_w(1344, 1850)
+        
+        self.flash_sec_act(0x0000)
+        
+        if self.img_wh() != (1344, 1850):
+            raise Exception("Unexpected w/h")
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+    
+        if self.error():
+            raise Exception('Unexpected error')
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+
+    def _cap_setup(self):
+        '''Setup done right before taking an image'''
+        
+        self.hw_trig_arm()
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        if self.error():
+            raise Exception('Unexpected error')
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        
+        print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
+        
+        if self.error():
+            raise Exception('Unexpected error')
+        
+        self.versions()
+        
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+        if self.error():
+            raise Exception('Unexpected error')
+        
+        self.img_wh_w(1344, 1850)
+        self.flash_sec_act(0x0000)
+        if self.img_wh() != (1344, 1850):
+            raise Exception("Unexpected w/h")
+    
+        if self.state() != 1:
+            raise Exception('Unexpected state')
+
