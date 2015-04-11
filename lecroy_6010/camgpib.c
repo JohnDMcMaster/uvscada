@@ -1,7 +1,6 @@
 //Based on: http://cdn.teledynelecroy.com/files/manuals/8901aman.pdf
 
 /*
-/TEXT
 Purpose: Functions to control the CAMAC bus via an 8901A or 6010,
 from an IBM PC using National Instruments PC-II GPIB Card.
 Language: C
@@ -10,7 +9,6 @@ the basic knowledge of ‘C’, GPIB, and CAMAC.
 They are not optimized for speed but for ease of understanding.
 MUST link the National Instruments gpib.obj file, Microsoft ‘C’
 versions are labeld MCIBx.OBJ file, (x=C,S,M,L).
-/CODE
 */
 /* ———————————————————————————————————— */
 #include "camgpib.h"
@@ -28,22 +26,19 @@ char pcList[] = "A";        /* List 0 Talk 1 */
 int ccType = 0;
 /* Type of controller, 8901 or 6010 */
 int qxRet;
+
 /* status last camac command */
 #define DEF6010 "DUMB ON;CDMA OFF;CFMT OFF,WORD,BINARY;CORD LOFIRST;CAMAC 2"
-#define DEFCNT 59
-/* ——————————————————————————————————— */
+#define DEFCNT  59
+
 /*
-/TEXT
-Function: void caminit(addr, type)
-Purpose: Initialize the GPIB routines and the camac controller.
-Input: int addr - GPIB Address of controller
-int type - C8901 or C6010
-Notes: This function MUST be performed to setup CAMAC access!
-If GPIB board cannot be opened this function will exit(1)
-your program.
-/CODE
+Initialize the GPIB routines and the camac controller.
+This function MUST be performed to setup CAMAC access!
+If GPIB board cannot be opened this function will exit(1) your program.
 */
-void caminit(int addr, int type) {
+void caminit(
+        int addr,   //GPIB Address of controller
+        int type) { //C8901 or C6010
     /* if gpib board was never opened, open it */
     if (gpibBd < 0) {
         if ((gpibBd = ibfind("GPIB0")) < 0)
@@ -67,22 +62,16 @@ void caminit(int addr, int type) {
     }
 }
 
-/* ——————————————————————————————————— */
 /*
-/TEXT
-Function: void camo(n, f, a, d)
-Purpose: Do a 24 bit camac write cycle, W1-W24.
-Input: int n - slot number of module
-int f - funtion code
-int a - address code
-long d - data value to send
-/CODE
+Do a 24 bit camac write cycle, W1-W24.
 */
-void camo(n, f, a, d)
-int n, f, a;
-long d;
-{
+void camo(
+        int n,      //slot number of module
+        int f,      //funtion code
+        int a,      //address code
+        long d) {   //data value to send
     char rw[40];
+    
     /* init qxResp return value */
     qxRet = 0;
     if (ccType == 8901) {
@@ -131,21 +120,17 @@ long d;
     }
 }
 
-/* ——————————————————————————————————— */
 /*
-/TEXT
-Function: long cami(n, f, a)
-Purpose: Do a 24 bit camac read cycle.
-Input: int n - slot number of module
-int f - funtion code
-int a - address code
+Do a 24 bit camac read cycle.
 Returns: long (R1-R24) value of data read.
-/CODE
 */
-long cami(n, f, a) 26 int n, f, a;
-{
+long cami(
+        int n,      //slot number of module
+        int f,      //funtion code
+        int a) {    //address code
     long d, d1, d2, d3;
     char rw[40];
+    
     /* init return data value and qxResp return value */
     d = 0L;
     qxRet = 0;
@@ -212,24 +197,19 @@ long cami(n, f, a) 26 int n, f, a;
     return (d);
 }
 
-/* ——————————————————————————————————— */
 /*
-/TEXT
-Function: int camibk16(n, f, a, count, buffer)
-Purpose: Do a 16 bit block read cycle.
-Input: int n - slot number of module
-int f - funtion code
-int a - address code
-int count - number of data values to read
-Output: int *buffer - array to store data into
+Do a 16 bit block read cycle.
 Return: number of data values read.
-/CODE
 */
-int camibk16(n, f, a, count, buffer)
-int n, f, a, count, *buffer;
-{
+int camibk16(
+        int n,          //slot number of module
+        int f,          //funtion code
+        int a,          //address code
+        int count,      //number of data values to read
+        int *buffer) {  //array to store data into
     int retval;
     char rw[40];
+    
     /* init return data count value */
     retval = 0;
     /* block xfer mode is set in bytes */
@@ -282,20 +262,11 @@ int n, f, a, count, *buffer;
     return (retval);
 }
 
-/* ——————————————————————————————————— */
 /*
-/TEXT
-Function: int qxResp()
-Purpose: Returns the CAMAC Q and X response from the last camo or
-cami functions.
+Purpose: Returns the CAMAC Q and X response from the last camo or cami functions.
 Returns: Q response in bit 1, X response in bit 0
-/CODE
-29
 */
-int qxResp()
-{
-    return (qxRet);
+int qxResp(void) {
+    return qxRet;
 }
-
-/* —————————————— end of file ——————————————— */
 
