@@ -32,19 +32,22 @@ VERSION = 0.0
 class Timeout(Exception):
     pass
 
+def dbg(s):
+    pass
+
 class USBIO:
     # wtf is acm
     def __init__(self, device=None, debug=False):
         self.serial = None
         self.debug = debug
         if device is None:
-            for s in ("/dev/ttyACM0", "/dev/ttyS5", "COM12"):
+            for s in ("/dev/ttyUSB0", "/dev/ttyACM0", "/dev/ttyS5", "COM12"):
                 try:
                     self.try_open(s)
-                    print 'Opened %s okay' % s
+                    dbg('Opened %s okay' % s)
                     break
                 except IOError:
-                    print 'Failed to open %s' % s
+                    dbg('Failed to open %s' % s)
                     continue
             if self.serial is None:
                 raise IOError("Failed to find a suitable device")
@@ -53,7 +56,7 @@ class USBIO:
         
         # Clear old data
         if self.debug:
-            print 'Flushing %d chars' % self.serial.inWaiting()
+            dbg('Flushing %d chars' % self.serial.inWaiting())
         self.serial.flushInput()
 
     def try_open(self, device):
