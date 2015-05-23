@@ -13,11 +13,9 @@ import argparse
 import time
 import util
 
-def load(dev):
-    # Source data: cap1.cap
-    # Source range: 107 - 286
-
+def stage1(dev):
     # Generated from packet 107/108
+    # hold in reset to allow fw load
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x01")
     # Generated from packet 109/110
     dev.controlWrite(0x40, 0xA0, 0x0357, 0x0000, "\x90\xE6\x68\xE0\xFF\x74\xFF\xF0\xE0\xB4\x0B\x04\xEF\xF0\xD3\x22"
@@ -84,8 +82,12 @@ def load(dev):
     dev.controlWrite(0x40, 0xA0, 0x0000, 0x0000, "\x02\x03\x6E")
     # Generated from packet 127/128
     dev.controlWrite(0x40, 0xA0, 0x036E, 0x0000, "\x78\x7F\xE4\xF6\xD8\xFD\x75\x81\x20\x02\x02\xDE")
+    # release reset
     # Generated from packet 129/130
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x00")
+
+def stage2():
+    # enter reset
     # Generated from packet 131/132
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x01")
     # Generated from packet 133/134
@@ -765,6 +767,7 @@ def load(dev):
               "\xF0\xA3\xC8\xC5\x82\xC8\xCA\xC5\x83\xCA\xDF\xE9\xDE\xE7\x80\xBE")
     # Generated from packet 283/284
     dev.controlWrite(0x40, 0xA0, 0x1DED, 0x0000, "\x00")
+    # release reset
     # Generated from packet 285/286
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x00")
 
@@ -812,6 +815,14 @@ def load_all(wait=False):
         print 'Up after %0.1f sec' % (time.time() - tstart,)
 
     return ret
+
+def load(dev):
+    # Source data: cap1.cap
+    # Source range: 107 - 286
+    
+    stage1()
+    # xxx: should sleep here?
+    stage2()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')

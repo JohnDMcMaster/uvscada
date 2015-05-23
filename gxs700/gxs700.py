@@ -12,6 +12,8 @@ except ImportError:
     from StringIO import StringIO
 
 '''
+19.5 um pixels
+
 General notes
 
 5328:2010 Dexis Platinum
@@ -122,11 +124,11 @@ class GXS700:
 
     def i2c_r(self, addr, n):
         '''Read I2C bus'''
-        return self.dev.controlRead(0xC0, 0xB0, 0x0A, 0, n, timeout=self.timeout)
+        return self.dev.controlRead(0xC0, 0xB0, 0x0A, addr, n, timeout=self.timeout)
 
     def i2c_w(self, addr, buff):
         '''Write I2C bus'''
-        self.dev.controlWrite(0x40, 0xB0, 0x0A, 0, buff, timeout=self.timeout)
+        self.dev.controlWrite(0x40, 0xB0, 0x0A, addr, buff, timeout=self.timeout)
     
     def tim_running(self):
         '''Get if timing analysis is running'''
