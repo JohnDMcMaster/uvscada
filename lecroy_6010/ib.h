@@ -70,12 +70,14 @@ The size of the actual send data is returned to the global variable, ibcntl.
 */
 int ibwrt(
         /*
-        Specifies the board handle or device handle obtained by the ibfind or ibdev function. The operation depends on the type of handle.
+        Specifies the board handle or device handle obtained by the ibfind or ibdev function. 
+        The operation depends on the type of handle.
 	    <Board Handle>
 	    To call this function, addressing for the specified device needs beforehand. 
        	
 	    <Device Handle>
-	    Addressing for the specified device need not to call this function. This function recognized board as Listener and device as Talker.
+	    Addressing for the specified device need not to call this function. 
+	    This function recognized board as Listener and device as Talker.
         */
 	    int 	ud,
 	    //Points to a buffer to send the data.

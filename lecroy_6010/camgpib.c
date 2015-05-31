@@ -80,7 +80,7 @@ void camo(
         /* send 24 bit normal mode command to 8901A (decimal 100) */
         ibwrt(gpibBd, "d", 1);
         /* MUST make the 8901A unlisten, send unlisten & untalk */
-        25 ibcmd(gpibBd, "? _", 2);
+        ibcmd(gpibBd, "? _", 2);
         /* build command string with 3 bytes of data (CAMAC W1-W24) */
         rw[0] = (char) f;
         rw[1] = (char) a;
@@ -99,7 +99,7 @@ void camo(
         /* 1st byte=R1-R8, 2nd byte=R9-R16, 3rd byte=R17-R24, 4th byte=Q&X */
         if (ibcnt == 4)
             qxRet = (int) (rw[3] & 3);
-        } else if (ccType == 6010) {
+    } else if (ccType == 6010) {
         /* build command string with 3 bytes of data (CAMAC W1-W24) */
         sprintf(rw, "n = %2 d;
                 f = %2 d;
