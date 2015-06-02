@@ -6,7 +6,12 @@ http://prologix.biz/getfile?attachment_id=2
 '''
 
 import serial
-        
+
+class Timeout(Exception):
+    pass
+
+class ShortRead(Exception):
+    pass
 
 '''
 *********************************
@@ -23,7 +28,7 @@ Serial port parameters such as baud rate, data bits,
 stop bits and flow control do not matter and may be set to any value
 '''
 class PUGpib:
-    def __init__(self, port="/dev/ttyS0", timeout=3, addr=5):
+    def __init__(self, port="/dev/ttyUSB0", ser_timeout=1.0, gpib_timeout=0.9, addr=5, clr=True, eos=0):
         self.port = port
         self.addr = addr
         self.ser = serial.Serial(port,
@@ -35,20 +40,20 @@ class PUGpib:
                 rtscts=False,
                 dsrdtr=False,
                 xonxoff=False,
-                timeout=timeout,
+                timeout=ser_timeout,
                 # Blocking writes
                 writeTimeout=None)
-        
+        self.bin = False
         
         # Clear any previous partial command
-        self.send_str('')
+        #self.send_str('')
         # Clear any data laying around
         self.ser.flushInput()
-        self.ser.flush()
-        
-        self.send_str('++clr')
-        # ++addr 5\n"
-        self.send_str("++addr %d" % (self.addr,))
+        self.ser.flushOutput()
+
+        self.set_addr(addr)
+        if clr:
+            self.send_str('++clr')
         
         # Will generate a bunch of interrupted errors if you don't set this (default 1)
         self.send_str('++auto 0')
@@ -59,40 +64,71 @@ class PUGpib:
         ++eos 3    Do not append anything to instrument commands
         ++eos      Query current EOS state
         '''
-        self.send_str('++eos 0')
-        self.send_str('++read_tmo_ms 3000')
+        self.send_str('++eos %d' % eos)
+        self.send_str('++read_tmo_ms %d' % (gpib_timeout * 1000,))
         
         # Make sure simple queries work
         self.version()
     
     def set_addr(self, addr):
-        self.send_astr
+        self.addr = addr
+        self.send_str("++addr %d" % (self.addr,))
     
     def interface(self):
         return "GPIB"
     
+    def bin_mode(self):
+        self.bin = True
+        # disable cr/lf
+        self.send_str("++eos 3")
+        #self.send_str("++eot_enable 1")
+        # default: 0
+        #self.send_str("++eot_char 0")
+    
+    def snd(self, *args, **kwargs):
+        self.send_str(*args, **kwargs)
+    
     def send_str(self, s):
-        dbg('Sending "%s"' % (s))
-        s += '\n'
+        #dbg('Sending "%s"' % (s))
         '''
         With EOT on should not be needed
         for c in '\r\n+\x1b':
             s = s.replace(c, '\x1b' + c)
         '''
-        self.ser.write(s)
+        
+        '''
+        Special care must be taken when sending binary data to instruments. If any of the
+        following characters occur in the binary data -- CR (ASCII 13 0x0D), LF (ASCII 10 0x0A), ESC
+        (ASCII 27 0x1B), '+' (ASCII 43 0x2B) - they must be escaped by preceding them with an ESC
+        character
+        '''
+        if self.bin:
+            for c in '\x1b\x2b\x0d\x0a':
+                s = s.replace(c, '\x1b' + c)
+        
+        self.ser.write(s + "\n")
         # FIXME: flow control deadlock can get us stuck here
         # need some sort of timeout mechanism
         self.ser.flush()
     
-    def recv_str(self):
+    def rcv(self, *args, **kwargs):
+        return self.recv_str(*args, **kwargs)
+    
+    def recv_str(self, l=1024, empty=False, short=True):
         self.ser.write('++read eoi\n')
         self.ser.flush()
         
-        s = self.ser.readline(100)
-        if not s:
-            raise Timeout('Failed recv')
-        s = s.rstrip()
-        print 'DBG: received "%s"' % (s)
+        if self.bin:
+            s = self.ser.read(l)
+        else:
+            s = self.ser.readline()
+        if not s and not empty:
+            raise Timeout('Failed recv any bytes')
+        if self.bin and short and len(s) != l:
+            raise ShortRead()
+        if not self.bin:
+            s = s.rstrip()
+        #print 'DBG: received "%s"' % (s)
         return s
         
     '''
@@ -111,15 +147,24 @@ class PUGpib:
     from a previous command (the previous data is not overwritten). The output buffer is cleared when
     power has been turned off, or after a *RST (reset) command has been executed.
     '''
-    def sendrecv_str(self, s):
+    def snd_rcv(self, *args, **kwargs):
+        return self.sendrecv_str(*args, **kwargs)
+
+    def sendrecv_str(self, s, l=1024, empty=False, short=True):
         self.send_str(s)
         self.send_str('++read eoi')
         
         # wait for response line
-        s = self.ser.readline()
+        if self.bin:
+            s = self.ser.read(l)
+        else:
+            s = self.ser.readline()
         if not s:
-            raise Timeout('Failed recv')
-        s = s.rstrip()
+            raise Timeout('Failed recv any bytes')
+        if self.bin and short and len(s) != l:
+            raise ShortRead()
+        if not self.bin:
+            s = s.rstrip()
         #print 'received "%s"' % (s)
         return s
 
@@ -129,7 +174,7 @@ class PUGpib:
         
         # wait for response line
         s = self.ser.readline()
-        if not s:
+        if not s and not empty:
             raise Timeout('Failed recv')
         s = s.rstrip()
         #print 'received "%s"' % (s)
