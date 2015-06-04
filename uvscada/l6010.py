@@ -31,6 +31,9 @@ z   none
 from plx_usb import PUGpib
 
 import sys
+import time
+import binascii
+import struct
 
 def propget(func):
     locals = sys._getframe(1).f_locals
@@ -65,9 +68,15 @@ def propdel(func):
     return prop
 
 class L6010(object):
-    def __init__(self, port='/dev/ttyUSB0'):
-        self.gpib = PUGpib(port=port, addr=1, clr=True, eos=3, ser_timeout=1.0, gpib_timeout=0.9)
-    
+    def __init__(self, port='/dev/ttyUSB0', clr=True):
+        self.gpib = PUGpib(port=port, addr=1, clr=clr, eos=3, ser_timeout=1.0, gpib_timeout=0.9)
+        # Last transaction result status bits
+        self.ql = None
+        self.xl = None
+        # seems to block commands for half a second
+        if clr:
+            time.sleep(0.5)
+            
     '''
     Dataway: address
     '''
@@ -82,7 +91,8 @@ class L6010(object):
         if value < 0 or value > 15:
             raise ValueError(value)
         self.gpib.snd('A %d' % value)
-
+        if self.a != value:
+            raise Exception("Failed to set")
 
     @propget
     def b(self):
@@ -115,6 +125,8 @@ class L6010(object):
         if value < 0 or value > 31:
             raise ValueError(value)
         self.gpib.snd('F %d' % value)
+        if self.f != value:
+            raise Exception("Failed to set")
 
 
     '''
@@ -152,6 +164,8 @@ class L6010(object):
         if value < 1 or value > 23:
             raise ValueError(value)
         self.gpib.snd('N %d' % value)
+        if self.n != value:
+            raise Exception("Failed to set")
 
     @propget
     def q(self):
@@ -230,7 +244,12 @@ class L6010(object):
     def z(self):
         self.gpib.snd('Z')
 
-    def camo(n,     # slot number of module
+    '''
+    As far as I can tell theres no difference between in and out
+    the "in" function clears the register
+    '''
+
+    def camo(self, n,     # slot number of module
             f,      # funtion code
             a,      # address code
             d):     # data
@@ -238,11 +257,25 @@ class L6010(object):
         self.f = f
         self.a = a
         self.w = d
-        ret = self.gpib.rcv(l=10)
+        ret = self.gpib.snd_rcv('rqx', l=10)
         # Q/X update
-        print ret
+        if len(ret) != 4:
+            raise Exception("Unexpected response: %s" % binascii.hexlify(ret))
+        '''
+        /* 1st byte=R1-R8, 2nd byte=R9-R16, 3rd byte=R17-R24, 4th byte=Q&X */
+        if (ibcnt == 4)
+            qxRet = (int) (rw[3] & 3);
+        '''
+        ret = struct.unpack('<I', ret)[0]
+        #return ret
+        rqx = (ret >> 24) & 0x3
+        # XXX: are these correct?
+        self.ql = rqx >> 1
+        self.xl = rqx & 1
+        dat = ret & 0xFFFFFF
+        return dat
 
-    def cami(n,     # slot number of module
+    def cami(self, n,     # slot number of module
             f,      # funtion code
             a):     # address code
         self.n = n
@@ -250,8 +283,15 @@ class L6010(object):
         self.a = a
         # needed?
         self.w = 0
-        ret = self.gpib.rcv(l=10)
-        # Q/X update, data
-        print ret
-        return ret
+        ret = self.gpib.snd_rcv('rqx', l=16)
+        if len(ret) != 4:
+            raise Exception("Unexpected response: %s" % binascii.hexlify(ret))
+        ret = struct.unpack('<I', ret)[0]
+        #return ret
+        rqx = (ret >> 24) & 0x3
+        # XXX: are these correct?
+        self.ql = rqx >> 1
+        self.xl = rqx & 1
+        dat = ret & 0xFFFFFF
+        return dat
 

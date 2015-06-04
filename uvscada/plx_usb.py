@@ -152,21 +152,7 @@ class PUGpib:
 
     def sendrecv_str(self, s, l=1024, empty=False, short=True):
         self.send_str(s)
-        self.send_str('++read eoi')
-        
-        # wait for response line
-        if self.bin:
-            s = self.ser.read(l)
-        else:
-            s = self.ser.readline()
-        if not s:
-            raise Timeout('Failed recv any bytes')
-        if self.bin and short and len(s) != l:
-            raise ShortRead()
-        if not self.bin:
-            s = s.rstrip()
-        #print 'received "%s"' % (s)
-        return s
+        return self.recv_str(l=l, empty=empty, short=short)
 
     def sendrecv_astr(self, s):
         '''Send receive adapter string.  No ++read is required'''
