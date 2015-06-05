@@ -71,7 +71,7 @@ if __name__ == "__main__":
     if args.csv:
         csvf = open(args.csv, 'wb')
         csvw = csv.writer(csvf, delimiter=',')
-        csvw.writerow(['slot', 'iter'] + ['ch%d' % i for i in xrange(8)])
+        csvw.writerow(['slot', 'iter', 't'] + ['ch%d' % i for i in xrange(8)])
     else:
         csvw = None
 
@@ -94,7 +94,8 @@ if __name__ == "__main__":
         # Trigger test generator
         l.cami(n=args.n, f=25, a=0)
         
-        print 'Cycle %d' % cycle
+        t = time.time()
+        print 'Cycle %d @ %0.1f' % (cycle, t)
         # Read channels, clearning on last read
         vs = []
         for ch in xrange(8):
@@ -102,5 +103,6 @@ if __name__ == "__main__":
             vs.append(v)
             print '  CH%d: 0x%06X' % (ch, v)
         if csvw:
-            csvw.writerow([args.n, cycle] + vs)
+            csvw.writerow([args.n, cycle, '%0.1f' % t] + vs)
+            csvf.flush()
 
