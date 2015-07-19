@@ -1,3 +1,26 @@
+'''
+http://wiki.linuxcnc.org/cgi-bin/wiki.pl?Emcrsh
+
+hello EMC x 1.0
+set enable EMCTOO
+set verbose on
+set machine on
+set home 0
+set home 1
+set home 2
+set home 3
+set home 4
+set home 5
+set mode mdi
+
+
+hello EMC x 1.0
+set enable EMCTOO
+set verbose on
+set machine on
+set mode mdi
+'''
+
 import pexpect.fdpexpect
 import telnetlib
 import sys
@@ -67,11 +90,12 @@ print 'Config axes'
 # Even though I only have 3 axes looks like 6 need homing?
 # also they take a really long time
 # why?
-for axis in xrange(6):
-    print 'set %d' % axis
-    client.sendline('SET HOME %d' % axis)
-    print 'expect %d' % axis
-    client.expect('SET HOME ACK')
+if 0:
+    for axis in xrange(3):
+        print 'set %d' % axis
+        client.sendline('SET HOME %d' % axis)
+        print 'expect %d' % axis
+        client.expect('SET HOME ACK')
 
 print 'MDI mode'
 client.sendline('SET MODE MDI')
@@ -91,4 +115,14 @@ for i in xrange(3):
     client.sendline('SET MDI G0 X0')
     client.expect('SET MDI ACK')
 
+while True:
+    client.sendline('GET PROGRAM_STATUS')
+    status = client.readline().strip()
+    if status == 'PROGRAM_STATUS RUNNING':
+        print 'still running'
+    elif status == 'PROGRAM_STATUS IDLE':
+        print 'done'
+        break
+    else:
+        print 'bad status %s' % status
 
