@@ -5,7 +5,7 @@ import usb1
 import libusb1
 import struct
 import binascii
-import Image
+from PIL import Image
 try:
     from cStringIO import StringIO
 except ImportError:
@@ -505,7 +505,7 @@ class GXS700:
         depth = 2
         
         # no need to reallocate each loop
-        img = Image.new("RGB", (width, height), "White")
+        img = Image.new("I", (width, height), "White")
         
         for y in range(height):
             line0 = buff[y * width * depth:(y + 1) * width * depth]
@@ -513,16 +513,16 @@ class GXS700:
                 b0 = ord(line0[2*x + 0])
                 b1 = ord(line0[2*x + 1])
                 
-                # FIXME: 16 bit pixel truncation to fit into png
-                #G = (b1 << 8) + b0
-                G = b1
+                G = (b1 << 8) + b0
+                # optional 16-bit pixel truncation to turn into 8-bit PNG
+                # G = b1
                 
                 # In most x-rays white is the part that blocks the x-rays
                 # however, the camera reports brightness (unimpeded x-rays)
                 # compliment to give in conventional form per above
-                G = 0xFF - G
+                G = 0xFFFF - G
                 
-                img.putpixel((x, y), (G, G, G))
+                img.putpixel((x, y), G)
         return img
 
     def _setup_fpga1(self):
