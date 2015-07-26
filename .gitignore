@@ -1,3 +1,5 @@
+*~
+*.pyc
 CMakeFiles
 cmake_install.cmake
 Makefile
@@ -10,6 +12,7 @@ testdata
 *.png
 captures
 test
-*.pyc
-*~
+*.log
+MANIFEST
+dist
 
