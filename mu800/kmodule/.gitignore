@@ -1,0 +1,10 @@
+*.bin
+!Makefile
+*.o
+*.symver
+.tmp_versions
+modules.order
+Module.symvers
+*.ko
+*.mod.c
+*.cmd

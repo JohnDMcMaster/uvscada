@@ -1,0 +1,12 @@
+!Makefile
+.tmp_versions/
+.uvscopetek.ko.cmd
+.uvscopetek.mod.o.cmd
+.uvscopetek.o.cmd
+Module.symvers
+modules.order
+uvscopetek.ko
+uvscopetek.mod.c
+uvscopetek.mod.o
+uvscopetek.o
+

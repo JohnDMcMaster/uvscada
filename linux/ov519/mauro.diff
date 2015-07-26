@@ -1,0 +1,66 @@
+diff --git a/drivers/media/video/gspca/ov519.c b/drivers/media/video/gspca/ov519.c
+index 6a01b35..9ca3cfc 100644
+--- a/drivers/media/video/gspca/ov519.c
++++ b/drivers/media/video/gspca/ov519.c
+@@ -92,6 +92,8 @@ struct sd {
+ #define BRIDGE_W9968CF		6
+ #define BRIDGE_MASK		7
+ 
++#define BRIDGE_OVFX2_V2	9			/* For devices with another firmware */
++
+ 	char invert_led;
+ #define BRIDGE_INVERT_LED	8
+ 
+@@ -2448,14 +2450,19 @@ static int ov518_i2c_r(struct sd *sd, u8 reg)
+ 
+ static void ovfx2_i2c_w(struct sd *sd, u8 reg, u8 value)
+ {
+-	int ret;
++	int ret, req;
+ 
+ 	if (sd->gspca_dev.usb_err < 0)
+ 		return;
+ 
++	if (id->driver_info & BRIDGE_OVFX2_V2)
++		req = 0x0b;
++	else
++		req = 0x02;
++
+ 	ret = usb_control_msg(sd->gspca_dev.dev,
+ 			usb_sndctrlpipe(sd->gspca_dev.dev, 0),
+-			0x02,
++			req,
+ 			USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE,
+ 			(u16) value, (u16) reg, NULL, 0, 500);
+ 
+@@ -2469,14 +2476,19 @@ static void ovfx2_i2c_w(struct sd *sd, u8 reg, u8 value)
+ 
+ static int ovfx2_i2c_r(struct sd *sd, u8 reg)
+ {
+-	int ret;
++	int ret, req;
+ 
+ 	if (sd->gspca_dev.usb_err < 0)
+ 		return -1;
+ 
++	if (id->driver_info & BRIDGE_OVFX2_V2)
++		req = 0x0b;
++	else
++		req = 0x03;
++
+ 	ret = usb_control_msg(sd->gspca_dev.dev,
+ 			usb_rcvctrlpipe(sd->gspca_dev.dev, 0),
+-			0x03,
++			req,
+ 			USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_DEVICE,
+ 			0, (u16) reg, sd->gspca_dev.usb_buf, 1, 500);
+ 
+@@ -5023,6 +5035,7 @@ static const struct usb_device_id device_table[] = {
+ 	{USB_DEVICE(0x05a9, 0x0530),
+ 		.driver_info = BRIDGE_OV519 | BRIDGE_INVERT_LED },
+ 	{USB_DEVICE(0x05a9, 0x2800), .driver_info = BRIDGE_OVFX2 },
++	{USB_DEVICE(0xdead, 0xbeef), .driver_info = BRIDGE_OVFX2 | BRIDGE_OVFX2_V2 },
+ 	{USB_DEVICE(0x05a9, 0x4519), .driver_info = BRIDGE_OV519 },
+ 	{USB_DEVICE(0x05a9, 0x8519), .driver_info = BRIDGE_OV519 },
+ 	{USB_DEVICE(0x05a9, 0xa511), .driver_info = BRIDGE_OV511PLUS },
+
