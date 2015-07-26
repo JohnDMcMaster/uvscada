@@ -20,7 +20,7 @@ import time
 
 from util import open_dev, IOTimestamp, IOLog
 from pr0ndexer import Indexer
-import gxs700
+from uvscada import gxs700
 
 SW_HV = 1
 SW_FIL = 2

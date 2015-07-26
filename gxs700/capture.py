@@ -6,7 +6,7 @@ import libusb1
 import argparse
 from util import open_dev
 import os
-import gxs700
+from uvscada import gxs700
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')

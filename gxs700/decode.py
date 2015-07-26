@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import struct
 
-import gxs700
+from uvscada import gxs700
 
 # http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
 def histeq(buff, nbr_bins=256):

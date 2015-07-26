@@ -33,7 +33,7 @@ import argparse
 import time
 from util import open_dev
 import os
-import gxs700
+from uvscada import gxs700
 
 def validate_read(expected, actual, msg, ignore_errors=False):
     if expected != actual:
