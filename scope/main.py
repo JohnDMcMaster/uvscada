@@ -13,9 +13,9 @@ Question: why on Ubuntu 12.04 w/ custom kernel can I take pictures but not strea
 
 from config import config, RunConfig
 from imager import Imager
-from mc import MC
+from uvscada.mc import MC
 from mock_controller import MockController
-from pr0ndexer_controller import PDC
+from uvscada.pr0ndexer_controller import PDC
 from threads import ControllerThread, PlannerThread
 
 VCImager = None
@@ -24,8 +24,7 @@ try:
 except ImportError:
     print 'Note: failed to import VCImager'
 
-from pr0ntools.benchmark import Benchmark
-from pr0ntools.pimage import PImage
+from uvscada.benchmark import Benchmark
 
 from PyQt4 import Qt
 from PyQt4.QtGui import *
@@ -99,7 +98,8 @@ def get_cnc(log):
         raise Exception("Unknown CNC engine %s" % engine)
 
 
-
+def get_scaled(image, factor, filt=Image.NEAREST):
+    return image.resize((int(image.size[0] * factor), int(image.size[1] * factor)), filt)
 
 # Example sink code at
 # https://coherence.beebits.net/svn/branches/xbox-branch-2/coherence/transcoder.py
@@ -142,12 +142,12 @@ class ResizeSink(gst.Element):
             #io = StringIO.StringIO(buffer.data)
             io = StringIO.StringIO(str(buffer))
             try:
-                image = PImage.from_image(Image.open(io))
+                image = Image.open(io)
             except:
                 print 'failed to create image'
                 return gst.FLOW_OK
             # Use a fast filter since this is realtime
-            image = image.get_scaled(0.5, Image.NEAREST)
+            image = get_scaled(image, 0.5, Image.NEAREST)
 
             output = StringIO.StringIO()
             image.save(output, 'jpeg')
@@ -858,10 +858,10 @@ class CNCGUI(QMainWindow):
                         emit_log('Waiting for next image...')
                         self.image_ready.wait()
                         emit_log('Got image %s' % self.image_id)
-                        image = PImage.from_image(self.gui.capture_sink.pop_image(self.image_id))
+                        image = self.gui.capture_sink.pop_image(self.image_id)
                         factor = float(config['imager']['scalar'])
                         # Use a reasonably high quality filter
-                        scaled = image.get_scaled(factor, Image.ANTIALIAS)
+                        scaled = get_scaled(image, factor, Image.ANTIALIAS)
                         if not self.gui.dry():
                             scaled.save(file_name_out)
 
@@ -1108,7 +1108,7 @@ class CNCGUI(QMainWindow):
     def captureSnapshot(self, image_id):
         self.log('RX image for saving')
         def try_save():
-            image = PImage.from_image(self.capture_sink.pop_image(image_id))
+            image = self.capture_sink.pop_image(image_id)
             txt = str(self.snapshot_fn_le.text())
             if '.' not in txt:
                 txt = txt + '.jpg'
@@ -1121,7 +1121,7 @@ class CNCGUI(QMainWindow):
                 return
             factor = float(config['imager']['scalar'])
             # Use a reasonably high quality filter
-            image.get_scaled(factor, Image.ANTIALIAS).save(fn_full)
+            get_scaled(image, factor, Image.ANTIALIAS).save(fn_full)
         try_save()
         
         # That image is done, get read for the next

@@ -4,7 +4,7 @@ from PyQt4.QtCore import *
 import time
 from controller import Controller
 from planner import Planner
-from pr0ntools.benchmark import Benchmark
+from uvscada.benchmark import Benchmark
 import os
 
 def dbg(*args):

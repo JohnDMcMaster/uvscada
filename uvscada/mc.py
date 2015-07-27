@@ -43,12 +43,6 @@ from controller import Controller
 
 # Klinger / Micro-controle driver
 class MC(Controller):
-    UNIT_INCH = 1
-    UNIT_MM = 2
-    
-    #DIR_FORWARD = 1
-    #DIR_REVERSE = 2
-    
     def __init__(self, debug=False, log=None):
         Controller.__init__(self, debug=False, log=log)
         
@@ -57,15 +51,10 @@ class MC(Controller):
         if self.usbio.serial is None:
             raise Exception("USBIO missing serial")
         
-        #self.usbio.set_relay(2, True)
-        #print 'debug break'
-        #sys.exit(1)
-        
-        self.x = MCAxis('X', self, 0, 1, invert_dir=True, log=log)
-        self.y = MCAxis('Y', self, 2, 3, invert_dir=False, log=log)
-        self.z = MCAxis('Z', self, 4, 5, invert_dir=False, log=log)
-        
-        self.axes = [self.x, self.y, self.z]
+        self.axes = [MCAxis('X', self, 0, 1, invert_dir=True, log=log),
+                    MCAxis('Y', self, 2, 3, invert_dir=False, log=log),
+                    MCAxis('Z', self, 4, 5, invert_dir=False, log=log),
+                    ]
         
         for axis in self.axes:
             axis.forward(True)
@@ -96,57 +85,6 @@ class MC(Controller):
         self.usbio.set_relay(2, True)
         self.is_on = True
         
-def str2bool(arg_value):
-    arg_value = arg_value.lower()
-    if arg_value == "false" or arg_value == "0" or arg_value == "no" or arg_value == "off":
-        return False
-    else:
-        return True
-
-def help():
-    print 'usbio version %s' % VERSION
-    print 'Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>'
-    print 'Usage:'
-    print 'usbio [options] [<port> <state>]'
-    print 'Options:'
-    print '--help: this message'
-
-if __name__ == "__main__":
-    mc = MC()
-    
-    '''
-    parser = OptionParser()
-    parser.add_option("-f", "--file", dest="filename",
-                      help="write report to FILE", metavar="FILE")
-    parser.add_option("-q", "--quiet",
-                      action="store_false", dest="verbose", default=True,
-                      help="don't print status messages to stdout")
-
-    (options, args) = parser.parse_args()
-    '''
-    
-    while True:
-        def s():
-            time.sleep(0.5)
-        d = 100
-        print 'Jogging X'
-        mc.x.jog(d)
-        s()
-        print 'Jogging Y'
-        mc.y.jog(d)
-        s()
-        print 'Jogging -X'
-        mc.x.jog(-d)
-        s()
-        print 'Jogging -Y'
-        mc.y.jog(-d)
-        s()
-        
-    while True:
-        for axis in mc.axes:
-            print 'Jogging %s' % axis.name
-            axis.jog(100)
-
 class MCAxis(Axis):
     def __init__(self, name, mc, step_pin, dir_pin, invert_dir = False, log=None):
         Axis.__init__(self, name, log=log)
@@ -169,6 +107,7 @@ class MCAxis(Axis):
         #self.step_delay_s = 0.001
         #self.step_delay_s = 5
         
+        # Total number of steps
         self.net = 0
 
         self._stop = threading.Event()
@@ -203,9 +142,18 @@ class MCAxis(Axis):
         self._stop.clear()
         
     def step(self, steps):
+        '''
+        Yes this does have terrible real time performance bit banging over USB
+        Was quick to setup and worked good enough for a while
+        '''
+        
         self.forward(steps > 0)
 
-        for i in range(abs(steps)):
+        # If steps would generate an extra step due to round carry over include it
+        # instead of taking raw steps val
+        # Ex: cur 10.3 + 4.8 steps => 5 steps now, not 4
+        final_pos = self.net + steps
+        for i in range(abs(int(final_pos - self.net))):
             # Loop runs quick enough that should detect reasonably quickly
             if self._estop.is_set():
                 print 'MC axis %s: emergency stop detected!' % (self.name,)
@@ -221,28 +169,47 @@ class MCAxis(Axis):
                 time.sleep(self.step_delay_s)
             self.usbio.set_gpio(self.step_pin, False)
 
-        self.net += steps
+        self.net = final_pos
 
-    def forward(self, is_forward = True):
+    def forward(self, is_forward):
         if self.is_forward == is_forward:
             return
-        to_set = is_forward
-        if self.invert_dir:
-            to_set = not to_set
-        self.usbio.set_gpio(self.dir_pin, to_set)
+        self.usbio.set_gpio(self.dir_pin,
+                    not is_forward if self.invert_dir else is_forward)
         self.is_forward = is_forward
     
-    # pretend we are at 0
-    def set_home(self):
+    def home(self):
+        # Assume current location is 0
         self.net = 0
     
-    def set_pos(self, units):
-        '''
-        Ex:
-        old position is 2 we want 10
-        we need to move 10 - 2 = 8
-        '''
-        self.jog(units - self.get_um())
+    def mv_abs(self, units):
+        self.step(units * self._spu - self.steps)
+
+    def mv_rel(self, units):
+        self.step(units * self._spu)
+
+if __name__ == "__main__":
+    mc = MC()
+    
+    while True:
+        def s():
+            time.sleep(0.5)
+        d = 100
+        print 'Jogging X'
+        mc.axes['x'].jog(d)
+        s()
+        print 'Jogging Y'
+        mc.axes['y'].jog(d)
+        s()
+        print 'Jogging -X'
+        mc.axes['x'].jog(-d)
+        s()
+        print 'Jogging -Y'
+        mc.axes['y'].jog(-d)
+        s()
         
-    def home(self):
-        self.step(-self.net)
+    while True:
+        for axis in mc.axes.values():
+            print 'Jogging %s' % axis.name
+            axis.jog(100)
+

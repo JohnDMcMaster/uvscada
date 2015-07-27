@@ -35,21 +35,22 @@ class LCNCRPC:
     def command(self):
         return LCNCRPCCommand(self.server)
 
-host = 'localhost'
-# X-58 Y-59 => 22617
-port = 22617
-lcncrpc = LCNCRPC(host, port)
-
-s = lcncrpc.stat()
-c = lcncrpc.command()
-
-def ok_for_mdi():
-    s.poll()
-    return not s.estop and s.enabled and s.homed and (s.interp_state == lcncrpc.INTERP_IDLE)
-
-if ok_for_mdi():
-    c.mode(lcncrpc.MODE_MDI)
-    c.wait_complete() # wait until mode switch executed
-    c.mdi("G0 X5")
-    time.sleep(1)
-    c.mdi("G0 X0")
+if __name__ == '__main__':
+    host = 'localhost'
+    # X-58 Y-59 => 22617
+    port = 22617
+    lcncrpc = LCNCRPC(host, port)
+    
+    s = lcncrpc.stat()
+    c = lcncrpc.command()
+    
+    def ok_for_mdi():
+        s.poll()
+        return not s.estop and s.enabled and s.homed and (s.interp_state == lcncrpc.INTERP_IDLE)
+    
+    if ok_for_mdi():
+        c.mode(lcncrpc.MODE_MDI)
+        c.wait_complete() # wait until mode switch executed
+        c.mdi("G0 X5")
+        time.sleep(1)
+        c.mdi("G0 X0")

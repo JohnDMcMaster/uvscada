@@ -19,7 +19,7 @@ import pycurl
 import time
 
 from util import open_dev, IOTimestamp, IOLog
-from pr0ndexer import Indexer
+from uvscada.pr0ndexer import Indexer
 from uvscada import gxs700
 
 SW_HV = 1

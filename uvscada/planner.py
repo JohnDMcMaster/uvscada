@@ -15,6 +15,7 @@ import copy
 import shutil
 import json
 import threading
+import abc
 
 VERSION = '0.1'
 
@@ -106,11 +107,6 @@ class Camera:
 '''
 
 class FocusLevel:
-    # Assume XY isn't effected by Z
-    eyepiece_mag = None
-    objective_mag = None
-    # Not including digital
-    camera_mag = None
     # Rough estimates for now
     # The pictures it take are actually slightly larger than the view area I think
     # Inches, or w/e your measurement system is set to
@@ -137,7 +133,7 @@ class PlannerAxis:
         if log is None:
             def log(s):
                 print s
-        self._log = log
+        self.log = log
         # How many the pixels the imager sees after scaling
         # XXX: is this global scalar playing correctly with the objective scalar?
         self.view_pixels = imager_width * imager_scalar
@@ -157,7 +153,7 @@ class PlannerAxis:
         self.req_end = end
         self.end = end
         if self.delta() < view:
-            self._log('Axis %s: delta %0.3f < view %0.3f, expanding end' % (self.name, self.delta(), view))
+            self.log('Axis %s: delta %0.3f < view %0.3f, expanding end' % (self.name, self.delta(), view))
             self.end = start + view
         self.view = view
 
@@ -190,7 +186,7 @@ class PlannerAxis:
         '''How many images should actually take after considering margins and rounding'''
         ret = int(math.ceil(self.images_ideal()))
         if ret < 1:
-            self._log(self.images_ideal())
+            self.log(self.images_ideal())
             raise Exception('Bad number of images %d' % ret)
         return ret
     
@@ -221,12 +217,14 @@ class PlannerAxis:
     #    '''Actual percentage of each image that is unique when linearly stepping'''
             
 class Planner:
-    def __init__(self, rconfig_in, log=None, verbosity=2):
+    def __init__(self, rconfig_in, hal, log=None, verbosity=2):
         if log is None:
             def log(msg):
                 print msg
         self.log = log
         self.v = verbosity
+        self.hal = hal
+        
         self.normal_running = threading.Event()
         self.normal_running.set()
         # FIXME: this is better than before but CTypes pickle error from deepcopy
@@ -258,12 +256,6 @@ class Planner:
         
         focus = FocusLevel()
         self.focus = focus
-        try:
-            focus.eyepiece_mag = float(config['eyepiece'][0])
-        except:
-            focus.eyepiece_mag = 1.0
-        focus.objective_mag = float(obj_config['mag'])
-        focus.camera_mag = float(config['imager']['mag'])
         # FIXME: this needs a baseline and scale it
         focus.x_view = float(obj_config['x_view'])
         focus.y_view = float(obj_config['y_view'])
@@ -282,15 +274,15 @@ class Planner:
         
         self.parse_points()
         if not self.z:
-            self._log('WARNING: crudely removing Z since its not present or broken')
+            self.log('WARNING: crudely removing Z since its not present or broken')
         self.parse_focus_stack()
         
-        self._log( 'X %f to %f, Y %f to %f' % (self.x.start, self.x.end, self.y.start, self.y.end), 2)
-        self._log('Ideal overlap: %f, actual X %g, Y %g' % (ideal_overlap, self.x.step_percent(), self.y.step_percent()), 2)
+        self.log( 'X %f to %f, Y %f to %f' % (self.x.start, self.x.end, self.y.start, self.y.end), 2)
+        self.log('Ideal overlap: %f, actual X %g, Y %g' % (ideal_overlap, self.x.step_percent(), self.y.step_percent()), 2)
         scan_config['computed']['x']['overlap']  = self.x.step_percent()
         scan_config['computed']['y']['overlap']  = self.x.step_percent()
-        self._log('full x delta: %f, y delta: %f' % (self.x.delta(), self.y.delta()), 2)
-        self._log('view x: %f, y: %f' % (focus.x_view, focus.y_view), 2)
+        self.log('full x delta: %f, y delta: %f' % (self.x.delta(), self.y.delta()), 2)
+        self.log('view x: %f, y: %f' % (focus.x_view, focus.y_view), 2)
             
         if self.z:
             self.z_backlash = float(config['stage']['z_backlash'])
@@ -299,21 +291,21 @@ class Planner:
     
         #self.x_overlap = self.x.step() / focus.x_view
         #self.y_overlap = self.y.step() / focus.y_view
-        #self._log('step x: %g, y: %g' % (self.x.step(), self.y.step()))
+        #self.log('step x: %g, y: %g' % (self.x.step(), self.y.step()))
         '''
         expect = 100, actual = 100 => 100 % efficient
         expect = 100, actual = 200 => 50 % efficient        
         '''
-        #self._log('X overlap actual %g vs ideal %g, %g efficient' % (
+        #self.log('X overlap actual %g vs ideal %g, %g efficient' % (
         #        self.x_overlap, ideal_x_overlap, ideal_x_overlap / self.x_overlap * 100.0 ))
-        #self._log('Y overlap actual %g vs ideal %g, %g efficient' % (
+        #self.log('Y overlap actual %g vs ideal %g, %g efficient' % (
         #        self.y_overlap, ideal_y_overlap, ideal_y_overlap / self.y_overlap * 100.0 ))
 
         # A true useful metric of efficieny loss is how many extra pictures we had to take
         # Maybe overhead is a better way of reporting it
         ideal_n_pictures = self.x.images_ideal() * self.y.images_ideal()
         expected_n_pictures = self.x.images() * self.y.images()
-        self._log('Ideally taking %g pictures (%g X %g) but actually taking %d (%d X %d), %g efficient' % (
+        self.log('Ideally taking %g pictures (%g X %g) but actually taking %d (%d X %d), %g efficient' % (
                 ideal_n_pictures, self.x.images_ideal(), self.y.images_ideal(), 
                 expected_n_pictures, self.x.images(), self.y.images(),
                 ideal_n_pictures / expected_n_pictures * 100.0), 2)
@@ -321,7 +313,7 @@ class Planner:
         if self.z and self.others:
             self.calc_normal()
         else:
-            self._log('Not calculating normal (z %s, others %s)' % (self.z, self.others))
+            self.log('Not calculating normal (z %s, others %s)' % (self.z, self.others))
         
         self.getPointsExInit()
     
@@ -329,12 +321,12 @@ class Planner:
         self.pictures_to_take = self.getNumPoints()
         self.rconfig.scan_config['computed']['pictures_to_take'] = self.pictures_to_take
         if self.rconfig.scan_config.get('exclude', []):
-            self._log('Suprressing picture take check on exclusions')
+            self.log('Suprressing picture take check on exclusions')
         elif self.pictures_to_take != expected_n_pictures:
-            self._log('Going to take %d pictures but thought was going to take %d pictures (x %d X y %d)' % (self.pictures_to_take, expected_n_pictures, self.x.images(), self.y.images()))
-            self._log('Points:')
+            self.log('Going to take %d pictures but thought was going to take %d pictures (x %d X y %d)' % (self.pictures_to_take, expected_n_pictures, self.x.images(), self.y.images()))
+            self.log('Points:')
             for p in self.getPoints():
-                self._log('    ' + str(p))
+                self.log('    ' + str(p))
             raise Exception('See above')
         self.pictures_taken = 0
         self.actual_pictures_taken = 0
@@ -357,7 +349,7 @@ class Planner:
         try:
             self.z_start = float(scan_config['start']['z'])
         except:
-            self._log('Failed to find z start, disabling Z')
+            self.log('Failed to find z start, disabling Z')
             self.z_start = None
             self.z = False
         self.start = [self.x.start, self.y.start, self.z_start]
@@ -365,7 +357,7 @@ class Planner:
         try:
             self.z_end = float(scan_config['end']['z'])
         except:
-            self._log('Failed to find z end, disabling Z')
+            self.log('Failed to find z end, disabling Z')
             self.z_end = None
             self.z = False
         self.end = [self.x.end, self.y.end, self.z_end]
@@ -375,18 +367,18 @@ class Planner:
             i = 0
             for p in scan_config['others']:
                 l = [float(p['x']), float(p['y']), None]
-                self._log(l)
+                self.log(l)
                 self.others.append(l)
                 try:
                     self.others[i][2] = float(p['z'])
                 except:
                     self.others[i][2] = None
-                    self._log('Failed to find z other (%s), disabling Z' % (p))
+                    self.log('Failed to find z other (%s), disabling Z' % (p))
                     self.z = False
                 #self.other = [self.x_other, self.y_other, self.z_other]    
                 i += 1
         else:
-            self._log('Could not find other points')
+            self.log('Could not find other points')
             #raise Exception('die')
             self.others = None
     
@@ -462,16 +454,16 @@ class Planner:
                 c[i] /= n
             return c
             
-        self._log('Calculating normal')
+        self.log('Calculating normal')
             
         if len(self.others) == 1:
-            self._log('Single plane case')
+            self.log('Single plane case')
             p0 = self.start
             p1 = self.end
             p2 = self.others[0]
             self.normal = cross(p0, p1, p2)
         else:
-            self._log('Multiple plane case')
+            self.log('Multiple plane case')
             # This is massively inefficient but number of points should be low
             self.normal = [0.0, 0.0, 0.0]
             #ps = [self.start, self.end] + self.others
@@ -489,12 +481,12 @@ class Planner:
                 for p1 in [self.end]:
                     for p2 in self.others:
                         normal = cross(p0, p1, p2)
-                        self._log()
-                        self._log('Computed normal %s' % str(normal))
-                        self._log(p0)
-                        self._log(p1)
-                        self._log(p2)
-                        self._log()
+                        self.log()
+                        self.log('Computed normal %s' % str(normal))
+                        self.log(p0)
+                        self.log(p1)
+                        self.log(p2)
+                        self.log()
                         for i in range(0, 3):
                             self.normal[i] += normal[i]
                         n += 1
@@ -506,7 +498,7 @@ class Planner:
         # dz/dy = -b / c
         self.dz_dy = -self.normal[1] / self.normal[2]
         
-        self._log('Normal: %s' % str(self.normal))
+        self.log('Normal: %s' % str(self.normal))
         
         # Validate the plane mode l is reasonable
         compare = self.others
@@ -518,13 +510,13 @@ class Planner:
             d = abs(z - z_expect)
             thresh = 5.0
             thresh_absolute = 500
-            self._log('Point %s: calc %g, error %g' % (str(p), z, d))
+            self.log('Point %s: calc %g, error %g' % (str(p), z, d))
             if d > thresh:
-                self._log('Bad planar solution, difference %g vs threshold %g' % (d, thresh))
-                self._log(p)
-                self._log('Computed z: %g, expected z: %g' % (z, z_expect))
-                self._log(self.others)
-                self._log('Normal: %s' % str(self.normal))
+                self.log('Bad planar solution, difference %g vs threshold %g' % (d, thresh))
+                self.log(p)
+                self.log('Computed z: %g, expected z: %g' % (z, z_expect))
+                self.log(self.others)
+                self.log('Normal: %s' % str(self.normal))
                 if d > thresh_absolute:
                     raise Exception('Bad planar solution')
             
@@ -534,9 +526,9 @@ class Planner:
 
     def comment(self, s = '', verbosity=2):
         if len(s) == 0:
-            self._log(verbosity=verbosity)
+            self.log(verbosity=verbosity)
         else:
-            self._log('# %s' % s, verbosity=verbosity)
+            self.log('# %s' % s, verbosity=verbosity)
 
     def calc_z(self, cur_x, cur_y):
         if not self.z:
@@ -552,13 +544,13 @@ class Planner:
             full_z_delta = None
         else:
             full_z_delta = self.z_end - self.z_start
-        #self._log(full_z_delta)
+        #self.log(full_z_delta)
     
         center_length = math.sqrt(self.x.end * self.x.end + self.y.end * self.y.end)
         projection_length = (cur_x * self.x.end + cur_y * self.y.end) / center_length
         cur_z = full_z_delta * projection_length / center_length
         # Proportion of entire sweep
-        #self._log('cur_z: %f, projection_length %f, center_length %f' % (cur_z, projection_length, center_length))
+        #self.log('cur_z: %f, projection_length %f, center_length %f' % (cur_z, projection_length, center_length))
         return cur_z
     
     def calc_z_planar(self, cur_x, cur_y):
@@ -617,23 +609,23 @@ class Planner:
         od = self.out_dir()
         if od:
             if self.rconfig.dry:
-                self._log('DRY: mkdir(%s)' % od)
+                self.log('DRY: mkdir(%s)' % od)
             else:
                 base = config['cnc']['out_dir']
                 if not os.path.exists(base):
-                    self._log('Creating base directory %s' % base)
+                    self.log('Creating base directory %s' % base)
                     os.mkdir(base)
                 if os.path.exists(od):
                     if not config['cnc']['overwrite']:
                         raise Exception("Output dir %s already exists" % od)
-                    self._log('WARNING: overwriting old output')
+                    self.log('WARNING: overwriting old output')
                     shutil.rmtree(od)
-                self._log('Creating output directory %s' % od)
+                self.log('Creating output directory %s' % od)
                 os.mkdir(od)
             
     def take_picture(self, image_file_name):
         self.focus_camera()
-        self.do_take_picture(image_file_name)
+        self.hal.take_picture(image_file_name)
         self.actual_pictures_taken += 1
         self.reset_camera()
     
@@ -644,7 +636,7 @@ class Planner:
                 raise Exception('Center stacking requires odd n')
             # how much to step on each side
             n2 = (self.num_stack - 1) / 2
-            self.absolute_move(None, None, -n2 * self.stack_step_size)
+            self.mv_abs(None, None, -n2 * self.stack_step_size)
             
             self.pictures_taken += 1
             
@@ -657,7 +649,7 @@ class Planner:
                 self.take_picture(image_file_name)
                 # Avoid moving at end
                 if i != n:
-                    self.relative_move(None, None, self.stack_step_size)
+                    self.mv_rel(None, None, self.stack_step_size)
                     # we now sleep before the actual picture is taken
                     #time.sleep(3)
                 self.notify_progress(image_file_name)
@@ -666,29 +658,6 @@ class Planner:
             self.take_picture(image_file_name)        
             self.pictures_taken += 1
             self.notify_progress(image_file_name)
-    
-    def do_take_picture(self, file_name = None):
-        self._log('Dummy: taking picture to %s' % file_name)
-        pass
-        
-    def reset_camera(self):
-        pass
-        
-    def focus_camera(self):
-        pass
-            
-    '''
-    def gen_x_points(self):
-        # We want to step nicely but this simple step doesn't take into account our x field of view
-        x_end = self.x.end - self.focus.x_view
-        for cur_x in drange_at_least(self.x.start, x_end, self.x.step()):
-            yield cur_x
-    
-    def gen_y_points(self):
-        y_end = self.y.end - self.focus.y_view
-        for cur_y in drange_at_least(self.y.start, y_end, self.y.step()):
-            yield cur_y
-    '''
     
     def gen_x_points(self):
         for i in range(self.x.images()):
@@ -745,7 +714,7 @@ class Planner:
     
     def validate_point(self, p):
         (cur_x, cur_y, cur_z, cur_row, cur_col) = p
-        #self._log('xh: %g vs cur %g, yh: %g vs cur %g' % (xh, cur_x, yh, cur_y))
+        #self.log('xh: %g vs cur %g, yh: %g vs cur %g' % (xh, cur_x, yh, cur_y))
         #do = False
         #do = cur_x > 3048 and cur_y > 3143
         x_tol = 3.0
@@ -756,26 +725,26 @@ class Planner:
         fail = False
         
         if cur_col < 0 or cur_col >= self.x.images():
-            self._log('Col out of range 0 <= %d <= %d' % (cur_col, self.x.images()))
+            self.log('Col out of range 0 <= %d <= %d' % (cur_col, self.x.images()))
             fail = True
         if cur_x < self.x.start - x_tol or xmax > self.x.end + x_tol:
-            self._log('X out of range')
+            self.log('X out of range')
             fail = True
             
         if cur_row < 0 or cur_row >= self.y.images():
-            self._log('Row out of range 0 <= %d <= %d' % (cur_row, self.y.images()))
+            self.log('Row out of range 0 <= %d <= %d' % (cur_row, self.y.images()))
             fail = True
         if cur_y < self.y.start - y_tol or ymax > self.y.end + y_tol:
-            self._log('Y out of range')
+            self.log('Y out of range')
             fail = True        
         
         if fail:
-            self._log('Bad point:')
-            self._log('  X: %g' % cur_x)
-            self._log('  Y: %g' % cur_y)
-            self._log('  Z: %s' % str(cur_z))
-            self._log('  Row: %g' % cur_row)
-            self._log('  Col: %g' % cur_col)
+            self.log('Bad point:')
+            self.log('  X: %g' % cur_x)
+            self.log('  Y: %g' % cur_y)
+            self.log('  Z: %s' % str(cur_z))
+            self.log('  Row: %g' % cur_row)
+            self.log('  Col: %g' % cur_col)
             raise Exception('Bad point (%g + %g = %g, %g + %g = %g) for range (%g, %g) to (%g, %g)' % (
                     cur_x, self.focus.x_view, xmax,
                     cur_y, self.focus.y_view, ymax,
@@ -794,7 +763,7 @@ class Planner:
             c0 = exclusion.get('c0', float('inf'))
             c1 = exclusion.get('c1', float('-inf'))
             if cur_row >= r0 and cur_row <= r1 and cur_col >= c0 and cur_col <= c1:
-                self._log('Excluding r%d, c%d on r%s:%s, c%s:%s' % (cur_row, cur_col, r0, r1, c0, c1))
+                self.log('Excluding r%d, c%d on r%s:%s, c%s:%s' % (cur_row, cur_col, r0, r1, c0, c1))
                 return True
         return False
     
@@ -885,9 +854,9 @@ class Planner:
         
     def run(self, start_hook=None):
         self.start_time = time.time()
-        self._log()
-        self._log()
-        self._log()
+        self.log()
+        self.log()
+        self.log()
         self.comment('Generated by pr0ncnc %s on %s' % (VERSION, time.strftime("%d/%m/%Y %H:%M:%S")))
         focus = self.focus
         net_mag = focus.objective_mag * focus.eyepiece_mag * focus.camera_mag
@@ -906,13 +875,13 @@ class Planner:
             if self.dz_dy > 0:
                 # Then decrease and increase
                 self.comment('increasing dz/dy backlash normalization')
-                #relative_move(0.0, 0.0, -z_backlash)
-                #relative_move(0.0, 0.0, z_backlash)
+                #mv_rel(0.0, 0.0, -z_backlash)
+                #mv_rel(0.0, 0.0, z_backlash)
             else:
                 # Then increase then decrease
                 self.comment('decreasing dz/dy backlash normalization')
-                #relative_move(0.0, 0.0, z_backlash)
-                #relative_move(0.0, 0.0, -z_backlash)
+                #mv_rel(0.0, 0.0, z_backlash)
+                #mv_rel(0.0, 0.0, -z_backlash)
         self.comment('pictures: %d' % self.pictures_to_take)
         self.comment()
 
@@ -976,14 +945,14 @@ class Planner:
                         #self.comment('decreasing dz/dy backlash normalization')
                         z_backlash_delta = z_backlash
 
-                self._log('', 3)
+                self.log('', 3)
                 cur_z = self.calc_z(cur_x, cur_y)
-                # self._log(cur_z)
-                # self._log('full_z_delta: %f, z_start %f, z_end %f' % (full_z_delta, z_start, z_end))
+                # self.log(cur_z)
+                # self.log('full_z_delta: %f, z_start %f, z_end %f' % (full_z_delta, z_start, z_end))
                 self.comment('comp (%d, %d, %d), pos (%f, %f, %s)' % (self.x_comp, self.y_comp, self.z_comp, cur_x, cur_y, str(cur_z)), 3)
 
                 #if cur_z < z_start or cur_z > z_end:
-                #    self._log('cur_z: %f, z_start %f, z_end %f' % (cur_z, z_start, z_end))
+                #    self.log('cur_z: %f, z_start %f, z_end %f' % (cur_z, z_start, z_end))
                 #    raise Exception('z out of range')
                 '''
                 x_delta = cur_x - prev_x
@@ -995,10 +964,10 @@ class Planner:
                 if self.z:
                     z_param = z_delta + z_backlash_delta
                 '''
-                #self.relative_move(x_delta, y_delta, z_param)
+                #self.mv_rel(x_delta, y_delta, z_param)
                 self.absolute_backlash_move(cur_x, cur_y, cur_z)
                 if z_backlash_delta:
-                    self.relative_move(0.0, 0.0, -z_backlash_delta)
+                    self.mv_rel(0.0, 0.0, -z_backlash_delta)
                 self.take_pictures()
                 '''
                 prev_x = cur_x
@@ -1017,28 +986,28 @@ class Planner:
             '''
             #raise Exception('break')
 
-        self.home()
+        self.ret0()
         self.end_program()
         self.end_time = time.time()
 
-        self._log()
-        self._log()
-        self._log()
+        self.log()
+        self.log()
+        self.log()
         #self.comment('Statistics:')
         #self.comment('Pictures: %d' % pictures_taken)
         if not self.pictures_taken == self.pictures_to_take:
             if self.rconfig.scan_config.get('exclude', []):
-                self._log('Suppressing for exclusion: pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.pictures_taken))
+                self.log('Suppressing for exclusion: pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.pictures_taken))
             else:
                 raise Exception('pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.pictures_taken))
            
-        rd = self.run_data()
+        rd = self.stats()
         self.rconfig.scan_config['run_data'] = rd
         
         self.write_metadata()
         return rd
         
-    def run_data(self):
+    def stats(self):
         '''Can only be called after run'''
         return {
             # In seconds
@@ -1053,9 +1022,9 @@ class Planner:
         }
         
     def home(self):
-        self.relative_move(-self.cur_x, -self.cur_y)
+        self.mv_rel(-self.cur_x, -self.cur_y)
 
-    def relative_move(self, x, y, z = None):
+    def mv_rel(self, x, y, z = None):
         raise Exception('required')
 
     def absolute_backlash_move(self, x, y, z):
@@ -1077,13 +1046,13 @@ class Planner:
                 return (self.x_backlash(), self.y_backlash(), self.z_backlash)[i]
             def comp():
                 return (self.x_comp, self.y_comp, self.z_comp)[i]
-            def absolute_move(n):
+            def mv_abs(n):
                 if i == 0:
-                    self.absolute_move(n, None)
+                    self.mv_abs(n, None)
                 elif i == 1:
-                    self.absolute_move(None, n)
+                    self.mv_abs(None, n)
                 elif i == 2:
-                    self.absolute_move(None, None, n)
+                    self.mv_abs(None, None, n)
                 else:
                     raise Exception('bad axis')
             def compensated(n):
@@ -1105,19 +1074,19 @@ class Planner:
                 # with boundries messes things up
                 if i == 1:
                     # Compensate for moving right
-                    self._log('Axis %d: initial compensate for moving increasing (FIXME: hack)' % i, 3)
-                    absolute_move(to() - backlash())
+                    self.log('Axis %d: initial compensate for moving increasing (FIXME: hack)' % i, 3)
+                    mv_abs(to() - backlash())
                     compensated(1)
                 # Starting from the left?
                 elif to() == self.x.start:
                     # Compensate for moving right
-                    self._log('Axis %d: initial compensate for moving increasing' % i, 3)
-                    absolute_move(to() - backlash())
+                    self.log('Axis %d: initial compensate for moving increasing' % i, 3)
+                    mv_abs(to() - backlash())
                     compensated(1)
                 else:
                     # Compensate for moving left
-                    self._log('Axis %d: initial compensate for moving decreasing' % i, 3)
-                    absolute_move(to() + backlash())
+                    self.log('Axis %d: initial compensate for moving decreasing' % i, 3)
+                    mv_abs(to() + backlash())
                     compensated(-1)
                 # XXX HACK: rapid reversal seems to cause issues
                 # only location we do rapid reversal but it may be good idea to add this check elsewhere
@@ -1125,16 +1094,16 @@ class Planner:
             else:
                 # Going right but was not compensating right?
                 if (to() - last() > 0) and (comp() <= 0):
-                    self._log('Axis %d: compensate for changing to increasing' % i, 3)
-                    absolute_move(to() - backlash())
+                    self.log('Axis %d: compensate for changing to increasing' % i, 3)
+                    mv_abs(to() - backlash())
                     compensated(1)
                 # Going left but was not compensating left?
                 elif (to() - last() < 0) and (comp() >= 0):
-                    self._log('Axis %d: compensate for changing to decreasing' % i, 3)
-                    absolute_move(to() + backlash())
+                    self.log('Axis %d: compensate for changing to decreasing' % i, 3)
+                    mv_abs(to() + backlash())
                     compensated(-1)
             
-        self.absolute_move(x, y, z)
+        self.mv_abs(x, y, z)
         if x is not None:
             self.last_x = x
         if y is not None:
@@ -1142,265 +1111,338 @@ class Planner:
         if z is not None:
             self.last_z = z
 
-    def absolute_move(self, x, y, z = None):
+    def mv_abs(self, x, y, z = None):
         raise Exception('required')
-    
-    @staticmethod
-    def get(rconfig, log, *args, **kwargs):
-        if rconfig.dry:
-            log("***DRY RUN***")
-            return DryControllerPlanner(rconfig, log, *args, **kwargs)
-        else:
-            return ControllerPlanner(rconfig, log, *args, **kwargs)
-    
-class GCodePlanner(Planner):
-    '''
-    M7 (coolant on): tied to focus / half press pin
-    M8 (coolant flood): tied to snap picture
-        M7 must be depressed first
-    M9 (coolant off): release focus / picture
-    '''
-    
-    def __init__(self, **args):
-        Planner.__init__(self, **args)
 
-    def do_take_picture(self, file_name):
-        self.line('M8')
-        self.pause(3)
+'''
+Planner hardware abstraction layer (HAL)
+At this time there is no need for unit conversions
+Operate in whatever the native system is
+'''
+class Hal:
+    def __init__(self, dry, log):
+        self.dry = dry
+        self.log = log
 
-    def reset_camera(self):
-        # original needed focus button released
-        self.line('M9')
-    
-    def absolute_move(self, x, y, z = None):
-        self.do_move('G90', x, y, z)
-        if x is not None:
-            self.x_pos = x
-        if y is not None:
-            self.y_pos = y
-        if z is not None:
-            self.z_pos = z
+    def ret0(self):
+        '''Return to origin'''
+        self.mv_abs(0, 0, 0)
 
-    def relative_move(self, x, y, z = None):
-        if not x and not y and not z:
-            self.line('(omitted G91 for 0 move)')
-            return
-        self.do_move('G91', x, y, z)
-
-    def do_move(self, code, x, y, z):
-        x_part = ''
-        if x:
-            x_part = ' X%lf' % (x)
-        y_part = ''
-        if y:
-            y_part = ' Y%lf' % (y)
-        z_part = ''
-        if z:
-            z_part = ' Z%lf' % (z)
-
-        self.line('%s G1%s%s%s F3' % (code, x_part, y_part, z_part))
-
-    def comment(self, s = ''):
-        if len(s) == 0:
-            self.line()
-        else:
-            self.line('(%s)' % s)
-
-    def focus_camera(self):
-        self.line('M7')
-        self.pause(2)
-
-    # What was this?
-    '''
-    def fix_focus(self):
-        # And just don't 
-        #focus_camera()
+    @abc.abstractmethod
+    def mv_abs(self, pos):
+        '''Relative move to positions specified by pos dict'''
         pass
+
+    @abc.abstractmethod
+    def mv_rel(self, delta):
+        '''Absolute move to positions specified by delta dict'''
+        pass
+    
     '''
+    In modern systems the first is almost always used
+    The second is supported for now while porting legacy code
+    '''
+    @abc.abstractmethod
+    def img_get(self):
+        '''Take a picture and return a PIL image'''
+        pass
+    def img_take(self):
+        '''Take a picture and save it to internal.  File name is generated automatically'''
+        raise Exception("Unsupported")
 
-    def line(self, s = ''):
-        self._log(s)
+    @abc.abstractmethod
+    def pos(self, axes):
+        '''Return current position for given axes'''
+        pass
 
-    def end_program(self):
-        self.line()
-        self.line('(Done!)')
-        #self.line('M2')
+    @abc.abstractmethod
+    def begin(self):
+        '''Call at start of active use'''
+        pass
+    
+    @abc.abstractmethod
+    def end(self):
+        '''Called after machine is no longer in use.  Motors must maintain position'''
+        pass
 
-    def home(self):
-        self.absolute_move(0, 0, 0)
-        
+    def stop(self):
+        '''Stop motion as soon as convenient.  Motors must maintain position'''
+        pass
+
+    def estop(self):
+        '''Stop motion ASAP.  Motors are not required to maintain position'''
+        pass
+
+    def unestop(self):
+        '''Allow system to move again after estop'''
+        pass
+
+    def stats(self):
+        '''Supplementary info to add to run log'''
+        return {}
+
+    def forever_pos(self):
+        raise Exception("Not supported")
+
+    def forever_neg(self):
+        raise Exception("Not supported")
+
 '''
-Live control using an active Controller object
+Has no actual hardware associated with it
 '''
-class ControllerPlanner(Planner):
-    def __init__(self, rconfig, log, *args, **kwargs):
-        Planner.__init__(self, rconfig, log, *args, **kwargs)
-        self.controller = rconfig.controller
-        self.imager = rconfig.imager
+class MockHAL(Hal):
+    def __init__(self, dry, log, axes):
+        Hal.__init__(self, dry, log)
+
+        self.axes = list(axes)
+        self._pos = {}
+        # Assume starting at 0.0 until causes problems
+        for axis in self.axes:
+            self._pos[axis] = 0.0
+
+    def _log(self, msg):
+        if self.dry:
+            self.log('Mock-dry: ' + msg)
+        else:
+            self.log('Mock: ' + msg)
+
+    def take_picture(self, file_name):
+        self._log('taking picture to %s' % file_name)
+
+    def mv_abs(self, pos):
+        for axis, apos in pos.itervalues():
+            self._pos[axis] = apos
+        self._log('absolute move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+
+    def mv_rel(self, delta):
+        for axis, adelta in delta.itervalues():
+            self._pos[axis] += adelta
+        self._log('relative move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.itervalues()]))
+
+    def img_get(self):
+        self._log('img_get()')
+        # XXX: return image?
+        return None
+    
+    def img_take(self):
+        self._log('img_take()')
+
+'''
+Legacy uvscada.mc adapter
+'''
+class MCHal(Hal):
+    def __init__(self, dry, log, mc, imager):
+        Planner.__init__(self, dry, log)
+        self.mc = mc
+        self.imager = imager
         # seconds to wait before snapping picture
         self.t_settle = 4.0
 
-        # Positions in um
-        self.x_pos = 0.0
-        self.y_pos = 0.0
-        self.z_pos = 0.0
+    def settle(self):
+        '''Check last move time and wait if its not safe to take picture'''
+        if self.dry:
+            self.sleep(self.t_settle, 'settle')
+        else:
+            sleept = self.t_settle + self.mv_lastt - time.time()
+            if sleept > 0.0:
+                self.sleep(sleept, 'settle')
 
     def sleep(self, sec, why):
-        time.sleep(sec)
+        self.log('Sleep %s' % (format_t(sec), why), 3)
+        self.rt_sleep += sec
 
-    def do_take_picture(self, file_name):
-        #self.line('M8')
-        #self.pause(3)
-        # TODO: add this in once I move over to the windows machine
-        # Give it some time to settle
-        if self.imager:
-            '''
-            At full res this takes a while to settle
-            all settings, including resolution, seem to be getting inherited from AmScope program which works fine for me
-            '''
-            #self._log('test')
-            #time.sleep(4.5)
-            # allows for better cooling, motor is getting hot
-            #time.sleep(15)
-            # Originally at 6 but changed to 3 after microstepping
-            # vibration is pretty minimal now but camera still takes a while to settle
-            # raised a little
-            # TODO: consider using image processing to detect settling
-            self.sleep(self.t_settle, 'settle')
-            self.imager.take_picture(file_name)
-        else:
-            self.sleep(0.5, 'hack')
+    def img_get(self):
+        self.settle()
+        return self.imager.get()
 
     def reset_camera(self):
         # original needed focus button released
         #self.line('M9')
         # suspect I don't need anything here
         pass
-    
-    def absolute_move(self, x, y, z = None):
-        self._log('Absolute move to (%s, %s, %s)' % (str(x), str(y), str(z)))
-        if not x is None:
-            self.controller.x.set_pos(x)
-            self.x_pos = x
-        if not y is None:
-            self.controller.y.set_pos(y)
-            self.y_pos = y
-        if not z is None:
-            self.controller.z.set_pos(z)
-            self.z_pos = z
 
-    def relative_move(self, x, y, z = None):
-        if not x and not y and not z:
-            self._log('Omitting 0 move')
-            return
-        if x:
-            self.controller.x.jog(x)
-        if y:
-            self.controller.y.jog(y)
-        if z:
-            self.controller.z.jog(z)
-        self._log('Relative move to (%s, %s, %s)' % (str(x), str(y), str(z)))
-
-    def focus_camera(self):
-        # no z axis control right now
-        pass
+    def mv_abs(self, pos):
+        # Only one axis can be moved at a time
+        for axis, apos in pos.itervalues():
+            if self.dry:
+                self._pos[axis] = apos
+            else:
+                self.mc.axes[axis].mv_abs(apos)
+                self.mv_lastt = time.time()
         
-    def end_program(self):
-        self._log('Done!')
+    def mv_rel(self, delta):
+        # Only one axis can be moved at a time
+        for axis, adelta in delta.itervalues():
+            if self.dry:
+                self._pos[axis] += adelta
+            else:
+                self.mc.axes[axis].mv_rel(adelta)
+                self.mv_lastt = time.time()
 
-    def home(self):
-        self.controller.home()
-
-class DryControllerPlanner(ControllerPlanner):
-    def __init__(self, *args, **kwargs):
-        ControllerPlanner.__init__(self, *args, **kwargs)
-        '''
-        FIXME: adjusted below to try to match actual times
-        There is a large descrepency, possibly due to acceleration
-        '''
-        self.steps_per_sec = 10000 / 100 * 8.510 / 2.7
-        self._log('DRY: steps per sec: %0.1f' % self.steps_per_sec)
+    '''
+    def stats(self):
+        ret = {}
         
-        self.rt_move = None
-        self.rt_settle = None
-        self.rt_sleep = None
-        self.rt_tot = None
-    
-        # Make sure bugs don't cause accidental movement and instead crash us
-        self.controller = None
-    
-    def sleep(self, sec, why):
-        self._log('DRY %s: sleep %s' % (format_t(sec), why), 3)
-        self.rt_sleep += sec
-
-    def get_steps(self, um):
-        return um * config['cnc']['steps_per_um']
-
-    def absolute_move(self, x, y, z = None):
-        rt_move = 0.0
-        if x is not None:
-            #self.rt_tot += self.controller.x.get_steps(abs(x - self.x_pos)) / self.steps_per_sec
-            rt_move += self.get_steps(abs(x - self.x_pos)) / self.steps_per_sec
-            self.x_pos = x
-        if y is not None:
-            rt_move += self.get_steps(abs(y - self.y_pos)) / self.steps_per_sec
-            self.y_pos = y
-        if z is not None:
-            rt_move += self.get_steps(abs(z - self.z_pos)) / self.steps_per_sec
-            self.z_pos = z
-        self._log('DRY %s: absolute move to (%s, %s, %s)' % (format_t(rt_move), str(x), str(y), str(z)))
-        self.rt_move += rt_move
-
-    def relative_move(self, x, y, z = None):
-        rt_move = 0.0
-        if x is None:
-            x = 0.0
-        rt_move += self.get_steps(abs(x)) / self.steps_per_sec
-        if y is None:
-            y = 0.0
-        rt_move += self.get_steps(abs(y)) / self.steps_per_sec
-        if z is None:
-            z = 0.0
-        rt_move += self.get_steps(abs(z)) / self.steps_per_sec
-        self._log('DRY %s: relative move to (%0.3f, %0.3f, %0.3f)' % (format_t(rt_move), x, y, z))
-        self.rt_move += rt_move
-
-    def take_picture(self, img_fn):
-        self._log('DRY: taking picture to %s' % img_fn, 3)
-        self.actual_pictures_taken += 1
-        self.sleep(self.t_settle, 'settle')
-    
-    def run(self, start_hook=None):
+        # FIXME: time estimator
+        # It didn't really work so I didn't bother porting it over during cleanup
         self.rt_move = 0.0
         self.rt_settle = 0.0
         self.rt_sleep = 0.0
-        self.rt_tot = None
-        
-        ret = ControllerPlanner.run(self, start_hook=start_hook)
-        
-        # yield hack to get print at end
-        #time.sleep(0.1)
-        self._log('DRY: estimated %s (%0.1f sec)' % (format_t(self.rt_tot), self.rt_tot))
-        self._log('DRY:   Move:   %s' % (format_t(self.rt_move)))
-        #self._log('DRY:   Settle: %s' % (format_t(self.rt_settle)))
-        self._log('DRY:   Sleep:  %s' % (format_t(self.rt_sleep)))
-        return ret
 
-    def home(self):
-        self._log('DRY: home all')
-        self.relative_move(-self.cur_x, -self.cur_y)
-
-    def run_data(self):
-        self.rt_tot = self.rt_move + self.rt_settle + self.rt_sleep
-        
-        rd = Planner.run_data(self)
+        rt_tot = self.rt_move + self.rt_settle + self.rt_sleep
         if self.rconfig.dry:
-            rd['rt_est'] = {
-                    'total': self.rt_tot,
-                    'move': self.rt_move,
-                    'sleep': self.rt_sleep,
+            rt_k = 'rt_est'
+        else:
+            rt_k = 'rt'
+        ret[rt_k] = {
+                    'total':    rt_tot,
+                    'move':     self.rt_move,
+                    'settle':   self.rt_settle,
+                    'sleep':    self.rt_sleep,
                     }
-        return rd
+        
+        return ret
+        '''
 
-    def write_metadata(self):
+'''
+Static gcode generator using coolant hack
+Not to be confused LCncHal which uses MDI g-code in real time
+
+M7 (coolant on): tied to focus / half press pin
+M8 (coolant flood): tied to snap picture
+    M7 must be depressed first
+M9 (coolant off): release focus / picture
+'''
+class GCodeHal(Hal):
+    def __init__(self, dry, log, axes):
+        Hal.__init__(self, dry, log)
+        self.axes = list(axes)
+        
+        self._pos = {}
+        # Assume starting at 0.0 until causes problems
+        for axis in self.axes:
+            self._pos[axis] = 0.0
+        self._buff = bytearray()
+
+    def img_take(self):
+        # Focus (coolant mist)
+        self._line('M7')
+        self._dwell(2)
+        
+        # Snap picture (coolant flood)
+        self._line('M8')
+        self._dwell(3)
+        
+        # Release shutter (coolant off)
+        self._line('M9')
+
+    def mv_abs(self, pos):
+        for axis, apos in pos.itervalues():
+            self._pos[axis] = apos
+        self._line('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+
+    def mv_rel(self, pos):
+        for axis, delta in pos.itervalues():
+            self._pos[axis] += delta
+        self._line('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+
+    def comment(self, s=''):
+        if len(s) == 0:
+            self._line()
+        else:
+            self._line('(%s)' % s)
+
+    def _line(self, s=''):
+        #self.log(s)
+        self._buff += s + '\n'
+
+    def begin(self):
         pass
+    
+    def end(self):
+        self.line()
+        self.line('(Done!)')
+        self.line('M2')
+
+    def _dwell(self, seconds):
+        raise Exception("FIXME")
+
+    def get(self):
+        return str(self._buff)
+
+# Camera always local
+class LcncHal(Hal):
+    def __init__(self, dry, log, rsh, imager):
+        Hal.__init__(self, dry, log)
+        self.imager = imager
+
+    def settle(self):
+        '''Check last move time and wait if its not safe to take picture'''
+        if self.dry:
+            self.sleep(self.t_settle, 'settle')
+        else:
+            sleept = self.t_settle + self.mv_lastt - time.time()
+            if sleept > 0.0:
+                self.sleep(sleept, 'settle')
+
+    def sleep(self, sec, why):
+        self.log('Sleep %s' % (format_t(sec), why), 3)
+        self.rt_sleep += sec
+
+    def img_get(self):
+        self.settle()
+        return self.imager.get()
+
+    @abc.abstractmethod
+    def cmd(self, cmd):
+        pass
+   
+    def do_cmd(self, cmd):
+        if self.dry:
+            self.log(cmd)
+        else:
+            self.cmd(cmd)
+            
+    def mv_abs(self, pos):
+        # Unlike DIY controllers, all axes can be moved concurrently
+        # Don't waste time moving them individually
+        self.cmd_('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+        
+    def mv_rel(self, delta):
+        # Unlike DIY controllers, all axes can be moved concurrently
+        # Don't waste time moving them individually
+        self.cmd('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.itervalues()]))
+
+# LinuxCNC python connection
+# Currently the rpc version emulates stat and command channels
+# making these identical for the time being
+class LcncPyHal(LcncHal):
+    def __init__(self, dry, log, imager, linuxcnc):
+        LcncHal.__init__(self, dry, log, imager)
+        self.linuxcnc = linuxcnc
+        self.stat = self.linuxcnc.stat()
+        self.command = self.linuxcnc.command()
+    
+    def ok_for_mdi(self):
+        self.stat.poll()
+        return not self.stat.estop and self.stat.enabled and self.stat.homed and self.stat.interp_state == self.linuxcnc.INTERP_IDLE
+        
+    def wait_mdi_idle(self):
+        while not self.ok_for_mdi():
+            time.sleep(0.1)
+        
+    def do_cmd(self, cmd):
+        self.wait_mdi_idle()
+        self.command.mdi(cmd)            
+        self.wait_mdi_idle()
+    
+# LinuxCNC remote connection
+class LcncRshHal(LcncHal):
+    def __init__(self, dry, log, imager, rsh):
+        LcncHal.__init__(self, dry, log, imager)
+        self.rsh = rsh
+        self.t_settle = 4.0
+        
+    def do_cmd(self, cmd):
+        # Waits for completion before returning
+        self.rsh.mdi(cmd, timeout=0)            
