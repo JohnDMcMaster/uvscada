@@ -5,17 +5,13 @@ Copyright 2010 John McMaster <JohnDMcMaster@gmail.com>
 Licensed under a 2 clause BSD license, see COPYING for details
 '''
 
-import time
-import math
-import numpy
-import numpy.linalg
-import os
-import copy
-import shutil
-import json
-import threading
-import abc
 from collections import OrderedDict
+import json
+import math
+import os
+import shutil
+import threading
+import time
 
 def format_t(dt):
     s = dt % 60
@@ -56,7 +52,7 @@ def drange_tol(start, stop, step, delta = None):
             break
         r += step
 
-class PlannerAxis:
+class PlannerAxis(object):
     def __init__(self, name,
                 # Desired image overlap
                 # Actual may be greater if there is more area
@@ -71,7 +67,7 @@ class PlannerAxis:
                 start, end,
                 log=None):
         if log is None:
-            def log(s):
+            def log(s=''):
                 print s
         self.log = log
         # How many the pixels the imager sees after scaling
@@ -108,8 +104,6 @@ class PlannerAxis:
         '''
         self.comp = 0
 
-        self.last = None
-        
         self._meta = {}
 
     def meta(self):
@@ -176,13 +170,14 @@ class PlannerAxis:
         for i in xrange(self.images()):
             yield self.start + i * step
     
-class Planner:
-    def __init__(self, scan_config, progress_cb, hal,
-                img_sz, img_scalar,
-                out_dir, overwrite=False, dry=False,
+class Planner(object):
+    def __init__(self, scan_config, hal, img_sz, out_dir,
+                progress_cb=None,
+                overwrite=False, dry=False,
+                img_scalar=1,
                 log=None, verbosity=2):
         if log is None:
-            def log(msg):
+            def log(msg='', verbosity=None):
                 print msg
         self.log = log
         self.v = verbosity
@@ -228,8 +223,7 @@ class Planner:
         self.x = self.axes['x']
         self.y = self.axes['y']
         
-        self.parse_points()
-        self.parse_focus_stack()
+        self.stack_init()
         
         for axisc, axis in self.axes.iteritems():
             self.log('Axis %s' % axisc)
@@ -242,7 +236,7 @@ class Planner:
         # Maybe overhead is a better way of reporting it
         ideal_n_pictures = self.x.images_ideal() * self.y.images_ideal()
         expected_n_pictures = self.x.images() * self.y.images()
-        self.log('Ideally taking %g pictures (%g X %g) but actually taking %d (%d X %d), %g efficient' % (
+        self.log('Ideally taking %g pictures (%g X %g) but actually taking %d (%d X %d), %0.1f%% efficient' % (
                 ideal_n_pictures, self.x.images_ideal(), self.y.images_ideal(), 
                 expected_n_pictures, self.y.images(), self.y.images(),
                 ideal_n_pictures / expected_n_pictures * 100.0), 2)
@@ -250,7 +244,7 @@ class Planner:
         # Try actually generating the points and see if it matches how many we thought we were going to get
         self.pictures_to_take = self.n_xy()
         self._meta['pictures_to_take'] = self.pictures_to_take
-        if self.scan_config.get('exclude', []):
+        if self.config.get('exclude', []):
             self.log('Suppressing picture take check on exclusions')
         elif self.pictures_to_take != expected_n_pictures:
             self.log('Going to take %d pictures but thought was going to take %d pictures (x %d X y %d)' % (self.pictures_to_take, expected_n_pictures, self.x.images(), self.y.images()))
@@ -271,16 +265,16 @@ class Planner:
         if verbosity <= self.v:
             self.log(msg)
 
-    def parse_focus_stack(self):
-        if 'stack' in self.scan_config:
-            stack = self.scan_config['stack']
+    def stack_init(self):
+        if 'stack' in self.config:
+            stack = self.config['stack']
             self.num_stack = int(stack['num'])
             self.stack_step_size = int(stack['step_size'])
         else:
             self.num_stack = None
             self.stack_step_size = None
         
-    def notify_progress(self, image_file_name, first = False):
+    def notify_progress(self, image_file_name, first=False):
         if self.progress_cb:
             self.progress_cb(self.pictures_to_take, self.xy_imgs, image_file_name, first)
 
@@ -296,9 +290,14 @@ class Planner:
     def pause(self, seconds):
         pass
 
-    def write_metadata(self):
+    def write_meta(self):
         # Copy config for reference
-        self.rconfig.write_to_dir(self.out_dir)
+        def dumpj(j, fn):
+            open(os.path.join(self.out_dir, fn), 'w').write(json.dumps(j, sort_keys=True, indent=4, separators=(',', ': ')))
+        
+        dumpj(self.config, 'scan.json')
+        dumpj(self.meta(), 'out.json')
+        
         # TODO: write out coordinate map
         
     def prepare_image_output(self):
@@ -329,7 +328,7 @@ class Planner:
                 raise Exception('Center stacking requires odd n')
             # how much to step on each side
             n2 = (self.num_stack - 1) / 2
-            self.mv_abs(None, None, -n2 * self.stack_step_size)
+            self.hal.mv_abs(None, None, -n2 * self.stack_step_size)
             
             '''
             Say 3 image stack
@@ -352,14 +351,14 @@ class Planner:
         self.xy_imgs += 1
     
     def validate_point(self, p):
-        (cur_x, cur_y, cur_row, cur_col) = p
+        (cur_x, cur_y), (cur_row, cur_col) = p
         #self.log('xh: %g vs cur %g, yh: %g vs cur %g' % (xh, cur_x, yh, cur_y))
         #do = False
         #do = cur_x > 3048 and cur_y > 3143
         x_tol = 3.0
         y_tol = 3.0
-        xmax = cur_x + self.focus.x_view
-        ymax = cur_y + self.focus.y_view
+        xmax = cur_x + self.x.view
+        ymax = cur_y + self.y.view
         
         fail = False
         
@@ -384,14 +383,14 @@ class Planner:
             self.log('  Row: %g' % cur_row)
             self.log('  Col: %g' % cur_col)
             raise Exception('Bad point (%g + %g = %g, %g + %g = %g) for range (%g, %g) to (%g, %g)' % (
-                    cur_x, self.focus.x_view, xmax,
-                    cur_y, self.focus.y_view, ymax,
+                    cur_x, self.x.view, xmax,
+                    cur_y, self.y.view, ymax,
                     self.x.start, self.y.start,
                     self.x.end, self.y.end))
     
     def exclude(self, p):
         (_xy, (cur_row, cur_col)) = p
-        for exclusion in self.scan_config.get('exclude', []):
+        for exclusion in self.config.get('exclude', []):
             '''
             If neither limit is specified don't exclude
             maybe later: if one limit is specified but not the other take it as the single bound
@@ -456,16 +455,13 @@ class Planner:
         self.log()
         self.log()
         self.comment('Generated by pr0ncnc on %s' % (time.strftime("%d/%m/%Y %H:%M:%S"),))
-        focus = self.focus
-        net_mag = focus.objective_mag * focus.eyepiece_mag * focus.camera_mag
-        self.comment('objective: %f, eyepiece: %f, camera: %f, net: %f' % (focus.objective_mag, focus.eyepiece_mag, focus.camera_mag, net_mag))
         self.comment('x size: %f um / %d pix, y size: %f um / %d pix' % (self.x.delta(), self.x.delta_pixels(), self.y.delta(), self.y.delta_pixels()))
         mp = self.x.delta_pixels() * self.y.delta_pixels() / (10**6)
         if mp >= 1000:
             self.comment('Image size: %0.1f GP' % (mp/1000,))
         else:
             self.comment('Image size: %0.1f MP' % (mp,))
-        self.comment('x fov: %f, y fov: %f' % (focus.x_view, focus.y_view))
+        self.comment('x fov: %f, y fov: %f' % (self.x.view, self.y.view))
         self.comment('x_step: %f, y_step: %f' % (self.x.step(), self.y.step()))
         
         self.comment('pictures: %d' % self.pictures_to_take)
@@ -487,12 +483,12 @@ class Planner:
                 self.log('Planner unpaused')
             if True:
                 self.log('', 3)
-                self.comment('comp (%d, %d, %d), pos (%f, %f, %s)' % (self.x_comp, self.y_comp, cur_x, cur_y), 3)
+                self.comment('comp (%d, %d), pos (%f, %f)' % (self.x.comp, self.y.comp, cur_x, cur_y), 3)
 
                 self.mv_abs_backlash({'x':cur_x, 'y':cur_y})
                 self.take_pictures()
 
-        self.ret0()
+        self.hal.ret0()
         self.end_program()
         self.end_time = time.time()
 
@@ -502,12 +498,12 @@ class Planner:
         #self.comment('Statistics:')
         #self.comment('Pictures: %d' % pictures_taken)
         if not self.xy_imgs == self.pictures_to_take:
-            if self.scan_config.get('exclude', []):
+            if self.config.get('exclude', []):
                 self.log('Suppressing for exclusion: pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.xy_imgs))
             else:
                 raise Exception('pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.xy_imgs))
            
-        self.write_metadata()
+        self.write_meta()
         
     def meta(self):
         '''Can only be called after run'''
@@ -521,6 +517,7 @@ class Planner:
         return self._meta
         
     def backlash_init(self):
+        # TODO: rethink this for non-0 start
         self.hal.mv_abs({'x': -self.x.backlash, 'y': -self.y.backlash})
         self.x.comp = -1
         self.y.comp = -1
@@ -528,18 +525,20 @@ class Planner:
     def mv_abs_backlash(self, move_to):
         '''Do an absolute move with backlash compensation'''
         
+        pos = self.hal.pos()
+        
         for axisc in move_to.keys():
             axis = self.axes[axisc]
             
             # Going right but was not compensating right?
-            if (move_to[axisc] - axis.last > 0) and (axis.comp <= 0):
+            if (move_to[axisc] - pos[axisc] > 0) and (axis.comp <= 0):
                 self.log('Axis %c: compensate for changing to increasing' % axisc, 3)
-                self.mv_abs({axisc:move_to[axisc] - axis.backlash})
+                self.hal.mv_abs({axisc:move_to[axisc] - axis.backlash})
                 axis.comp = 1
             # Going left but was not compensating left?
-            elif (move_to[axisc] - axis.last < 0) and (axis.comp >= 0):
+            elif (move_to[axisc] - pos[axisc] < 0) and (axis.comp >= 0):
                 self.log('Axis %c: compensate for changing to decreasing' % axisc, 3)
-                self.mv_abs({axisc:move_to[axisc] + axis.backlash})
+                self.hal.mv_abs({axisc:move_to[axisc] + axis.backlash})
                 axis.comp = -1
             
         self.hal.mv_abs(move_to)
@@ -549,51 +548,48 @@ Planner hardware abstraction layer (HAL)
 At this time there is no need for unit conversions
 Operate in whatever the native system is
 '''
-class Hal:
+class Hal(object):
     def __init__(self, dry, log):
         self.dry = dry
+        if log is None:
+            def log(msg=''):
+                print msg
         self.log = log
 
     def ret0(self):
         '''Return to origin'''
-        self.mv_abs(0, 0, 0)
+        self.mv_abs({'x': 0, 'y':0})
 
-    @abc.abstractmethod
     def mv_abs(self, pos):
-        '''Relative move to positions specified by pos dict'''
-        pass
+        '''Absolute move to positions specified by pos dict'''
+        raise Exception("Required")
 
-    @abc.abstractmethod
     def mv_rel(self, delta):
-        '''Absolute move to positions specified by delta dict'''
-        pass
+        '''Relative move to positions specified by delta dict'''
+        raise Exception("Required")
     
     '''
     In modern systems the first is almost always used
     The second is supported for now while porting legacy code
     '''
-    @abc.abstractmethod
     def img_get(self):
         '''Take a picture and return a PIL image'''
-        pass
+        raise Exception("Required")
     def img_take(self):
         '''Take a picture and save it to internal.  File name is generated automatically'''
         raise Exception("Unsupported")
 
-    @abc.abstractmethod
-    def pos(self, axes):
-        '''Return current position for given axes'''
-        pass
+    def pos(self):
+        '''Return current position for all axes'''
+        raise Exception("Required")
 
-    @abc.abstractmethod
     def begin(self):
         '''Call at start of active use'''
-        pass
+        raise Exception("Required")
     
-    @abc.abstractmethod
     def end(self):
         '''Called after machine is no longer in use.  Motors must maintain position'''
-        pass
+        raise Exception("Required")
 
     def stop(self):
         '''Stop motion as soon as convenient.  Motors must maintain position'''
@@ -620,8 +616,8 @@ class Hal:
 '''
 Has no actual hardware associated with it
 '''
-class MockHAL(Hal):
-    def __init__(self, dry, log, axes):
+class MockHal(Hal):
+    def __init__(self, dry, imager, log=None, axes='xy'):
         Hal.__init__(self, dry, log)
 
         self.axes = list(axes)
@@ -629,6 +625,7 @@ class MockHAL(Hal):
         # Assume starting at 0.0 until causes problems
         for axis in self.axes:
             self._pos[axis] = 0.0
+        self.imager = imager
 
     def _log(self, msg):
         if self.dry:
@@ -640,29 +637,31 @@ class MockHAL(Hal):
         self._log('taking picture to %s' % file_name)
 
     def mv_abs(self, pos):
-        for axis, apos in pos.itervalues():
+        for axis, apos in pos.iteritems():
             self._pos[axis] = apos
-        self._log('absolute move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+        self._log('absolute move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
 
     def mv_rel(self, delta):
-        for axis, adelta in delta.itervalues():
+        for axis, adelta in delta.iteritems():
             self._pos[axis] += adelta
-        self._log('relative move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.itervalues()]))
+        self._log('relative move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
 
     def img_get(self):
         self._log('img_get()')
-        # XXX: return image?
-        return None
+        return self.imager.get()
     
     def img_take(self):
         self._log('img_take()')
+
+    def pos(self):
+        return self._pos
 
 '''
 Legacy uvscada.mc adapter
 '''
 class MCHal(Hal):
     def __init__(self, dry, log, mc, imager):
-        Planner.__init__(self, dry, log)
+        Hal.__init__(self, dry, log)
         self.mc = mc
         self.imager = imager
         # seconds to wait before snapping picture
@@ -693,7 +692,7 @@ class MCHal(Hal):
 
     def mv_abs(self, pos):
         # Only one axis can be moved at a time
-        for axis, apos in pos.itervalues():
+        for axis, apos in pos.iteritems():
             if self.dry:
                 self._pos[axis] = apos
             else:
@@ -702,7 +701,7 @@ class MCHal(Hal):
         
     def mv_rel(self, delta):
         # Only one axis can be moved at a time
-        for axis, adelta in delta.itervalues():
+        for axis, adelta in delta.iteritems():
             if self.dry:
                 self._pos[axis] += adelta
             else:
@@ -767,14 +766,14 @@ class GCodeHal(Hal):
         self._line('M9')
 
     def mv_abs(self, pos):
-        for axis, apos in pos.itervalues():
+        for axis, apos in pos.iteritems():
             self._pos[axis] = apos
-        self._line('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+        self._line('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
 
     def mv_rel(self, pos):
-        for axis, delta in pos.itervalues():
+        for axis, delta in pos.iteritems():
             self._pos[axis] += delta
-        self._line('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+        self._line('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
 
     def comment(self, s=''):
         if len(s) == 0:
@@ -823,9 +822,8 @@ class LcncHal(Hal):
         self.settle()
         return self.imager.get()
 
-    @abc.abstractmethod
     def cmd(self, cmd):
-        pass
+        raise Exception("Required")
    
     def do_cmd(self, cmd):
         if self.dry:
@@ -836,12 +834,12 @@ class LcncHal(Hal):
     def mv_abs(self, pos):
         # Unlike DIY controllers, all axes can be moved concurrently
         # Don't waste time moving them individually
-        self.cmd_('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.itervalues()]))
+        self.cmd_('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
         
     def mv_rel(self, delta):
         # Unlike DIY controllers, all axes can be moved concurrently
         # Don't waste time moving them individually
-        self.cmd('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.itervalues()]))
+        self.cmd('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
 
 # LinuxCNC python connection
 # Currently the rpc version emulates stat and command channels
