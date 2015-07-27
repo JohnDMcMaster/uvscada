@@ -10,24 +10,13 @@ import math
 import numpy
 import numpy.linalg
 import os
-from config import config
 import copy
 import shutil
 import json
 import threading
 import abc
+from collections import OrderedDict
 
-VERSION = '0.1'
-
-ACTION_GCODE = 1
-ACTION_RENAME = 2
-ACTION_JSON = 3
-
-dry_run = False
-# Coordinate seems to be accurate enough and more intuitive to work with
-include_rowcol = False
-include_coordinate = True
-    
 def format_t(dt):
     s = dt % 60
     m = int(dt / 60 % 60)
@@ -67,55 +56,6 @@ def drange_tol(start, stop, step, delta = None):
             break
         r += step
 
-'''
-I'll move this to a JSON, XML or something format if I keep working on this
-
-Canon SD630
-
-15X eyepieces
-    Unitron WFH15X
-Objectives
-    5X
-    10X
-    20X
-    40X
-    
-Intel wafer
-upper right: 0, 0, 0
-lower left: 0.2639,0.3275,-0.0068
-
-'''
-
-'''
-class CameraResolution:
-    width = 1280
-    height = 1024
-    pictures = 500
-
-class Camera:
-    vendor = "canon"
-    model = "SD630"
-    resolutions = list()
-    memory = None
-    
-    def __init__():
-        #resolutions.append(
-        set_memory("4GB")
-
-    def set_memory(s):
-        memory = 4000000000
-'''
-
-class FocusLevel:
-    # Rough estimates for now
-    # The pictures it take are actually slightly larger than the view area I think
-    # Inches, or w/e your measurement system is set to
-    x_view = None
-    y_view = None
-    
-    def __init__(self):
-        pass
-
 class PlannerAxis:
     def __init__(self, name,
                 # Desired image overlap
@@ -125,7 +65,7 @@ class PlannerAxis:
                 # How much the imager can see (in um)
                 view,
                 # Actual sensor dimension may be oversampled, scale down as needed
-                imager_width, imager_scalar,
+                imager_scalar,
                 # start and end absolute positions (in um)
                 # Inclusive such that 0:0 means image at position 0 only
                 start, end,
@@ -136,7 +76,7 @@ class PlannerAxis:
         self.log = log
         # How many the pixels the imager sees after scaling
         # XXX: is this global scalar playing correctly with the objective scalar?
-        self.view_pixels = imager_width * imager_scalar
+        self.view_pixels = view * imager_scalar
         #self.pos = 0.0
         self.name = name
         '''
@@ -156,6 +96,26 @@ class PlannerAxis:
             self.log('Axis %s: delta %0.3f < view %0.3f, expanding end' % (self.name, self.delta(), view))
             self.end = start + view
         self.view = view
+
+        # Its actually less than this but it seems it takes some stepping
+        # to get it out of the system
+        self.backlash = 50
+        '''
+        Backlash compensation
+        0: no compensation
+        -1: compensated for decreasing
+        1: compensated for increasing
+        '''
+        self.comp = 0
+
+        self.last = None
+        
+        self._meta = {}
+
+    def meta(self):
+        self._meta['backlash'] = self.backlash
+        self._meta['overlap']  = self.step_percent()
+        return self._meta
 
     def delta(self):
         '''Total distance that will actually be imaged'''
@@ -186,7 +146,6 @@ class PlannerAxis:
         '''How many images should actually take after considering margins and rounding'''
         ret = int(math.ceil(self.images_ideal()))
         if ret < 1:
-            self.log(self.images_ideal())
             raise Exception('Bad number of images %d' % ret)
         return ret
     
@@ -201,7 +160,6 @@ class PlannerAxis:
         However, the entire quantity should not be negative
         '''
         # Note that we don't need to adjust the initial view since its fixed, only the steps
-        # self.images_to_take = 1.0 + (self.delta() - self.view) / self.step_size_calc
         images_to_take = self.images()
         if images_to_take == 1:
             return self.delta()
@@ -213,40 +171,38 @@ class PlannerAxis:
         # Contrast with requested value self.req_overlap_percent
         return self.step() / self.view
         
-    #def overlap(self):
-    #    '''Actual percentage of each image that is unique when linearly stepping'''
-            
+    def points(self):
+        step = self.step()
+        for i in xrange(self.images()):
+            yield self.start + i * step
+    
 class Planner:
-    def __init__(self, rconfig_in, hal, log=None, verbosity=2):
+    def __init__(self, scan_config, progress_cb, hal,
+                img_sz, img_scalar,
+                out_dir, overwrite=False, dry=False,
+                log=None, verbosity=2):
         if log is None:
             def log(msg):
                 print msg
         self.log = log
         self.v = verbosity
         self.hal = hal
+        self.dry = dry
+        # os.path.join(config['cnc']['out_dir'], self.rconfig.job_name)
+        self.out_dir = out_dir
+        # config['cnc']['overwrite']:
+        self.overwrite = overwrite
         
         self.normal_running = threading.Event()
         self.normal_running.set()
         # FIXME: this is better than before but CTypes pickle error from deepcopy
-        #self.rconfig = copy.deepcopy(rconfig)
-        self.rconfig = copy.copy(rconfig_in)
-        rconfig = self.rconfig
-        obj_config = rconfig.obj_config
-        self.progress_cb = rconfig.progress_cb
+        self.config = scan_config
+        self.progress_cb = progress_cb
         
-        self.cur_x = 0.0
-        self.cur_y = 0.0
-        self.cur_z = 0.0
-    
-        if rconfig.scan_config is None:
-            rconfig.scan_config = json.loads(open(config['scan_json']).read())
-            
-        scan_config = rconfig.scan_config
-
-        scan_config['computed'] = {
-                'x':{},
-                'y':{},
-                }
+        self._meta = {
+            'x':{},
+            'y':{},
+            }
         
         ideal_overlap = 2.0 / 3.0
         if 'overlap' in scan_config:
@@ -254,275 +210,79 @@ class Planner:
         # Maximum allowable overlap proportion error when trying to fit number of snapshots
         #overlap_max_error = 0.05
         
-        focus = FocusLevel()
-        self.focus = focus
-        # FIXME: this needs a baseline and scale it
-        focus.x_view = float(obj_config['x_view'])
-        focus.y_view = float(obj_config['y_view'])
-    
         '''
         Planar test run
         plane calibration corner ended at 0.0000, 0.2674, -0.0129
         '''
     
-        self.x = PlannerAxis('X', ideal_overlap, focus.x_view, 
-                    float(config['imager']['width']), float(config['imager']['scalar']),
-                    float(scan_config['start']['x']), float(scan_config['end']['x']), log=self.log)
-        self.y = PlannerAxis('Y', ideal_overlap, focus.y_view,
-                    float(config['imager']['height']), float(config['imager']['scalar']),
-                    float(scan_config['start']['y']), float(scan_config['end']['y']), log=self.log)
+        start = (float(scan_config['start']['x']), float(scan_config['start']['y']))
+        end = (float(scan_config['end']['x']), float(scan_config['end']['y']))
+        self.axes = OrderedDict([
+                ('x', PlannerAxis('X', ideal_overlap,
+                    img_sz[0], img_scalar,
+                    start[0], end[0], log=self.log)),
+                ('y', PlannerAxis('Y', ideal_overlap,
+                    img_sz[1], img_scalar,
+                    start[1], end[1], log=self.log)),
+                ])
+        self.x = self.axes['x']
+        self.y = self.axes['y']
         
         self.parse_points()
-        if not self.z:
-            self.log('WARNING: crudely removing Z since its not present or broken')
         self.parse_focus_stack()
         
-        self.log( 'X %f to %f, Y %f to %f' % (self.x.start, self.x.end, self.y.start, self.y.end), 2)
-        self.log('Ideal overlap: %f, actual X %g, Y %g' % (ideal_overlap, self.x.step_percent(), self.y.step_percent()), 2)
-        scan_config['computed']['x']['overlap']  = self.x.step_percent()
-        scan_config['computed']['y']['overlap']  = self.x.step_percent()
-        self.log('full x delta: %f, y delta: %f' % (self.x.delta(), self.y.delta()), 2)
-        self.log('view x: %f, y: %f' % (focus.x_view, focus.y_view), 2)
+        for axisc, axis in self.axes.iteritems():
+            self.log('Axis %s' % axisc)
+            self.log('  %f to %f' % (axis.start, axis.end), 2)
+            self.log('  Ideal overlap: %f, actual %g' % (ideal_overlap, axis.step_percent()), 2)
+            self.log('  full delta: %f' % (self.x.delta()), 2)
+            self.log('  view: %f' % (axis.view,), 2)
             
-        if self.z:
-            self.z_backlash = float(config['stage']['z_backlash'])
-        else:
-            self.z_backlash = None
-    
-        #self.x_overlap = self.x.step() / focus.x_view
-        #self.y_overlap = self.y.step() / focus.y_view
-        #self.log('step x: %g, y: %g' % (self.x.step(), self.y.step()))
-        '''
-        expect = 100, actual = 100 => 100 % efficient
-        expect = 100, actual = 200 => 50 % efficient        
-        '''
-        #self.log('X overlap actual %g vs ideal %g, %g efficient' % (
-        #        self.x_overlap, ideal_x_overlap, ideal_x_overlap / self.x_overlap * 100.0 ))
-        #self.log('Y overlap actual %g vs ideal %g, %g efficient' % (
-        #        self.y_overlap, ideal_y_overlap, ideal_y_overlap / self.y_overlap * 100.0 ))
-
         # A true useful metric of efficieny loss is how many extra pictures we had to take
         # Maybe overhead is a better way of reporting it
         ideal_n_pictures = self.x.images_ideal() * self.y.images_ideal()
         expected_n_pictures = self.x.images() * self.y.images()
         self.log('Ideally taking %g pictures (%g X %g) but actually taking %d (%d X %d), %g efficient' % (
                 ideal_n_pictures, self.x.images_ideal(), self.y.images_ideal(), 
-                expected_n_pictures, self.x.images(), self.y.images(),
+                expected_n_pictures, self.y.images(), self.y.images(),
                 ideal_n_pictures / expected_n_pictures * 100.0), 2)
         
-        if self.z and self.others:
-            self.calc_normal()
-        else:
-            self.log('Not calculating normal (z %s, others %s)' % (self.z, self.others))
-        
-        self.getPointsExInit()
-    
         # Try actually generating the points and see if it matches how many we thought we were going to get
-        self.pictures_to_take = self.getNumPoints()
-        self.rconfig.scan_config['computed']['pictures_to_take'] = self.pictures_to_take
-        if self.rconfig.scan_config.get('exclude', []):
-            self.log('Suprressing picture take check on exclusions')
+        self.pictures_to_take = self.n_xy()
+        self._meta['pictures_to_take'] = self.pictures_to_take
+        if self.scan_config.get('exclude', []):
+            self.log('Suppressing picture take check on exclusions')
         elif self.pictures_to_take != expected_n_pictures:
             self.log('Going to take %d pictures but thought was going to take %d pictures (x %d X y %d)' % (self.pictures_to_take, expected_n_pictures, self.x.images(), self.y.images()))
             self.log('Points:')
-            for p in self.getPoints():
+            for p in self.gen_xys():
                 self.log('    ' + str(p))
             raise Exception('See above')
-        self.pictures_taken = 0
-        self.actual_pictures_taken = 0
         self.notify_progress(None, True)
+        self.img_ext = '.jpg'
+
+        # Total number of images taken
+        self.all_imgs = 0
+        # Number of images taken at unique x, y coordinates
+        # May be different than all_imags if image stacking
+        self.xy_imgs = 0
 
     def _log(self, msg='', verbosity=2):
         if verbosity <= self.v:
             self.log(msg)
 
-    def __del__(self):
-        pass
-        
-    def parse_points(self):
-        self.z = True
-
-        scan_config = self.rconfig.scan_config
-        if scan_config is None:
-            raise Exception('Missing scan parameters')
-        
-        try:
-            self.z_start = float(scan_config['start']['z'])
-        except:
-            self.log('Failed to find z start, disabling Z')
-            self.z_start = None
-            self.z = False
-        self.start = [self.x.start, self.y.start, self.z_start]
-        
-        try:
-            self.z_end = float(scan_config['end']['z'])
-        except:
-            self.log('Failed to find z end, disabling Z')
-            self.z_end = None
-            self.z = False
-        self.end = [self.x.end, self.y.end, self.z_end]
-    
-        if 'others' in scan_config:
-            self.others = []
-            i = 0
-            for p in scan_config['others']:
-                l = [float(p['x']), float(p['y']), None]
-                self.log(l)
-                self.others.append(l)
-                try:
-                    self.others[i][2] = float(p['z'])
-                except:
-                    self.others[i][2] = None
-                    self.log('Failed to find z other (%s), disabling Z' % (p))
-                    self.z = False
-                #self.other = [self.x_other, self.y_other, self.z_other]    
-                i += 1
-        else:
-            self.log('Could not find other points')
-            #raise Exception('die')
-            self.others = None
-    
     def parse_focus_stack(self):
-        config = self.rconfig.scan_config
-        if 'stack' in config:
-            stack = config['stack']
+        if 'stack' in self.scan_config:
+            stack = self.scan_config['stack']
             self.num_stack = int(stack['num'])
             self.stack_step_size = int(stack['step_size'])
         else:
             self.num_stack = None
             self.stack_step_size = None
         
-    def calc_normal(self):
-        '''
-        To find the Z on this model, find projection to center line
-        Projection of A (position) onto B (center line) length = |A| cos(theta) = A dot B / |B| 
-        Should I have the z component in here?  In any case it should be small compared to others 
-        and I'll likely eventually need it
-        '''
-
-        '''            
-        planar projection
-
-        Given two vectors in plane, create orthagonol basis vectors
-        Project vertex onto plane to get vertex coordinates within the plane
-        http://stackoverflow.com/questions/3383105/projection-of-polygon-onto-plane-using-gsl-in-c-c
-
-        Constraints
-        Linear XY coordinate system given
-        Need to project point from XY to UV plane to get Z distance
-        UV plane passes through XY origin
-
-
-        Eh a simple way
-        Get plane in a x + b y + c z + d = 0 form
-        If we know x and y, should be simple
-        d = 0 for simplicity (set plane intersect at origin)
-
-        Three points
-            (0, 0, 0) implicit
-            (ax, ay, az) at other end of rectangle
-            (bx, by, bz) somewhere else on plane, probably another corner
-        Find normal vector, simple to convert to equation
-            nonzero normal vector n = (a, b, c)
-            through the point x0 =(x0, y0, z0)
-            n * (x - x0) = 0, 
-            yields ax + by + cz + d = 0 
-        "Converting between the different notations in 3D"
-            http://www.euclideanspace.com/maths/geometry/elements/plane/index.htm
-            Convert Three points to normal notation
-            N = (p1 - p0) x (p2 - p0)
-            d = -N * p02
-            where:
-                * N = normal to plane (not necessarily unit length)
-                * d = perpendicular distance of plane from origin.
-                * p0,p1 and p2 = vertex points
-                * x = cross product
-        '''
-        
-        def cross(p0, p1, p2):
-            # [a - b for a, b in zip(a, b)]
-            # cross0 = p1 - p0
-            cross0 = [float(t1) - float(t0) for t1, t0 in zip(p1, p0)]
-            # cross1 = p2 - p0
-            cross1 = [float(t2) - float(t0) for t2, t0 in zip(p2, p0)]
-            c = numpy.cross(cross0, cross1)
-            n = numpy.linalg.norm(c)
-            # Keep pointed up to make things more regular
-            if c[2] < 0:
-                n *= -1.0
-            for i in range(3):
-                c[i] /= n
-            return c
-            
-        self.log('Calculating normal')
-            
-        if len(self.others) == 1:
-            self.log('Single plane case')
-            p0 = self.start
-            p1 = self.end
-            p2 = self.others[0]
-            self.normal = cross(p0, p1, p2)
-        else:
-            self.log('Multiple plane case')
-            # This is massively inefficient but number of points should be low
-            self.normal = [0.0, 0.0, 0.0]
-            #ps = [self.start, self.end] + self.others
-            n = 0
-            '''
-            for p0 in ps:
-                for p1 in ps:
-                    if p1 == p0:
-                        continue
-                    for p2 in ps:
-                        if p2 == p1 or p2 == p0:
-                            continue
-            '''
-            for p0 in [self.start]:
-                for p1 in [self.end]:
-                    for p2 in self.others:
-                        normal = cross(p0, p1, p2)
-                        self.log()
-                        self.log('Computed normal %s' % str(normal))
-                        self.log(p0)
-                        self.log(p1)
-                        self.log(p2)
-                        self.log()
-                        for i in range(0, 3):
-                            self.normal[i] += normal[i]
-                        n += 1
-                            
-            for i in range(0, 3):
-                self.normal[i] /= n
-        # a x + b y + c z + d = 0 
-        # z = -(a x + by) / c
-        # dz/dy = -b / c
-        self.dz_dy = -self.normal[1] / self.normal[2]
-        
-        self.log('Normal: %s' % str(self.normal))
-        
-        # Validate the plane mode l is reasonable
-        compare = self.others
-        #compare = [[4197.88, 236.898, -21.0], [0.0, 4200.0, 28.0]]
-        #compare = [[4197.8, 400.0, -26.5], [0.0, 4200.0, 10.0]]
-        for p in [self.start, self.end] + compare:
-            z = self.calc_z(p[0], p[1])
-            z_expect = p[2]
-            d = abs(z - z_expect)
-            thresh = 5.0
-            thresh_absolute = 500
-            self.log('Point %s: calc %g, error %g' % (str(p), z, d))
-            if d > thresh:
-                self.log('Bad planar solution, difference %g vs threshold %g' % (d, thresh))
-                self.log(p)
-                self.log('Computed z: %g, expected z: %g' % (z, z_expect))
-                self.log(self.others)
-                self.log('Normal: %s' % str(self.normal))
-                if d > thresh_absolute:
-                    raise Exception('Bad planar solution')
-            
     def notify_progress(self, image_file_name, first = False):
         if self.progress_cb:
-            self.progress_cb(self.pictures_to_take, self.pictures_taken, image_file_name, first)
+            self.progress_cb(self.pictures_to_take, self.xy_imgs, image_file_name, first)
 
     def comment(self, s = '', verbosity=2):
         if len(s) == 0:
@@ -530,37 +290,6 @@ class Planner:
         else:
             self.log('# %s' % s, verbosity=verbosity)
 
-    def calc_z(self, cur_x, cur_y):
-        if not self.z:
-            return None
-            
-        if False:
-            return self.calc_z_simple(cur_x, cur_y)
-        else:
-            return self.calc_z_planar(cur_x, cur_y)
-    
-    def calc_z_simple(self, cur_x, cur_y):
-        if self.z_start is None or self.z_end is None:
-            full_z_delta = None
-        else:
-            full_z_delta = self.z_end - self.z_start
-        #self.log(full_z_delta)
-    
-        center_length = math.sqrt(self.x.end * self.x.end + self.y.end * self.y.end)
-        projection_length = (cur_x * self.x.end + cur_y * self.y.end) / center_length
-        cur_z = full_z_delta * projection_length / center_length
-        # Proportion of entire sweep
-        #self.log('cur_z: %f, projection_length %f, center_length %f' % (cur_z, projection_length, center_length))
-        return cur_z
-    
-    def calc_z_planar(self, cur_x, cur_y):
-        # Plane is through origin, so x0 is (0, 0, 0) and dissapears, same goes for distance d
-        # Now we just need to solve the equation for z
-        # a x + b y + c z + d = 0 
-        # z = -(a x + b y) / c
-        cur_z = -(self.normal[0] * cur_x + self.normal[1] * cur_y) / self.normal[2]
-        return cur_z
-        
     def end_program(self):
         pass
     
@@ -569,65 +298,29 @@ class Planner:
 
     def write_metadata(self):
         # Copy config for reference
-        self.rconfig.write_to_dir(self.out_dir())
+        self.rconfig.write_to_dir(self.out_dir)
         # TODO: write out coordinate map
         
-    def genBasename(self, point, original_file_name):
-        suffix = original_file_name.split('.')[1]
-        row = point[3]
-        col = point[4]
-        rowcol = ''
-        if include_rowcol:
-            rowcol = 'c%04d_r%04d' % (col, row)
-        coordinate = ''
-        # 5 digits seems quite reasonable
-        if include_coordinate:
-            coordinate = "x%05d_y%05d" % (point[0] * 1000, point[1] * 1000)
-        spacer = ''
-        if len(rowcol) and len(coordinate):
-            spacer = '__'
-        return "%s%s%s%s" % (rowcol, spacer, coordinate, suffix)
-
-    def out_dir(self):
-        return os.path.join(config['cnc']['out_dir'], self.rconfig.job_name)
-        
-    def get_this_file_name(self, stack_mangle = None):
-        # row and column, 0 indexed
-        #return 'c%04X_r%04X.jpg' % (self.cur_col, self.cur_row)
-        if stack_mangle:
-            stack_mangle = '_' + stack_mangle
-        else:
-            stack_mangle = ''
-        #extension = '.tif'
-        extension = '.jpg'
-        r =  'c%04d_r%04d%s%s' % (self.cur_col, self.cur_row, stack_mangle, extension)
-        if self.out_dir():
-            r = '%s/%s' % (self.out_dir(), r)
-        return r
-        
     def prepare_image_output(self):
-        od = self.out_dir()
-        if od:
-            if self.rconfig.dry:
-                self.log('DRY: mkdir(%s)' % od)
-            else:
-                base = config['cnc']['out_dir']
-                if not os.path.exists(base):
-                    self.log('Creating base directory %s' % base)
-                    os.mkdir(base)
-                if os.path.exists(od):
-                    if not config['cnc']['overwrite']:
-                        raise Exception("Output dir %s already exists" % od)
-                    self.log('WARNING: overwriting old output')
-                    shutil.rmtree(od)
-                self.log('Creating output directory %s' % od)
-                os.mkdir(od)
+        if self.dry:
+            self.log('DRY: mkdir(%s)' % self.out_dir)
+            return
+        
+        if os.path.exists(self.out_dir):
+            if not self.overwrite:
+                raise Exception("Output dir %s already exists" % self.out_dir)
+            self.log('WARNING: overwriting old output')
+            shutil.rmtree(self.out_dir)
+        self.log('Creating output directory %s' % self.out_dir)
+        os.mkdir(self.out_dir)
             
-    def take_picture(self, image_file_name):
-        self.focus_camera()
-        self.hal.take_picture(image_file_name)
-        self.actual_pictures_taken += 1
-        self.reset_camera()
+    def img_fn(self, stack_suffix=''):
+        return os.path.join(self.out_dir,
+                'c%03d_r%03d%s%s' % (self.cur_col, self.cur_row, stack_suffix, self.img_ext))
+        
+    def take_picture(self, fn):
+        self.hal.img_get().save(fn)
+        self.all_imgs += 1
     
     def take_pictures(self):
         if self.num_stack:
@@ -638,82 +331,28 @@ class Planner:
             n2 = (self.num_stack - 1) / 2
             self.mv_abs(None, None, -n2 * self.stack_step_size)
             
-            self.pictures_taken += 1
-            
             '''
             Say 3 image stack
             Move down 1 step to start and will have to do 2 more
             '''
             for i in range(n):
-                image_file_name = self.get_this_file_name('%02d' % i)
-                self.take_picture(image_file_name)
+                img_fn = self.img_fn('_z%02d' % i)
+                self.take_picture(img_fn)
                 # Avoid moving at end
                 if i != n:
                     self.mv_rel(None, None, self.stack_step_size)
                     # we now sleep before the actual picture is taken
                     #time.sleep(3)
-                self.notify_progress(image_file_name)
+                self.notify_progress(img_fn)
         else:
-            image_file_name = self.get_this_file_name()
-            self.take_picture(image_file_name)        
-            self.pictures_taken += 1
-            self.notify_progress(image_file_name)
-    
-    def gen_x_points(self):
-        for i in range(self.x.images()):
-            yield self.x.start + i * self.x.step()
-    
-    def gen_y_points(self):
-        for i in range(self.y.images()):
-            yield self.y.start + i * self.y.step()
-    
-    def getNumPoints(self):
-        pictures_to_take = 0
-        #pictures_to_take = len(list(drange_at_least(self.x.start, self.x.end, self.x.step()))) * len(list(drange_at_least(self.y.start, self.y.end, self.y.step())))
-        #for cur_x in self.gen_x_points():
-        #    for cur_y in self.gen_y_points():
-        #        pictures_to_take += 1
-        for _p in self.getPoints():
-            pictures_to_take += 1
-        return pictures_to_take
-    
-    """
-    def getPoints(self):
-        '''ret (x, y, z)'''
-        for cur_x in self.gen_x_points():
-            for cur_y in self.gen_y_points():
-                cur_z = self.calc_z(cur_x, cur_y)
-                yield (cur_x, cur_y, cur_z)
-    """
-    
-    def getPoints(self):
-        for (cur_x, cur_y, cur_z, _row, _col) in self.getPointsEx():
-            yield (cur_x, cur_y, cur_z)
-    
-    """
-    def getPointsEx(self):
-        '''ret (x, y, z, row, col)'''
-        last_x = None
-        row = 0
-        col = -1
-        for point in getPoints():
-            if not last_x == point[0]:
-                col += 1
-                row = 0
-            yield (point[0], point[1], point[2], row, col)
-            last_x = point[0]
-            row += 1
-    """
+            img_fn = self.img_fn()
+            self.take_picture(img_fn)        
+            self.notify_progress(img_fn)
 
-    def getPointsExInit(self):
-        if 0:
-            self.getPointsExCore = self.getPointsExLoop
-        else:
-            #self.getPointsEx = self.getPointsExSerpentineXY
-            self.getPointsExCore = self.getPointsExSerpentineYX
+        self.xy_imgs += 1
     
     def validate_point(self, p):
-        (cur_x, cur_y, cur_z, cur_row, cur_col) = p
+        (cur_x, cur_y, cur_row, cur_col) = p
         #self.log('xh: %g vs cur %g, yh: %g vs cur %g' % (xh, cur_x, yh, cur_y))
         #do = False
         #do = cur_x > 3048 and cur_y > 3143
@@ -742,7 +381,6 @@ class Planner:
             self.log('Bad point:')
             self.log('  X: %g' % cur_x)
             self.log('  Y: %g' % cur_y)
-            self.log('  Z: %s' % str(cur_z))
             self.log('  Row: %g' % cur_row)
             self.log('  Col: %g' % cur_col)
             raise Exception('Bad point (%g + %g = %g, %g + %g = %g) for range (%g, %g) to (%g, %g)' % (
@@ -752,8 +390,8 @@ class Planner:
                     self.x.end, self.y.end))
     
     def exclude(self, p):
-        (cur_x, cur_y, cur_z, cur_row, cur_col) = p
-        for exclusion in self.rconfig.scan_config.get('exclude', []):
+        (_xy, (cur_row, cur_col)) = p
+        for exclusion in self.scan_config.get('exclude', []):
             '''
             If neither limit is specified don't exclude
             maybe later: if one limit is specified but not the other take it as the single bound
@@ -766,86 +404,46 @@ class Planner:
                 self.log('Excluding r%d, c%d on r%s:%s, c%s:%s' % (cur_row, cur_col, r0, r1, c0, c1))
                 return True
         return False
+
+    def n_xy(self):
+        '''Number of unique x, y coordinates'''
+        pictures_to_take = 0
+        for _p in self.gen_xys():
+            pictures_to_take += 1
+        return pictures_to_take
     
-    def getPointsEx(self):
-        for p in self.getPointsExCore():
+    def gen_xys(self):
+        for (x, y), _cr in self.gen_xycr():
+            yield (x, y)
+    
+    def gen_xycr(self):
+        for p in self.gen_xycr_serp():
             self.validate_point(p)
             if self.exclude(p):
                 continue
             yield p
     
-    
-    # Simpler and less backlash issues
-    # However, takes longer as  we have to go back to the other side
-    def getPointsExLoop(self):
-        col = 0
-        for cur_x in self.gen_x_points():
-            row = 0
-            for cur_y in self.gen_y_points():
-                cur_z = self.calc_z(cur_x, cur_y)
-                yield (cur_x, cur_y, cur_z, row, col)
-                row += 1
-            col += 1
-    
-    # Has higher throughput but more prone to backlash issue
-    def getPointsExSerpentineXY(self):
-        y_list_active = [x for x in self.gen_y_points()]
-        y_list_next = list(y_list_active)
-        y_list_next.reverse()
-        col = 0
-        forward = True
-        for cur_x in self.gen_x_points():
-            if forward:
-                row = 0
-            else:
-                row = len(y_list_active) - 1
-            for cur_y in y_list_active:
-                cur_z = self.calc_z(cur_x, cur_y)
-                yield (cur_x, cur_y, cur_z, row, col)
-                if forward:
-                    row += 1
-                else:
-                    row -= 1
-            # swap direction
-            temp = y_list_active
-            y_list_active = y_list_next
-            y_list_next = temp
-            col += 1
-            forward = not forward
-            
-    def getPointsExSerpentineYX(self):
-        x_list_active = [x for x in self.gen_x_points()]
-        x_list_next = list(x_list_active)
-        x_list_next.reverse()
+    def gen_xycr_serp(self):
+        '''Generate serpentine pattern'''
+        x_list = [x for x in self.x.points()]
+        x_list_rev = list(x_list)
+        x_list_rev.reverse()
         row = 0
-        forward = True
-        for cur_y in self.gen_y_points():
-            if forward:
-                col = 0
-            else:
-                col = len(x_list_active) - 1
-            for cur_x in x_list_active:
-                cur_z = self.calc_z(cur_x, cur_y)
-                yield (cur_x, cur_y, cur_z, row, col)
-                if forward:
-                    col += 1
-                else:
-                    col -= 1
-            # swap direction
-            temp = x_list_active
-            x_list_active = x_list_next
-            x_list_next = temp
-            row += 1
-            forward = not forward
-    
-    # Its actually less than this but it seems it takes some stepping
-    # to get it out of the system
-    def x_backlash(self):
-        return 50
-    def y_backlash(self):
-        return 50
         
-    def setRunning(self, running):
+        active = (x_list, 0, 1)
+        nexts = (x_list_rev, len(x_list_rev) - 1, -1)
+        
+        for cur_y in self.y.points():
+            x_list, col, cold = active
+            
+            for cur_x in x_list:
+                yield ((cur_x, cur_y), (row, col))
+                col += cold
+            # swap direction
+            active, nexts = nexts, active
+            row += 1
+    
+    def set_run(self, running):
         '''Used to pause movement'''
         if running:
             self.normal_running.set()
@@ -857,7 +455,7 @@ class Planner:
         self.log()
         self.log()
         self.log()
-        self.comment('Generated by pr0ncnc %s on %s' % (VERSION, time.strftime("%d/%m/%Y %H:%M:%S")))
+        self.comment('Generated by pr0ncnc on %s' % (time.strftime("%d/%m/%Y %H:%M:%S"),))
         focus = self.focus
         net_mag = focus.objective_mag * focus.eyepiece_mag * focus.camera_mag
         self.comment('objective: %f, eyepiece: %f, camera: %f, net: %f' % (focus.objective_mag, focus.eyepiece_mag, focus.camera_mag, net_mag))
@@ -870,121 +468,29 @@ class Planner:
         self.comment('x fov: %f, y fov: %f' % (focus.x_view, focus.y_view))
         self.comment('x_step: %f, y_step: %f' % (self.x.step(), self.y.step()))
         
-        z_backlash = self.z_backlash
-        if z_backlash:
-            if self.dz_dy > 0:
-                # Then decrease and increase
-                self.comment('increasing dz/dy backlash normalization')
-                #mv_rel(0.0, 0.0, -z_backlash)
-                #mv_rel(0.0, 0.0, z_backlash)
-            else:
-                # Then increase then decrease
-                self.comment('decreasing dz/dy backlash normalization')
-                #mv_rel(0.0, 0.0, z_backlash)
-                #mv_rel(0.0, 0.0, -z_backlash)
         self.comment('pictures: %d' % self.pictures_to_take)
         self.comment()
-
-        '''
-        prev_x = 0.0
-        prev_y = 0.0
-        prev_z = 0.0
-        '''
 
         self.prepare_image_output()
         if start_hook:
             start_hook(self.out_dir())
-        '''
-        Backlash compensation
-        0: no compensation
-        -1: compensated for decreasing
-        1: compensated for increasing
-        '''
-        self.x_comp = 0
-        self.y_comp = 0
-        self.z_comp = 0
-        self.last_x = None
-        self.last_y = None
-        self.last_z = None
+        
+        # Do initial backlash compensation
+        self.backlash_init()
         
         self.cur_col = -1
         # columns
-        for (cur_x, cur_y, cur_z, self.cur_row, self.cur_col) in self.getPointsEx():
+        for ((cur_x, cur_y), (self.cur_col, self.cur_row)) in self.gen_xycr():
             if not self.normal_running.is_set():
                 self.log('Planner paused')
                 self.normal_running.wait()
                 self.log('Planner unpaused')
-        #for cur_x in self.gen_x_points():
-            #self.cur_x = cur_x
-            #self.cur_col += 1
-            #self.cur_row = -1
-            # rows
-            #for cur_y in self.gen_y_points():
-            
             if True:
-                self.cur_y = cur_y
-                '''
-                Until I can properly spring load the z axis, I have it rubber banded
-                Also, for now assume simple planar model where we assume the third point is such that it makes the plane "level"
-                    That is, even X and Y distortion
-                '''
-        
-                #self.cur_row += 1
-                first_y = self.cur_row == 0
-                z_backlash_delta = 0.0
-                if first_y and z_backlash:
-                    # Reposition z to ensure we aren't getting errors from axis backlash
-                    # Taking into account y slant to make sure we will be going in the same direction
-                    # z increasing as we scan along y?
-                    if self.dz_dy > 0:
-                        # Then decrease and increase
-                        #self.comment('increasing dz/dy backlash normalization')
-                        z_backlash_delta = -z_backlash
-                    else:
-                        # Then increase then decrease
-                        #self.comment('decreasing dz/dy backlash normalization')
-                        z_backlash_delta = z_backlash
-
                 self.log('', 3)
-                cur_z = self.calc_z(cur_x, cur_y)
-                # self.log(cur_z)
-                # self.log('full_z_delta: %f, z_start %f, z_end %f' % (full_z_delta, z_start, z_end))
-                self.comment('comp (%d, %d, %d), pos (%f, %f, %s)' % (self.x_comp, self.y_comp, self.z_comp, cur_x, cur_y, str(cur_z)), 3)
+                self.comment('comp (%d, %d, %d), pos (%f, %f, %s)' % (self.x_comp, self.y_comp, cur_x, cur_y), 3)
 
-                #if cur_z < z_start or cur_z > z_end:
-                #    self.log('cur_z: %f, z_start %f, z_end %f' % (cur_z, z_start, z_end))
-                #    raise Exception('z out of range')
-                '''
-                x_delta = cur_x - prev_x
-                y_delta = cur_y - prev_y
-                if self.z:
-                    z_delta = cur_z - prev_z
-        
-                z_param = None
-                if self.z:
-                    z_param = z_delta + z_backlash_delta
-                '''
-                #self.mv_rel(x_delta, y_delta, z_param)
-                self.absolute_backlash_move(cur_x, cur_y, cur_z)
-                if z_backlash_delta:
-                    self.mv_rel(0.0, 0.0, -z_backlash_delta)
+                self.mv_abs_backlash({'x':cur_x, 'y':cur_y})
                 self.take_pictures()
-                '''
-                prev_x = cur_x
-                prev_y = cur_y
-                prev_z = cur_z
-                '''
-                first_y = False
-
-            '''
-            if forward:
-                for cur_y in range(y_start, y_end, y_step):
-                    inner_loop()
-            else:
-                for cur_y in range(y_start, y_end, y_step):
-                    inner_loop()
-            '''
-            #raise Exception('break')
 
         self.ret0()
         self.end_program()
@@ -995,124 +501,48 @@ class Planner:
         self.log()
         #self.comment('Statistics:')
         #self.comment('Pictures: %d' % pictures_taken)
-        if not self.pictures_taken == self.pictures_to_take:
-            if self.rconfig.scan_config.get('exclude', []):
-                self.log('Suppressing for exclusion: pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.pictures_taken))
+        if not self.xy_imgs == self.pictures_to_take:
+            if self.scan_config.get('exclude', []):
+                self.log('Suppressing for exclusion: pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.xy_imgs))
             else:
-                raise Exception('pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.pictures_taken))
+                raise Exception('pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.xy_imgs))
            
-        rd = self.stats()
-        self.rconfig.scan_config['run_data'] = rd
-        
         self.write_metadata()
-        return rd
         
-    def stats(self):
+    def meta(self):
         '''Can only be called after run'''
-        return {
-            # In seconds
-            'time': (self.end_time - self.start_time),
-            'pictures_taken': self.pictures_taken,
-            'x': {
-                'backlash': self.x_backlash(),
-            },
-            'y': {
-                'backlash': self.y_backlash(),
-            },
-        }
+        for axisc, axis in self.axes.iteritems():
+            self._meta[axisc] = axis.meta()
+    
+        # In seconds
+        self._meta['time'] = self.end_time - self.start_time
+        self._meta['pictures_taken'] = self.xy_imgs
         
-    def home(self):
-        self.mv_rel(-self.cur_x, -self.cur_y)
-
-    def mv_rel(self, x, y, z = None):
-        raise Exception('required')
-
-    def absolute_backlash_move(self, x, y, z):
+        return self._meta
+        
+    def backlash_init(self):
+        self.hal.mv_abs({'x': -self.x.backlash, 'y': -self.y.backlash})
+        self.x.comp = -1
+        self.y.comp = -1
+        
+    def mv_abs_backlash(self, move_to):
         '''Do an absolute move with backlash compensation'''
-        '''
-        On the very first move we need to compensate in the direction of travel
-        After that we compensate based on the last point
-        For the meantime to keep things simple going to assume very first move
-        is from the upper left which isn't necessarily true
-        Could make a guess based on the scan limits which solves for 95% of cases
-        '''
         
-        for i in xrange(3):
-            def last():
-                return (self.last_x, self.last_y, self.last_z)[i]
-            def to():
-                return (x, y, z)[i]
-            def backlash():
-                return (self.x_backlash(), self.y_backlash(), self.z_backlash)[i]
-            def comp():
-                return (self.x_comp, self.y_comp, self.z_comp)[i]
-            def mv_abs(n):
-                if i == 0:
-                    self.mv_abs(n, None)
-                elif i == 1:
-                    self.mv_abs(None, n)
-                elif i == 2:
-                    self.mv_abs(None, None, n)
-                else:
-                    raise Exception('bad axis')
-            def compensated(n):
-                if i == 0:
-                    self.x_comp = n
-                elif i == 1:
-                    self.y_comp = n
-                elif i == 2:
-                    self.z_comp = n
-                else:
-                    raise Exception('bad axis')
+        for axisc in move_to.keys():
+            axis = self.axes[axisc]
             
-            if to() is None:
-                continue
-            # If not going in the same direction as last need to compensate
-            # If no history force compensation
-            if last() is None:
-                # hack: y is always increasing
-                # with boundries messes things up
-                if i == 1:
-                    # Compensate for moving right
-                    self.log('Axis %d: initial compensate for moving increasing (FIXME: hack)' % i, 3)
-                    mv_abs(to() - backlash())
-                    compensated(1)
-                # Starting from the left?
-                elif to() == self.x.start:
-                    # Compensate for moving right
-                    self.log('Axis %d: initial compensate for moving increasing' % i, 3)
-                    mv_abs(to() - backlash())
-                    compensated(1)
-                else:
-                    # Compensate for moving left
-                    self.log('Axis %d: initial compensate for moving decreasing' % i, 3)
-                    mv_abs(to() + backlash())
-                    compensated(-1)
-                # XXX HACK: rapid reversal seems to cause issues
-                # only location we do rapid reversal but it may be good idea to add this check elsewhere
-                self.sleep(0.2, 'hack')
-            else:
-                # Going right but was not compensating right?
-                if (to() - last() > 0) and (comp() <= 0):
-                    self.log('Axis %d: compensate for changing to increasing' % i, 3)
-                    mv_abs(to() - backlash())
-                    compensated(1)
-                # Going left but was not compensating left?
-                elif (to() - last() < 0) and (comp() >= 0):
-                    self.log('Axis %d: compensate for changing to decreasing' % i, 3)
-                    mv_abs(to() + backlash())
-                    compensated(-1)
+            # Going right but was not compensating right?
+            if (move_to[axisc] - axis.last > 0) and (axis.comp <= 0):
+                self.log('Axis %c: compensate for changing to increasing' % axisc, 3)
+                self.mv_abs({axisc:move_to[axisc] - axis.backlash})
+                axis.comp = 1
+            # Going left but was not compensating left?
+            elif (move_to[axisc] - axis.last < 0) and (axis.comp >= 0):
+                self.log('Axis %c: compensate for changing to decreasing' % axisc, 3)
+                self.mv_abs({axisc:move_to[axisc] + axis.backlash})
+                axis.comp = -1
             
-        self.mv_abs(x, y, z)
-        if x is not None:
-            self.last_x = x
-        if y is not None:
-            self.last_y = y
-        if z is not None:
-            self.last_z = z
-
-    def mv_abs(self, x, y, z = None):
-        raise Exception('required')
+        self.hal.mv_abs(move_to)
 
 '''
 Planner hardware abstraction layer (HAL)
@@ -1177,7 +607,7 @@ class Hal:
         '''Allow system to move again after estop'''
         pass
 
-    def stats(self):
+    def meta(self):
         '''Supplementary info to add to run log'''
         return {}
 
@@ -1280,7 +710,7 @@ class MCHal(Hal):
                 self.mv_lastt = time.time()
 
     '''
-    def stats(self):
+    def meta(self):
         ret = {}
         
         # FIXME: time estimator
