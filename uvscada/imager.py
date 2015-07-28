@@ -28,8 +28,14 @@ class Imager:
 	def __init__(self):
 		pass
 
+	# Must implement at least one of the following
+	
 	def get(self):
 		'''Return PIL image object'''
+		raise Exception('Required')
+
+	def take(self):
+		'''Take and store to internal storage'''
 		raise Exception('Required')
 
 class MockImager(Imager):

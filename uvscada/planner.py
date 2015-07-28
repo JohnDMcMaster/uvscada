@@ -13,12 +13,6 @@ import shutil
 import threading
 import time
 
-def format_t(dt):
-    s = dt % 60
-    m = int(dt / 60 % 60)
-    hr = int(dt / 60 / 60)
-    return '%02d:%02d:%02d' % (hr, m, s)
-
 def drange(start, stop, step, inclusive = False):
     r = start
     if inclusive:
@@ -59,7 +53,9 @@ class PlannerAxis(object):
                 # than minimum number of pictures would support
                 req_overlap_percent, 
                 # How much the imager can see (in um)
-                view,
+                view_um,
+                # How much the imager can see (in pixels)
+                view_pix,
                 # Actual sensor dimension may be oversampled, scale down as needed
                 imager_scalar,
                 # start and end absolute positions (in um)
@@ -72,7 +68,7 @@ class PlannerAxis(object):
         self.log = log
         # How many the pixels the imager sees after scaling
         # XXX: is this global scalar playing correctly with the objective scalar?
-        self.view_pixels = view * imager_scalar
+        self.view_pixels = view_pix * imager_scalar
         #self.pos = 0.0
         self.name = name
         '''
@@ -88,10 +84,10 @@ class PlannerAxis(object):
         # Requested end, not necessarily true end
         self.req_end = end
         self.end = end
-        if self.delta() < view:
-            self.log('Axis %s: delta %0.3f < view %0.3f, expanding end' % (self.name, self.delta(), view))
-            self.end = start + view
-        self.view = view
+        if self.delta() < view_um:
+            self.log('Axis %s: delta %0.3f < view %0.3f, expanding end' % (self.name, self.delta(), view_um))
+            self.end = start + view_um
+        self.view_um = view_um
 
         # Its actually less than this but it seems it takes some stepping
         # to get it out of the system
@@ -129,9 +125,9 @@ class PlannerAxis(object):
         Remaining distance from the first image divided by
         how many pixels of each image are unique to the previously taken image when linear
         '''
-        if self.req_delta() <= self.view:
-            return 1.0 * self.req_delta() / self.view
-        ret = 1.0 + (self.req_delta() - self.view) / (self.req_overlap_percent * self.view)
+        if self.req_delta() <= self.view_um:
+            return 1.0 * self.req_delta() / self.view_um
+        ret = 1.0 + (self.req_delta() - self.view_um) / (self.req_overlap_percent * self.view_um)
         if ret < 0:
             raise Exception('bad number of idea images %s' % ret)
         return ret
@@ -158,12 +154,12 @@ class PlannerAxis(object):
         if images_to_take == 1:
             return self.delta()
         else:
-            return (self.delta() - self.view) / (images_to_take - 1.0)
+            return (self.delta() - self.view_um) / (images_to_take - 1.0)
         
     def step_percent(self):
         '''Actual percentage we move to take the next picture'''
         # Contrast with requested value self.req_overlap_percent
-        return self.step() / self.view
+        return self.step() / self.view_um
         
     def points(self):
         step = self.step()
@@ -171,7 +167,12 @@ class PlannerAxis(object):
             yield self.start + i * step
     
 class Planner(object):
-    def __init__(self, scan_config, hal, img_sz, out_dir,
+    def __init__(self, scan_config, hal,
+                # (w, h) in pixels
+                img_sz,
+                # 10 => each pixel is 10 um x 10 um
+                um_per_pix,
+                out_dir,
                 progress_cb=None,
                 overwrite=False, dry=False,
                 img_scalar=1,
@@ -185,7 +186,6 @@ class Planner(object):
         self.dry = dry
         # os.path.join(config['cnc']['out_dir'], self.rconfig.job_name)
         self.out_dir = out_dir
-        # config['cnc']['overwrite']:
         self.overwrite = overwrite
         
         self.normal_running = threading.Event()
@@ -214,10 +214,10 @@ class Planner(object):
         end = (float(scan_config['end']['x']), float(scan_config['end']['y']))
         self.axes = OrderedDict([
                 ('x', PlannerAxis('X', ideal_overlap,
-                    img_sz[0], img_scalar,
+                    img_sz[0] * um_per_pix, img_sz[0], img_scalar,
                     start[0], end[0], log=self.log)),
                 ('y', PlannerAxis('Y', ideal_overlap,
-                    img_sz[1], img_scalar,
+                    img_sz[1] * um_per_pix, img_sz[1], img_scalar,
                     start[1], end[1], log=self.log)),
                 ])
         self.x = self.axes['x']
@@ -318,7 +318,8 @@ class Planner(object):
                 'c%03d_r%03d%s%s' % (self.cur_col, self.cur_row, stack_suffix, self.img_ext))
         
     def take_picture(self, fn):
-        self.hal.img_get().save(fn)
+        self.hal.settle()
+        self.imager.get().save(fn)
         self.all_imgs += 1
     
     def take_pictures(self):
@@ -328,7 +329,7 @@ class Planner(object):
                 raise Exception('Center stacking requires odd n')
             # how much to step on each side
             n2 = (self.num_stack - 1) / 2
-            self.hal.mv_abs(None, None, -n2 * self.stack_step_size)
+            self.hal.mv_abs({'z':-n2 * self.stack_step_size})
             
             '''
             Say 3 image stack
@@ -449,7 +450,7 @@ class Planner(object):
         else:
             self.normal_running.clear()
         
-    def run(self, start_hook=None):
+    def run(self):
         self.start_time = time.time()
         self.log()
         self.log()
@@ -468,8 +469,6 @@ class Planner(object):
         self.comment()
 
         self.prepare_image_output()
-        if start_hook:
-            start_hook(self.out_dir())
         
         # Do initial backlash compensation
         self.backlash_init()
@@ -481,12 +480,12 @@ class Planner(object):
                 self.log('Planner paused')
                 self.normal_running.wait()
                 self.log('Planner unpaused')
-            if True:
-                self.log('', 3)
-                self.comment('comp (%d, %d), pos (%f, %f)' % (self.x.comp, self.y.comp, cur_x, cur_y), 3)
+            
+            #self.log('', 3)
+            #self.comment('comp (%d, %d), pos (%f, %f)' % (self.x.comp, self.y.comp, cur_x, cur_y), 3)
 
-                self.mv_abs_backlash({'x':cur_x, 'y':cur_y})
-                self.take_pictures()
+            self.mv_abs_backlash({'x':cur_x, 'y':cur_y})
+            self.take_pictures()
 
         self.hal.ret0()
         self.end_program()
@@ -527,350 +526,21 @@ class Planner(object):
         
         pos = self.hal.pos()
         
+        blsh_mv = {}
         for axisc in move_to.keys():
             axis = self.axes[axisc]
             
             # Going right but was not compensating right?
             if (move_to[axisc] - pos[axisc] > 0) and (axis.comp <= 0):
                 self.log('Axis %c: compensate for changing to increasing' % axisc, 3)
-                self.hal.mv_abs({axisc:move_to[axisc] - axis.backlash})
+                blsh_mv[axisc] = move_to[axisc] - axis.backlash
                 axis.comp = 1
             # Going left but was not compensating left?
             elif (move_to[axisc] - pos[axisc] < 0) and (axis.comp >= 0):
                 self.log('Axis %c: compensate for changing to decreasing' % axisc, 3)
-                self.hal.mv_abs({axisc:move_to[axisc] + axis.backlash})
+                blsh_mv[axisc] = move_to[axisc] + axis.backlash
                 axis.comp = -1
-            
+        self.hal.mv_abs(blsh_mv)
+        
         self.hal.mv_abs(move_to)
 
-'''
-Planner hardware abstraction layer (HAL)
-At this time there is no need for unit conversions
-Operate in whatever the native system is
-'''
-class Hal(object):
-    def __init__(self, dry, log):
-        self.dry = dry
-        if log is None:
-            def log(msg=''):
-                print msg
-        self.log = log
-
-    def ret0(self):
-        '''Return to origin'''
-        self.mv_abs({'x': 0, 'y':0})
-
-    def mv_abs(self, pos):
-        '''Absolute move to positions specified by pos dict'''
-        raise Exception("Required")
-
-    def mv_rel(self, delta):
-        '''Relative move to positions specified by delta dict'''
-        raise Exception("Required")
-    
-    '''
-    In modern systems the first is almost always used
-    The second is supported for now while porting legacy code
-    '''
-    def img_get(self):
-        '''Take a picture and return a PIL image'''
-        raise Exception("Required")
-    def img_take(self):
-        '''Take a picture and save it to internal.  File name is generated automatically'''
-        raise Exception("Unsupported")
-
-    def pos(self):
-        '''Return current position for all axes'''
-        raise Exception("Required")
-
-    def begin(self):
-        '''Call at start of active use'''
-        raise Exception("Required")
-    
-    def end(self):
-        '''Called after machine is no longer in use.  Motors must maintain position'''
-        raise Exception("Required")
-
-    def stop(self):
-        '''Stop motion as soon as convenient.  Motors must maintain position'''
-        pass
-
-    def estop(self):
-        '''Stop motion ASAP.  Motors are not required to maintain position'''
-        pass
-
-    def unestop(self):
-        '''Allow system to move again after estop'''
-        pass
-
-    def meta(self):
-        '''Supplementary info to add to run log'''
-        return {}
-
-    def forever_pos(self):
-        raise Exception("Not supported")
-
-    def forever_neg(self):
-        raise Exception("Not supported")
-
-'''
-Has no actual hardware associated with it
-'''
-class MockHal(Hal):
-    def __init__(self, dry, imager, log=None, axes='xy'):
-        Hal.__init__(self, dry, log)
-
-        self.axes = list(axes)
-        self._pos = {}
-        # Assume starting at 0.0 until causes problems
-        for axis in self.axes:
-            self._pos[axis] = 0.0
-        self.imager = imager
-
-    def _log(self, msg):
-        if self.dry:
-            self.log('Mock-dry: ' + msg)
-        else:
-            self.log('Mock: ' + msg)
-
-    def take_picture(self, file_name):
-        self._log('taking picture to %s' % file_name)
-
-    def mv_abs(self, pos):
-        for axis, apos in pos.iteritems():
-            self._pos[axis] = apos
-        self._log('absolute move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
-
-    def mv_rel(self, delta):
-        for axis, adelta in delta.iteritems():
-            self._pos[axis] += adelta
-        self._log('relative move to ' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
-
-    def img_get(self):
-        self._log('img_get()')
-        return self.imager.get()
-    
-    def img_take(self):
-        self._log('img_take()')
-
-    def pos(self):
-        return self._pos
-
-'''
-Legacy uvscada.mc adapter
-'''
-class MCHal(Hal):
-    def __init__(self, dry, log, mc, imager):
-        Hal.__init__(self, dry, log)
-        self.mc = mc
-        self.imager = imager
-        # seconds to wait before snapping picture
-        self.t_settle = 4.0
-
-    def settle(self):
-        '''Check last move time and wait if its not safe to take picture'''
-        if self.dry:
-            self.sleep(self.t_settle, 'settle')
-        else:
-            sleept = self.t_settle + self.mv_lastt - time.time()
-            if sleept > 0.0:
-                self.sleep(sleept, 'settle')
-
-    def sleep(self, sec, why):
-        self.log('Sleep %s' % (format_t(sec), why), 3)
-        self.rt_sleep += sec
-
-    def img_get(self):
-        self.settle()
-        return self.imager.get()
-
-    def reset_camera(self):
-        # original needed focus button released
-        #self.line('M9')
-        # suspect I don't need anything here
-        pass
-
-    def mv_abs(self, pos):
-        # Only one axis can be moved at a time
-        for axis, apos in pos.iteritems():
-            if self.dry:
-                self._pos[axis] = apos
-            else:
-                self.mc.axes[axis].mv_abs(apos)
-                self.mv_lastt = time.time()
-        
-    def mv_rel(self, delta):
-        # Only one axis can be moved at a time
-        for axis, adelta in delta.iteritems():
-            if self.dry:
-                self._pos[axis] += adelta
-            else:
-                self.mc.axes[axis].mv_rel(adelta)
-                self.mv_lastt = time.time()
-
-    '''
-    def meta(self):
-        ret = {}
-        
-        # FIXME: time estimator
-        # It didn't really work so I didn't bother porting it over during cleanup
-        self.rt_move = 0.0
-        self.rt_settle = 0.0
-        self.rt_sleep = 0.0
-
-        rt_tot = self.rt_move + self.rt_settle + self.rt_sleep
-        if self.rconfig.dry:
-            rt_k = 'rt_est'
-        else:
-            rt_k = 'rt'
-        ret[rt_k] = {
-                    'total':    rt_tot,
-                    'move':     self.rt_move,
-                    'settle':   self.rt_settle,
-                    'sleep':    self.rt_sleep,
-                    }
-        
-        return ret
-        '''
-
-'''
-Static gcode generator using coolant hack
-Not to be confused LCncHal which uses MDI g-code in real time
-
-M7 (coolant on): tied to focus / half press pin
-M8 (coolant flood): tied to snap picture
-    M7 must be depressed first
-M9 (coolant off): release focus / picture
-'''
-class GCodeHal(Hal):
-    def __init__(self, dry, log, axes):
-        Hal.__init__(self, dry, log)
-        self.axes = list(axes)
-        
-        self._pos = {}
-        # Assume starting at 0.0 until causes problems
-        for axis in self.axes:
-            self._pos[axis] = 0.0
-        self._buff = bytearray()
-
-    def img_take(self):
-        # Focus (coolant mist)
-        self._line('M7')
-        self._dwell(2)
-        
-        # Snap picture (coolant flood)
-        self._line('M8')
-        self._dwell(3)
-        
-        # Release shutter (coolant off)
-        self._line('M9')
-
-    def mv_abs(self, pos):
-        for axis, apos in pos.iteritems():
-            self._pos[axis] = apos
-        self._line('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
-
-    def mv_rel(self, pos):
-        for axis, delta in pos.iteritems():
-            self._pos[axis] += delta
-        self._line('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
-
-    def comment(self, s=''):
-        if len(s) == 0:
-            self._line()
-        else:
-            self._line('(%s)' % s)
-
-    def _line(self, s=''):
-        #self.log(s)
-        self._buff += s + '\n'
-
-    def begin(self):
-        pass
-    
-    def end(self):
-        self.line()
-        self.line('(Done!)')
-        self.line('M2')
-
-    def _dwell(self, seconds):
-        raise Exception("FIXME")
-
-    def get(self):
-        return str(self._buff)
-
-# Camera always local
-class LcncHal(Hal):
-    def __init__(self, dry, log, rsh, imager):
-        Hal.__init__(self, dry, log)
-        self.imager = imager
-
-    def settle(self):
-        '''Check last move time and wait if its not safe to take picture'''
-        if self.dry:
-            self.sleep(self.t_settle, 'settle')
-        else:
-            sleept = self.t_settle + self.mv_lastt - time.time()
-            if sleept > 0.0:
-                self.sleep(sleept, 'settle')
-
-    def sleep(self, sec, why):
-        self.log('Sleep %s' % (format_t(sec), why), 3)
-        self.rt_sleep += sec
-
-    def img_get(self):
-        self.settle()
-        return self.imager.get()
-
-    def cmd(self, cmd):
-        raise Exception("Required")
-   
-    def do_cmd(self, cmd):
-        if self.dry:
-            self.log(cmd)
-        else:
-            self.cmd(cmd)
-            
-    def mv_abs(self, pos):
-        # Unlike DIY controllers, all axes can be moved concurrently
-        # Don't waste time moving them individually
-        self.cmd_('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
-        
-    def mv_rel(self, delta):
-        # Unlike DIY controllers, all axes can be moved concurrently
-        # Don't waste time moving them individually
-        self.cmd('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
-
-# LinuxCNC python connection
-# Currently the rpc version emulates stat and command channels
-# making these identical for the time being
-class LcncPyHal(LcncHal):
-    def __init__(self, dry, log, imager, linuxcnc):
-        LcncHal.__init__(self, dry, log, imager)
-        self.linuxcnc = linuxcnc
-        self.stat = self.linuxcnc.stat()
-        self.command = self.linuxcnc.command()
-    
-    def ok_for_mdi(self):
-        self.stat.poll()
-        return not self.stat.estop and self.stat.enabled and self.stat.homed and self.stat.interp_state == self.linuxcnc.INTERP_IDLE
-        
-    def wait_mdi_idle(self):
-        while not self.ok_for_mdi():
-            time.sleep(0.1)
-        
-    def do_cmd(self, cmd):
-        self.wait_mdi_idle()
-        self.command.mdi(cmd)            
-        self.wait_mdi_idle()
-    
-# LinuxCNC remote connection
-class LcncRshHal(LcncHal):
-    def __init__(self, dry, log, imager, rsh):
-        LcncHal.__init__(self, dry, log, imager)
-        self.rsh = rsh
-        self.t_settle = 4.0
-        
-    def do_cmd(self, cmd):
-        # Waits for completion before returning
-        self.rsh.mdi(cmd, timeout=0)            

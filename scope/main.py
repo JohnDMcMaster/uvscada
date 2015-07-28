@@ -1,30 +1,14 @@
 #!/usr/bin/env python
 
-'''
-TODO: version 1 was platform independent without video feed
-Consider making video feed optional to make it continue to work on windows
-or maybe look into Phonon some more for rendering
-'''
-
-'''
-Question: why on Ubuntu 12.04 w/ custom kernel can I take pictures but not stream to screen?
-'''
-
-
-from config import config, RunConfig
-from imager import Imager
-from uvscada.mc import MC
-from mock_controller import MockController
-from uvscada.pr0ndexer_controller import PDC
-from threads import ControllerThread, PlannerThread
-
-VCImager = None
-try:
-    from vcimager import *
-except ImportError:
-    print 'Note: failed to import VCImager'
-
+from config import get_config
+from uvscada.imager import Imager
+from uvscada.img_util import get_scaled
 from uvscada.benchmark import Benchmark
+from uvscada.imager import MockImager
+from uvscada import planner_hal
+from uvscada import gst_util
+
+from threads import CncThread, PlannerThread
 
 from PyQt4 import Qt
 from PyQt4.QtGui import *
@@ -37,17 +21,17 @@ import sys
 import traceback
 import threading
 from PIL import Image
-import StringIO
+
+uscope_config = get_config()
 
 gobject = None
-pygst = None
 gst = None
 try:
-    import gobject, pygst
-    pygst.require('0.10')
+    import gobject
     import gst
+    gst_util.register()
 except ImportError:
-    if config['imager']['engine'] == 'gstreamer' or config['imager']['engine'] == 'gstreamer-testrc':
+    if uscope_config['imager']['engine'] == 'gstreamer' or uscope_config['imager']['engine'] == 'gstreamer-testrc':
         print 'Failed to import a gstreamer package when gstreamer is required'
         raise
 
@@ -62,249 +46,45 @@ def dbg(*args):
     else:
         print 'main: ' + (args[0] % args[1:])
 
-def get_cnc(log):
+def get_cnc_hal(log):
     engine = config['cnc']['engine']
     if engine == 'mock':
-        return MockController(debug=debug, log=log)
-    # USBIO MicroControle
-    elif engine == 'MC':
-        try:
-            return MC(debug=debug, log=log)
-        except IOError:
-            print 'Failed to open MC device'
-            raise
-    # pr0ndexer (still on MicroControle hardware though)
-    elif engine == 'PDC':
-        try:
-            return PDC(debug=False, log=log, config=config)
-        except IOError:
-            print 'Failed to open PD device'
-            raise
-    elif engine == 'auto':
-        try:
-            return PDC(debug=False, log=log, config=config)
-        except IOError:
-            pass
+        return planner_hal.MockHal(log=log)
+    elif engine == 'lcnc-py':
+        import linuxcnc
         
-        try:
-            mc = MC(debug=debug, log=log)
-            if mc.version():
-                return mc
-            raise IOError('Couldnt find dev')
-        except IOError:
-            log('Failed to open MC device, falling back to mock')
-            return MockController(debug=debug, log=log)
+        return planner_hal.LcncPyHal(linuxcnc=linuxcnc, log=log)
+    elif engine == 'lcnc-rpc':
+        from uvscada.lcnc.client import LCNCRPC
+        
+        return planner_hal.LcncPyHal(linuxcnc=LCNCRPC(host='localhost'), log=log)
+    elif engine == 'lcnc-rsh':
+        return planner_hal.LcncRshHal(log=log)
     else:
         raise Exception("Unknown CNC engine %s" % engine)
 
-
-def get_scaled(image, factor, filt=Image.NEAREST):
-    return image.resize((int(image.size[0] * factor), int(image.size[1] * factor)), filt)
-
-# Example sink code at
-# https://coherence.beebits.net/svn/branches/xbox-branch-2/coherence/transcoder.py
-class ResizeSink(gst.Element):
-    # Above didn't have this but seems its not optional
-    __gstdetails__ = ('ResizeSink','Sink', \
-                      'Resize source to get around X11 memory limitations', 'John McMaster')
-
-    _sinkpadtemplate = gst.PadTemplate ("sinkpadtemplate",
-                                        gst.PAD_SINK,
-                                        gst.PAD_ALWAYS,
-                                        gst.caps_new_any())
-
-
-    _srcpadtemplate =  gst.PadTemplate ("srcpadtemplate",
-                                        gst.PAD_SRC,
-                                        gst.PAD_ALWAYS,
-                                        gst.caps_new_any())
-
-    def __init__(self):
-        gst.Element.__init__(self)
-        self.sinkpad = gst.Pad(self._sinkpadtemplate, "sink")
-        self.srcpad = gst.Pad(self._srcpadtemplate, "src")
-        self.add_pad(self.sinkpad)
-        self.add_pad(self.srcpad)
-
-        self.sinkpad.set_chain_function(self.chainfunc)
-        self.sinkpad.set_event_function(self.eventfunc)
-    
-    def chainfunc(self, pad, buffer):
-        try:
-            print 'Got resize buffer'
-            # Simplest: just propagate the data
-            # self.srcpad.push(buffer)
-            
-            # Import into PIL and downsize it
-            # Raw jpeg to pr0n PIL wrapper object
-            print 'resize chain', len(buffer.data), len(buffer.data) / 3264.0
-            #open('temp.jpg', 'w').write(buffer.data)
-            #io = StringIO.StringIO(buffer.data)
-            io = StringIO.StringIO(str(buffer))
-            try:
-                image = Image.open(io)
-            except:
-                print 'failed to create image'
-                return gst.FLOW_OK
-            # Use a fast filter since this is realtime
-            image = get_scaled(image, 0.5, Image.NEAREST)
-
-            output = StringIO.StringIO()
-            image.save(output, 'jpeg')
-            self.srcpad.push(gst.Buffer(output.getvalue()))
-        except:
-            traceback.print_exc()
-            os._exit(1)
-        
-        return gst.FLOW_OK
-
-    def eventfunc(self, pad, event):
-        return True
-
-gobject.type_register(ResizeSink)
-gst.element_register (ResizeSink, 'myresize', gst.RANK_MARGINAL)
-
-# nope...
-# metaclass conflict: the metaclass of a derived class must be a (non-strict) subclass of the metaclasses of all its bases
-# ...and one stack overflow post later I know more about python classes than I ever wanted to
-# basically magic + magic = fizzle
-#class CaptureSink(gst.Element, QObject):
-class CaptureSink(gst.Element):
-    __gstdetails__ = ('CaptureSink','Sink', \
-                      'Captures images for the CNC', 'John McMaster')
-
-    _sinkpadtemplate = gst.PadTemplate ("sinkpadtemplate",
-                                        gst.PAD_SINK,
-                                        gst.PAD_ALWAYS,
-                                        gst.caps_new_any())
-
-    def __init__(self):
-        gst.Element.__init__(self)
-        self.sinkpad = gst.Pad(self._sinkpadtemplate, "sink")
-        self.add_pad(self.sinkpad)
-
-        self.sinkpad.set_chain_function(self.chainfunc)
-        self.sinkpad.set_event_function(self.eventfunc)
-
-        self.image_requested = threading.Event()
-        self.next_image_id = 0
-        self.images = {}
-        
-    def request_image(self, cb):
-        '''Request that the next image be saved'''
-        # Later we might make this multi-image
-        if self.image_requested.is_set():
-            raise Exception('Image already requested')
-        self.cb = cb
-        self.image_requested.set()
-        
-    def get_image(self, image_id):
-        '''Fetch the image but keep it in the buffer'''
-        return self.images[image_id]
-        
-    def del_image(self, image_id):
-        '''Delete image in buffer'''
-        del self.images[image_id]
-
-    def pop_image(self, image_id):
-        '''Fetch the image and delete it form the buffer'''
-        ret = self.images[image_id]
-        del self.images[image_id]
-        # Arbitrarily convert to PIL here
-        # TODO: should pass rawer/lossless image to PIL instead of jpg?
-        return Image.open(StringIO.StringIO(ret))
-    
     '''
-    gstreamer plugin core methods
-    '''
-    
-    def chainfunc(self, pad, buffer):
-        #print 'Capture sink buffer in'
+    # pr0ndexer (still on MicroControle hardware though)
+    elif engine == 'pdc':
         try:
-            '''
-            Two major circumstances:
-            -Imaging: want next image
-            -Snapshot: want next image
-            In either case the GUI should listen to all events and clear out the ones it doesn't want
-            '''
-            #print 'Got image'
-            if self.image_requested.is_set():
-                #print 'Processing image request'
-                # Does this need to be locked?
-                # Copy buffer so that even as object is reused we don't lose it
-                # is there a difference between str(buffer) and buffer.data?
-                self.images[self.next_image_id] = str(buffer)
-                # Clear before emitting signal so that it can be re-requested in response
-                self.image_requested.clear()
-                #print 'Emitting capture event'
-                self.cb(self.next_image_id)
-                #print 'Capture event emitted'
-                self.next_image_id += 1
-        except:
-            traceback.print_exc()
-            os._exit(1)
-        
-        return gst.FLOW_OK
+            #return PDC(debug=False, log=log, config=config)
+            return planner_hal.PdcHal(log=log)
+        except IOError:
+            print 'Failed to open PD device'
+            raise
+    '''
+    '''
+    Instead of auto lets support a fallback allowed option
+    elif engine == 'auto':
+        raise Exception('FIXME')
+        log('Failed to open device, falling back to mock')
+        return planner_hal.MockHal(log=log)
+    '''
 
-    def eventfunc(self, pad, event):
-        return True
-    
-gobject.type_register(CaptureSink)
-# Register the element into this process' registry.
-gst.element_register (CaptureSink, 'capturesink', gst.RANK_MARGINAL)
-
-
-class Axis(QWidget):
-    # Absolute position given
-    axisSet = pyqtSignal(int)
-    
+class AxisWidget(QWidget):
     def __init__(self, axis, parent = None):
         QWidget.__init__(self, parent)
-        # controller axis object
-        # Note that its wrapped in IPC layer
-        self.axis = axis
-        self.axis.movement_notify = lambda: self.emit_pos()
         
-        self.initUI()
-        self.jog_done = None
-    
-    def emit_pos(self):
-        #print 'emitting distance %d' % self.axis.get_um()
-        self.axisSet.emit(self.axis.get_um())
-    
-    def jog(self, n):
-        self.axis.jog(n, self.emit_pos)
-    
-    def go_abs(self):
-        #print 'abs'
-        self.axis.set_pos(float(str(self.abs_pos_le.text())), self.emit_pos)
-    
-    def go_rel(self, cb=None):
-        #print 'rel'
-        self.jog(float(str(self.rel_pos_le.text())))
-    
-    def home(self):
-        #print 'home'
-        self.axis.home(self.emit_pos)
-    
-    def set_home(self):
-        #print 'setting new home position'
-        self.axis.set_home(self.emit_pos)
-        
-    def meas_reset(self):
-        dbg('meas reset')
-        self.meas_abs = self.axis.axis.get_um()
-        self.meas_value.setText("0.0")
-        
-    def update_meas(self, pos):
-        nv = pos - self.meas_abs
-        dbg('new meas value %f' % nv)
-        self.meas_value.setNum(nv)
-        
-    def updateAxis(self, pos):
-        self.pos_value.setNum(pos)
-        
-    def initUI(self):
         self.gb = QGroupBox('Axis %s' % self.axis.name)
         self.gl = QGridLayout()
         self.gb.setLayout(self.gl)
@@ -313,7 +93,6 @@ class Axis(QWidget):
         self.gl.addWidget(QLabel("Pos (um):"), row, 0)
         self.pos_value = QLabel("Unknown")
         self.gl.addWidget(self.pos_value, row, 1)
-        self.axisSet.connect(self.updateAxis)
         row += 1
         
         # Return to 0 position
@@ -328,16 +107,16 @@ class Axis(QWidget):
         
         self.abs_pos_le = QLineEdit('0.0')
         self.gl.addWidget(self.abs_pos_le, row, 0)
-        self.go_abs_pb = QPushButton("Go absolute (um)")
-        self.go_abs_pb.clicked.connect(self.go_abs)
-        self.gl.addWidget(self.go_abs_pb, row, 1)
+        self.mv_abs_pb = QPushButton("Go absolute (um)")
+        self.mv_abs_pb.clicked.connect(self.mv_abs)
+        self.gl.addWidget(self.mv_abs_pb, row, 1)
         row += 1
         
         self.rel_pos_le = QLineEdit('0.0')
         self.gl.addWidget(self.rel_pos_le, row, 0)
-        self.go_rel_pb = QPushButton("Go relative (um)")
-        self.go_rel_pb.clicked.connect(self.go_rel)
-        self.gl.addWidget(self.go_rel_pb, row, 1)
+        self.mv_rel_pb = QPushButton("Go relative (um)")
+        self.mv_rel_pb.clicked.connect(self.mv_rel)
+        self.gl.addWidget(self.mv_rel_pb, row, 1)
         row += 1
 
         self.meas_label = QLabel("Meas (um)")
@@ -356,6 +135,33 @@ class Axis(QWidget):
         self.l.addWidget(self.gb)
         self.setLayout(self.l)
 
+class GstImager(Imager):
+    def __init__(self, gui):
+        Imager.__init__(self)
+        self.gui = gui
+        self.image_ready = threading.Event()
+        self.image_id = None
+        
+    def take_picture(self, file_name_out = None):
+        self.gui.emit_log('gstreamer imager: taking image to %s' % file_name_out)
+        def emitSnapshotCaptured(image_id):
+            self.gui.emit_log('Image captured reported: %s' % image_id)
+            self.image_id = image_id
+            self.image_ready.set()
+
+        self.image_id = None
+        self.image_ready.clear()
+        self.gui.capture_sink.request_image(emitSnapshotCaptured)
+        self.gui.emit_log('Waiting for next image...')
+        self.image_ready.wait()
+        self.gui.emit_log('Got image %s' % self.image_id)
+        image = self.gui.capture_sink.pop_image(self.image_id)
+        factor = float(uscope_config['imager']['scalar'])
+        # Use a reasonably high quality filter
+        scaled = get_scaled(image, factor, Image.ANTIALIAS)
+        if not self.gui.dry():
+            scaled.save(file_name_out)
+
 class CNCGUI(QMainWindow):
     cncProgress = pyqtSignal(int, int, str, int)
     snapshotCaptured = pyqtSignal(int)
@@ -363,26 +169,25 @@ class CNCGUI(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
         self.showMaximized()
-
+        self.uscope_config = uscope_config
+        
         # must be created early to accept early logging
         # not displayed until later though
         self.log_widget = QTextEdit()
         # Special case for logging that might occur out of thread
         self.connect(self, SIGNAL('log'), self.log)
+        self.connect(self, SIGNAL('pos'), self.update_pos)
         
         self.pt = None
         self.log_fd = None
-        self.cnc_raw = get_cnc(log=self.emit_log)
-        self.cnc_raw.on()
-        self.cnc_ipc = ControllerThread(self.cnc_raw)
+        hal = get_cnc_hal(log=self.emit_log)
+        hal.progress = self.hal_progress
+        self.cnc_thread = CncThread(hal=hal, cmd_done=self.cmd_done)
         self.initUI()
-        
-        for axis in self.axes.values():
-            axis.emit_pos()
         
         # Must not be initialized until after layout is set
         self.gstWindowId = None
-        engine_config = config['imager']['engine']
+        engine_config = self.uscope_config['imager']['engine']
         if engine_config == 'auto':
             if os.path.exists("/dev/video0"):
                 engine_config = 'gstreamer'
@@ -401,20 +206,16 @@ class CNCGUI(QMainWindow):
         else:
             raise Exception('Unknown engine %s' % (engine_config,))
         
-        self.cnc_ipc.start()
+        self.cnc_thread.start()
         
         # Offload callback to GUI thread so it can do GUI ops
         self.cncProgress.connect(self.processCncProgress)
-        
-        if self.cnc_raw is None:
-            dbg("Disabling all motion controls on no CNC")
-            self.setControlsEnabled(False)
         
         if self.gstWindowId:
             dbg("Starting gstreamer pipeline")
             self.player.set_state(gst.STATE_PLAYING)
         
-        if config['cnc']['startup_run']:
+        if self.uscope_config['cnc']['startup_run']:
             self.run()
         
     def log(self, s='', newline=True):
@@ -434,26 +235,38 @@ class CNCGUI(QMainWindow):
         # event must be omitted from the correct thread
         # however, if it hasn't been created yet assume we should log from this thread
         self.emit(SIGNAL('log'), s)
-        
-    def x(self, n):
-        self.axes['X'].jog(n)
     
-    def y(self, n):
-        self.axes['Y'].jog(n)
+    def update_pos(self, pos):
+        for axis, axis_pos in pos.iteritems():
+            self.axes[axis].pos_value.setText('%d' % axis_pos)
+    
+    def hal_progress(self, pos):
+        self.emit(SIGNAL('pos'), pos)
         
-    def z(self, n):
-        self.axes['Z'].jog(n)
+    def cmd_done(self, cmd, args, ret):
+        def default():
+            pass
         
+        def emit_pos(pos):
+            self.emit(SIGNAL('pos'), pos)
+        
+        {
+            'mv_abs': emit_pos,
+            'mv_rel': emit_pos,
+        }.get(cmd, default)(*args)
+    
     def reload_obj_cb(self):
         '''Re-populate the objective combo box'''
         self.obj_cb.clear()
         self.obj_config = None
-        for objective in config['objective']:
+        self.obj_configi = None
+        for objective in self.uscope_config['objective']:
             self.obj_cb.addItem(objective['name'])
     
     def update_obj_config(self):
         '''Make resolution display reflect current objective'''
-        self.obj_config = config['objective'][self.obj_cb.currentIndex ()]
+        self.obj_configi = self.obj_cb.currentIndex()
+        self.obj_config = self.uscope_config['objective'][self.obj_configi]
         self.log('Selected objective %s' % self.obj_config['name'])
         self.obj_mag.setText('Magnification: %0.2f' % self.obj_config["mag"])
         self.obj_x_view.setText('X view (um): %0.3f' % self.obj_config["x_view"])
@@ -530,109 +343,20 @@ class CNCGUI(QMainWindow):
         return layout
     
     def setupGst(self):
-        '''
-        gst-launch v4l2src device=/dev/video0 ! tee ! queue ! videoscale ! capsfilter caps=video/x-raw-yuv ! xvimagesink 
-            gst-launch v4l2src device=/dev/video0 ! videoscale ! xvimagesink
-        gst-launch v4l2src device=/dev/video0 ! ffmpegcolorspace ! ximagesink
-            works...hmm
-        
-        
-        gst-launch v4l2src device=/dev/video0 ! ffmpegcolorspace ! videocrop top=100 left=1 right=4 bottom=0 ! ximagesink
-        
-        
-        sysctl kernel.shmmax=67108864
-            cranked up to 128M, no change
-            er no that was in KB so that was 128GB...
-        sysctl kernel.shmall=32768
-            didn't try messing with this
-            kernel.shmall = 2097152
-            2GB, should be plenty
-
-
-            
-        sysctl kernel.shmmax=67108864
-            default: 33554432
-        sysctl kernel.shmall=32768
-            default: 2097152
-            
-        Default IPC limits
-        root@gespenst:/home/mcmaster# ipcs -l
-
-            ------ Shared Memory Limits --------
-            max number of segments = 4096
-            max seg size (kbytes) = 32768
-            max total shared memory (kbytes) = 8388608
-            min seg size (bytes) = 1
-
-            ------ Semaphore Limits --------
-            max number of arrays = 128
-            max semaphores per array = 250
-            max semaphores system wide = 32000
-            max ops per semop call = 32
-            semaphore max value = 32767
-
-            ------ Messages Limits --------
-            max queues system wide = 1471
-            max size of message (bytes) = 8192
-            default max size of queue (by        
-        
-        Works fine at med res
-        mcmaster@gespenst:~/document/external/pr0ntools/cnc_microscope/snapshot$ gst-launch v4l2src device=/dev/video0 ! videoscale ! xvimagesink 
-            Setting pipeline to PAUSED ...
-            Pipeline is live and does not need PREROLL ...
-            Setting pipeline to PLAYING ...
-            New clock: GstSystemClock
-
-            (close window)
-
-            ERROR: from element /GstPipeline:pipeline0/GstXvImageSink:xvimagesink0: Output window was closed
-            Additional debug info:
-            xvimagesink.c(1326): gst_xvimagesink_handle_xevents (): /GstPipeline:pipeline0/GstXvImageSink:xvimagesink0
-            Execution ended after 2888164132 ns.
-            Setting pipeline to PAUSED ...
-            Setting pipeline to READY ...
-            Setting pipeline to NULL ...
-            Freeing pipeline ...
-        Dies at high res
-        mcmaster@gespenst:~/document/external/pr0ntools/cnc_microscope/snapshot$ gst-launch v4l2src device=/dev/video0 ! videoscale ! xvimagesink 
-            Setting pipeline to PAUSED ...
-            Pipeline is live and does not need PREROLL ...
-            Setting pipeline to PLAYING ...
-            New clock: GstSystemClock
-            ERROR: from element /GstPipeline:pipeline0/GstXvImageSink:xvimagesink0: Failed to create output image buffer of 3264x2448 pixels
-            Additional debug info:
-            xvimagesink.c(2404): gst_xvimagesink_show_frame (): /GstPipeline:pipeline0/GstXvImageSink:xvimagesink0:
-            XServer allocated buffer size did not match input buffer
-            Execution ended after 1854135991 ns.
-            Setting pipeline to PAUSED ...
-            Setting pipeline to READY ...
-            Setting pipeline to NULL ...
-            Freeing pipeline ...
-        On Fedora I had to do something like vmalloc=192M, related?
-        
-        
-        gst-launch v4l2src device=/dev/video0 ! tee ! queue ! ffmpegcolorspace ! ximagesink
-        '''
-        
         dbg("Setting up gstreamer pipeline")
         self.gstWindowId = self.video_container.winId()
         self.gstWindowId2 = self.video_container2.winId()
 
         self.player = gst.Pipeline("player")
-        #sinkxv = gst.element_factory_make("xvimagesink")
         sinkx = gst.element_factory_make("ximagesink", 'sinkx_overview')
         sinkx_focus = gst.element_factory_make("ximagesink", 'sinkx_focus')
-        #fvidscale_cap = gst.element_factory_make("capsfilter")
-        #fvidscale = gst.element_factory_make("videoscale")
         fcs = gst.element_factory_make('ffmpegcolorspace')
-        caps = gst.caps_from_string('video/x-raw-yuv')
-        #fvidscale_cap.set_property('caps', caps)
+        #caps = gst.caps_from_string('video/x-raw-yuv')
 
         self.tee = gst.element_factory_make("tee")
 
         self.capture_enc = gst.element_factory_make("jpegenc")
         self.capture_sink = gst.element_factory_make("capturesink")
-        #self.resizer = gst.element_factory_make("myresize")
         self.resizer =  gst.element_factory_make("videoscale")
         self.snapshotCaptured.connect(self.captureSnapshot)
         self.capture_sink_queue = gst.element_factory_make("queue")
@@ -676,45 +400,9 @@ class CNCGUI(QMainWindow):
         gst.element_link_many(self.size_tee, self.size_queue_overview, self.resizer, sinkx)
         # gah
         # libv4l2: error converting / decoding frame data: v4l-convert: error destination buffer too small (16777216 < 23970816)
-        '''
-        Ubuntu 12.04 w/ 3.9.0-rc4 giving:
-        Error: The stream is in the wrong format. gstbasesrc.c(2830): gst_base_src_start (): /GstPipeline:player/GstV4l2Src:vsource:
-        Culprit seems to be videocrop
-        gst-launch v4l2src device=/dev/video0 ! videocrop top=918 bottom=918 left=1224 right=1224 ! videoscale ! ximagesink
-        gst-launch v4l2src device=/dev/video0 ! ffmpegcolorspace ! videocrop top=918 bottom=918 left=1224 right=1224 ! videoscale ! ximagesink
-            
-    mcmaster@pr0nscope:~/document/external/pr0ntools/cnc_microscope$ gst-launch v4l2src device=/dev/video0 ! videocrop top=918 bottom=918 left=1224 right=1224 ! videoscale ! ximagesink
-        Setting pipeline to PAUSED ...
-        ERROR: Pipeline doesn't want to pause.
-        ERROR: from element /GstPipeline:pipeline0/GstV4l2Src:v4l2src0: Could not negotiate format
-        Additional debug info:
-        gstbasesrc.c(2830): gst_base_src_start (): /GstPipeline:pipeline0/GstV4l2Src:v4l2src0:
-        Check your filtered caps, if any
-        Setting pipeline to NULL ...
-        Freeing pipeline ...
-        gst-launch v4l2src device=/dev/video0 ! ffmpegcolorspace ! videocrop top=100 left=1 right=4 bottom=0 ! ximagesink
-            works
-    mcmaster@pr0nscope:~/document/external/pr0ntools/cnc_microscope$ gst-launch v4l2src device=/dev/video0 ! ffmpegcolorspace ! videocrop top=100 left=1 right=4 bottom=0 ! ximagesink
-        Setting pipeline to PAUSED ...
-        Pipeline is live and does not need PREROLL ...
-        Setting pipeline to PLAYING ...
-        New clock: GstSystemClock
-        ERROR: from element /GstPipeline:pipeline0/GstXImageSink:ximagesink0: Output window was closed
-        Additional debug info:
-        ximagesink.c(1119): gst_ximagesink_handle_xevents (): /GstPipeline:pipeline0/GstXImageSink:ximagesink0
-        Execution ended after 4460586853 ns.
-        Setting pipeline to PAUSED ...
-        Setting pipeline to READY ...
-        Setting pipeline to NULL ...
-        Freeing pipeline ...
-    aha: the culprit is that I'm running the full driver which is defaulting to lower res
-        '''
-        if 0:
-            self.player.add(self.size_queue_focus, self.videocrop)
-            gst.element_link_many(self.size_tee, self.size_queue_focus, self.videocrop)
-        if 1:
-            self.player.add(self.size_queue_focus, self.videocrop, self.scale2, sinkx_focus)
-            gst.element_link_many(self.size_tee, self.size_queue_focus, self.videocrop, self.scale2, sinkx_focus)
+        # aha: the culprit is that I'm running the full driver which is defaulting to lower res
+        self.player.add(self.size_queue_focus, self.videocrop, self.scale2, sinkx_focus)
+        gst.element_link_many(self.size_tee, self.size_queue_focus, self.videocrop, self.scale2, sinkx_focus)
 
         # Frame grabber stream
         # compromise
@@ -760,21 +448,17 @@ class CNCGUI(QMainWindow):
             imagesink = message.src
             imagesink.set_xwindow_id(win_id)
     
-    def home(self):
-        dbg('home requested')
-        #self.cnc_ipc.home()
-        for axis in self.axes.values():
-            axis.home()
+    def ret0(self):
+        pos = dict([(k, 0.0) for k in self.axes])
+        self.cnc_thread.cmd('mv_abs', pos)
             
-    def go_rel(self):
-        dbg('Go rel all requested')
-        for axis in self.axes.values():
-            axis.go_rel()
-    
-    def go_abs(self):
-        dbg('Go abs all requested')
-        for axis in self.axes.values():
-            axis.go_abs()
+    def mv_rel(self):
+        pos = dict([(k, float(str(axis.rel_pos_le.text()))) for k, axis in self.axes.iteritems()])
+        self.cnc_thread.cmd('mv_rel', pos)
+        
+    def mv_abs(self):
+        pos = dict([(k, float(str(axis.abs_pos_le.text()))) for k, axis in self.axes.iteritems()])
+        self.cnc_thread.cmd('mv_abs', pos)
     
     def processCncProgress(self, pictures_to_take, pictures_taken, image, first):
         dbg('Processing CNC progress')
@@ -799,13 +483,13 @@ class CNCGUI(QMainWindow):
     def pause(self):
         if self.pause_pb.text() == 'Pause':
             self.pause_pb.setText('Run')
-            self.cnc_ipc.setRunning(False)
+            self.cnc_thread.setRunning(False)
             if self.pt:
                 self.pt.setRunning(False)
             self.log('Pause requested')
         else:
             self.pause_pb.setText('Pause')
-            self.cnc_ipc.setRunning(True)
+            self.cnc_thread.setRunning(True)
             if self.pt:
                 self.pt.setRunning(True)
             self.log('Resume requested')
@@ -814,16 +498,15 @@ class CNCGUI(QMainWindow):
         if not self.snapshot_pb.isEnabled():
             print "Wait for snapshot to complete before CNC'ing"
             return
-        emit_log = self.emit_log
         
         dry = self.dry()
         if dry:
             dbg('Dry run checked')
-        rconfig = RunConfig()
+        
         imager = None
         if not dry:
             self.log('Loading imager...')
-            itype = config['imager']['engine']
+            itype = self.uscope_config['imager']['engine']
             
             if itype == 'auto':
                 if os.path.exists('/dev/video0'):
@@ -833,79 +516,53 @@ class CNCGUI(QMainWindow):
             
             if itype == 'mock':
                 imager = MockImager()
-            elif itype == "VC":
-                if VCImager is None:
-                    raise Exception('Import failed')
-                imager = VCImager()
             elif itype == 'gstreamer' or itype == 'gstreamer-testsrc':
-                class GstImager(Imager):
-                    def __init__(self, gui):
-                        Imager.__init__(self)
-                        self.gui = gui
-                        self.image_ready = threading.Event()
-                        self.image_id = None
-                        
-                    def take_picture(self, file_name_out = None):
-                        emit_log('gstreamer imager: taking image to %s' % file_name_out)
-                        def emitSnapshotCaptured(image_id):
-                            emit_log('Image captured reported: %s' % image_id)
-                            self.image_id = image_id
-                            self.image_ready.set()
-
-                        self.image_id = None
-                        self.image_ready.clear()
-                        self.gui.capture_sink.request_image(emitSnapshotCaptured)
-                        emit_log('Waiting for next image...')
-                        self.image_ready.wait()
-                        emit_log('Got image %s' % self.image_id)
-                        image = self.gui.capture_sink.pop_image(self.image_id)
-                        factor = float(config['imager']['scalar'])
-                        # Use a reasonably high quality filter
-                        scaled = get_scaled(image, factor, Image.ANTIALIAS)
-                        if not self.gui.dry():
-                            scaled.save(file_name_out)
-
                 imager = GstImager(self)
             else:
                 raise Exception('Invalid imager type %s' % itype)
-        if not config:
-            raise Exception("missing uscope config")
-        if not self.obj_config:
-            raise Exception("missing obj config")
-        
-        rconfig.dry = dry
         
         def emitCncProgress(pictures_to_take, pictures_taken, image, first):
             #print 'Emitting CNC progress'
             if image is None:
                 image = ''
             self.cncProgress.emit(pictures_to_take, pictures_taken, image, first)
-        rconfig.progress_cb = emitCncProgress
         
-        rconfig.obj_config = self.obj_config            
-        # Will be offloaded to its own thread
-        # Operations must be blocking
-        # We enforce that nothing is running and disable all CNC GUI controls
-        rconfig.controller = self.cnc_raw
-        rconfig.imager = imager
-        
-        rconfig.job_name = str(self.job_name_le.text())
-        if len(rconfig.job_name) == 0:
-            rconfig.job_name = "out"
-        if not dry and os.path.exists(rconfig.job_name):
-            raise Exception("job name dir %s already exists" % rconfig.job_name)
+        out_dir = str(self.job_name_le.text())
+        if not dry and os.path.exists(out_dir):
+            raise Exception("job name dir %s already exists" % out_dir)
+
+        rconfig = {
+                'cnc_hal': self.cnc_thread.hal,
+                
+                # Will be offloaded to its own thread
+                # Operations must be blocking
+                # We enforce that nothing is running and disable all CNC GUI controls
+                'imager': imager,
+                
+                # Callback for progress
+                'progress_cb': emitCncProgress,
+                
+                'out_dir': out_dir,
+                
+                # Comprehensive config structure
+                'uscope': self.uscope_config,
+                # Which objective to use in above config
+                'obj': self.obj_configi,
+                
+                # Set to true if should try to mimimize hardware actions
+                'dry': dry,
+                'overwrite': False,
+                }
         
         # If user had started some movement before hitting run wait until its done
         dbg("Waiting for previous movement (if any) to cease")
-        self.cnc_ipc.wait_idle()
+        self.cnc_thread.wait_idle()
         
-        def start_hook(out_dir):
-            if not self.dry_cb.isChecked():
-                self.log_fd = open(os.path.join(out_dir, 'log.txt'), 'w')
-        self.pt = PlannerThread(self, rconfig, start_hook=start_hook)
+        self.pt = PlannerThread(self, rconfig)
         self.connect(self.pt, SIGNAL('log'), self.log)
         self.pt.plannerDone.connect(self.plannerDone)
         self.setControlsEnabled(False)
+        self.log_fd = open(os.path.join(out_dir, 'log.txt'), 'w')
         
         '''
         #eeeee not working as well as I hoped
@@ -927,8 +584,8 @@ class CNCGUI(QMainWindow):
     
     def setControlsEnabled(self, yes):
         self.go_pb.setEnabled(yes)
-        self.go_abs_pb.setEnabled(yes)
-        self.go_rel_pb.setEnabled(yes)
+        self.mv_abs_pb.setEnabled(yes)
+        self.mv_rel_pb.setEnabled(yes)
         self.snapshot_pb.setEnabled(yes)
     
     def plannerDone(self):
@@ -937,24 +594,21 @@ class CNCGUI(QMainWindow):
         self.log_fd = None
         self.pt = None
         self.setControlsEnabled(True)
-        if config['cnc']['startup_run_exit']:
+        if self.uscope_config['cnc']['startup_run_exit']:
             print 'Planner debug break on completion'
             os._exit(1)
     
     def stop(self):
         '''Stop operations after the next operation'''
-        for axis in self.cnc_ipc.axes:
-            axis.stop()
+        self.cnc_thread.stop()
         
     def estop(self):
         '''Stop operations immediately.  Position state may become corrupted'''
-        for axis in self.cnc_ipc.axes:
-            axis.estop()
+        self.cnc_thread.estop()
 
     def clear_estop(self):
         '''Stop operations immediately.  Position state may become corrupted'''
-        for axis in self.cnc_ipc.axes:
-            axis.unestop()
+        self.cnc_thread.unestop()
             
     def get_axes_layout(self):
         layout = QHBoxLayout()
@@ -970,13 +624,13 @@ class CNCGUI(QMainWindow):
                 self.home_pb.clicked.connect(self.home)
                 layout.addWidget(self.home_pb)
         
-                self.go_abs_pb = QPushButton("Go abs all")
-                self.go_abs_pb.clicked.connect(self.go_abs)
-                layout.addWidget(self.go_abs_pb)
+                self.mv_abs_pb = QPushButton("Go abs all")
+                self.mv_abs_pb.clicked.connect(self.mv_abs)
+                layout.addWidget(self.mv_abs_pb)
             
-                self.go_rel_pb = QPushButton("Go rel all")
-                self.go_rel_pb.clicked.connect(self.go_rel)
-                layout.addWidget(self.go_rel_pb)
+                self.mv_rel_pb = QPushButton("Go rel all")
+                self.mv_rel_pb.clicked.connect(self.mv_rel)
+                layout.addWidget(self.mv_rel_pb)
                 
                 return layout
                 
@@ -1004,13 +658,10 @@ class CNCGUI(QMainWindow):
         layout.addLayout(get_general_layout())
 
         self.axes = dict()
-        dbg('Axes: %u' % len(self.cnc_ipc.axes))
-        for axis in self.cnc_ipc.axes:
-            #if axis.name == 'Z':
-            #    continue
-            axisw = Axis(axis)
-            dbg('Creating axis GUI %s' % axis.name)
-            self.axes[axis.name] = axisw
+        dbg('Axes: %u' % len(self.cnc_thread.axes))
+        for axis in self.cnc_thread.hal.axes():
+            axisw = AxisWidget(axis)
+            self.axes[axis] = axisw
             layout.addWidget(axisw)
         
         gb.setLayout(layout)
@@ -1020,7 +671,7 @@ class CNCGUI(QMainWindow):
         gb = QGroupBox('Snapshot')
         layout = QGridLayout()
 
-        snapshot_dir = config['imager']['snapshot_dir']
+        snapshot_dir = self.uscope_config['imager']['snapshot_dir']
         if not os.path.isdir(snapshot_dir):
             self.log('Snapshot dir %s does not exist' % snapshot_dir)
             if os.path.exists(snapshot_dir):
@@ -1073,7 +724,7 @@ class CNCGUI(QMainWindow):
         while True:
             self.snapshot_serial += 1
             fn_base = '%s00%u' % (prefix, self.snapshot_serial)
-            fn_full = os.path.join(config['imager']['snapshot_dir'], fn_base)
+            fn_full = os.path.join(self.uscope_config['imager']['snapshot_dir'], fn_base)
             if os.path.exists(fn_full):
                 dbg('Snapshot %s already exists, skipping' % fn_full)
                 continue
@@ -1115,11 +766,11 @@ class CNCGUI(QMainWindow):
             elif '.jpg' not in txt:
                 self.log('WARNING: refusing to take bad image file name %s' % txt)
                 return
-            fn_full = os.path.join(config['imager']['snapshot_dir'], txt)
+            fn_full = os.path.join(self.uscope_config['imager']['snapshot_dir'], txt)
             if os.path.exists(fn_full):
                 self.log('WARNING: refusing to overwrite %s' % fn_full)
                 return
-            factor = float(config['imager']['scalar'])
+            factor = float(self.uscope_config['imager']['scalar'])
             # Use a reasonably high quality filter
             get_scaled(image, factor, Image.ANTIALIAS).save(fn_full)
         try_save()
@@ -1144,7 +795,7 @@ class CNCGUI(QMainWindow):
         layout.addWidget(self.pb, 1, 1)
         layout.addWidget(QLabel('Dry?'), 2, 0)
         self.dry_cb = QCheckBox()
-        self.dry_cb.setChecked(config['cnc']['dry'])
+        self.dry_cb.setChecked(self.uscope_config['cnc']['dry'])
         layout.addWidget(self.dry_cb, 2, 1)
 
         self.pause_pb = QPushButton("Pause")
@@ -1195,16 +846,13 @@ class CNCGUI(QMainWindow):
         if event.isAutoRepeat():
             return
             
-        #inc = 5
-        
         # Focus is sensitive...should step slower?
         # worry sonce focus gets re-integrated
         
-        neg_map = { Qt.Key_Left:    'X',
-                    Qt.Key_Up:      'Y',
-                    Qt.Key_PageDown:'Z', 
-                    }        
-        axis = neg_map.get(k, None)
+        axis = { Qt.Key_Left:   'x',
+                Qt.Key_Up:      'y',
+                Qt.Key_PageDown:'z', 
+                } .get(k, None)       
         if axis:
             dbg('Key %s+' % axis)
             axis = self.axes[axis]
@@ -1214,11 +862,10 @@ class CNCGUI(QMainWindow):
             axis.axis.forever_neg(axis.jog_done, lambda: axis.emit_pos())
             return
 
-        pos_map = { Qt.Key_Right:   'X',
-                    Qt.Key_Down:    'Y',
-                    Qt.Key_PageUp:  'Z', 
-                    }        
-        axis = pos_map.get(k, None)
+        axis = { Qt.Key_Right:  'x',
+                Qt.Key_Down:    'y',
+                Qt.Key_PageUp:  'z', 
+                }.get(k, None)       
         if axis:
             dbg('Key %s-' % axis)
             axis = self.axes[axis]
@@ -1232,39 +879,26 @@ class CNCGUI(QMainWindow):
             self.stop()
 
     def keyReleaseEvent(self, event):
+        # Don't move around with moving around text boxes, etc
         if not self.video_container.hasFocus():
             return
         k = event.key()
         # Ignore duplicates, want only real presses
         if event.isAutoRepeat():
             return
-        #inc = 5
-        if k == Qt.Key_Left:
-            dbg('left release')
-            self.axes['X'].jog_done.set()
-            self.axes['X'].jog_done = None
-            self.axes['X'].emit_pos()
-        elif k == Qt.Key_Right:
-            dbg('right release')
-            self.axes['X'].jog_done.set()
-            self.axes['X'].jog_done = None
-            self.axes['X'].emit_pos()
-        elif k == Qt.Key_Up:
-            self.axes['Y'].jog_done.set()
-            self.axes['Y'].jog_done = None
-            self.axes['Y'].emit_pos()
-        elif k == Qt.Key_Down:
-            self.axes['Y'].jog_done.set()
-            self.axes['Y'].jog_done = None
-            self.axes['Y'].emit_pos()
-        elif k == Qt.Key_PageDown:
-            self.axes['Z'].jog_done.set()
-            self.axes['Z'].jog_done = None
-            self.axes['Z'].emit_pos()
-        elif k == Qt.Key_PageUp:
-            self.axes['Z'].jog_done.set()
-            self.axes['Z'].jog_done = None
-            self.axes['Z'].emit_pos()
+        
+        axis = {
+                Qt.Key_Left:    'x',
+                Qt.Key_Right:   'x',
+                Qt.Key_Up:      'y',
+                Qt.Key_Down:    'y',
+                Qt.Key_PageDown: 'z',
+                Qt.Key_PageUp:  'z',
+                }.get(k, None)
+        if axis:
+            self.axes[axis].jog_done.set()
+            self.axes[axis].jog_done = None
+            self.axes[axis].emit_pos()
         
 def excepthook(excType, excValue, tracebackobj):
     print '%s: %s' % (excType, excValue)

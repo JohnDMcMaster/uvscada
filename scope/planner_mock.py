@@ -4,8 +4,7 @@ Planner test harness
 '''
 
 from uvscada import planner
-from uvscada.lcnc.client import LCNCRPC
-from uvscada.imager import MockImager
+from uvscada import planner_hal
 
 import argparse
 import json
@@ -16,9 +15,7 @@ if __name__ == "__main__":
     parser.add_argument('out', nargs='?', default='out', help='Output directory')
     args = parser.parse_args()
 
-    imager = MockImager()
-
-    hal = planner.MockHal(dry=True, imager=imager, log=None)
+    hal = planner_hal.MockHal(dry=True, log=None)
     # 20x objective
     p = planner.Planner(json.load(open(args.scan_json)), hal, img_sz=(544, 400), out_dir=args.out,
                 progress_cb=None,
