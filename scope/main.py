@@ -5,7 +5,7 @@ from uvscada.imager import Imager
 from uvscada.img_util import get_scaled
 from uvscada.benchmark import Benchmark
 from uvscada.imager import MockImager
-from uvscada import planner_hal
+from uvscada.cnc_hal import hal as cnc_hal
 from uvscada import gst_util
 
 from threads import CncThread, PlannerThread
@@ -50,20 +50,20 @@ def dbg(*args):
 def get_cnc_hal(log):
     engine = uscope_config['cnc']['engine']
     if engine == 'mock':
-        return planner_hal.MockHal(log=log)
+        return cnc_hal.MockHal(log=log)
     elif engine == 'lcnc-py':
         import linuxcnc
         
-        return planner_hal.LcncPyHal(linuxcnc=linuxcnc, log=log)
+        return cnc_hal.LcncPyHal(linuxcnc=linuxcnc, log=log)
     elif engine == 'lcnc-rpc':
         from uvscada.lcnc.client import SshLCNCRPC
         
         try:
-            return planner_hal.LcncPyHal(linuxcnc=SshLCNCRPC(host='mk-xray'), log=log)
+            return cnc_hal.LcncPyHal(linuxcnc=SshLCNCRPC(host='mk-xray'), log=log)
         except socket.error:
             raise Exception("Failed to connect to LCNCRPC")
     elif engine == 'lcnc-rsh':
-        return planner_hal.LcncRshHal(log=log)
+        return cnc_hal.LcncRshHal(log=log)
     else:
         raise Exception("Unknown CNC engine %s" % engine)
 
@@ -72,7 +72,7 @@ def get_cnc_hal(log):
     elif engine == 'pdc':
         try:
             #return PDC(debug=False, log=log, config=config)
-            return planner_hal.PdcHal(log=log)
+            return cnc_hal.PdcHal(log=log)
         except IOError:
             print 'Failed to open PD device'
             raise
@@ -82,7 +82,7 @@ def get_cnc_hal(log):
     elif engine == 'auto':
         raise Exception('FIXME')
         log('Failed to open device, falling back to mock')
-        return planner_hal.MockHal(log=log)
+        return cnc_hal.MockHal(log=log)
     '''
 
 class AxisWidget(QWidget):

@@ -1,5 +1,5 @@
 import time
-from imager import Imager
+from uvscada.imager import Imager
 
 def format_t(dt):
     s = dt % 60
