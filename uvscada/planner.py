@@ -543,4 +543,3 @@ class Planner(object):
         self.hal.mv_abs(blsh_mv)
         
         self.hal.mv_abs(move_to)
-

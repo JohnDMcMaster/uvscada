@@ -36,7 +36,7 @@ except ImportError:
         print 'Failed to import a gstreamer package when gstreamer is required'
         raise
 
-debug = False
+debug = 1
 def dbg(*args):
     if not debug:
         return
@@ -92,7 +92,7 @@ class AxisWidget(QWidget):
         self.axis = axis
         self.cnc_thread = cnc_thread
         
-        self.gb = QGroupBox('Axis %s' % self.axis)
+        self.gb = QGroupBox('Axis %s' % self.axis.upper())
         self.gl = QGridLayout()
         self.gb.setLayout(self.gl)
         row = 0
@@ -236,6 +236,8 @@ class CNCGUI(QMainWindow):
             dbg("Starting gstreamer pipeline")
             self.player.set_state(gst.STATE_PLAYING)
         
+        self.home()
+        
         if self.uscope_config['cnc']['startup_run']:
             self.run()
         
@@ -265,7 +267,7 @@ class CNCGUI(QMainWindow):
         self.emit(SIGNAL('pos'), pos)
         
     def cmd_done(self, cmd, args, ret):
-        def default():
+        def default(*args):
             pass
         
         def emit_pos(pos):
@@ -274,7 +276,8 @@ class CNCGUI(QMainWindow):
         {
             'mv_abs': emit_pos,
             'mv_rel': emit_pos,
-        }.get(cmd, default)(*args)
+            'home': emit_pos,
+        }.get(cmd, default)(ret)
     
     def reload_obj_cb(self):
         '''Re-populate the objective combo box'''
@@ -633,9 +636,9 @@ class CNCGUI(QMainWindow):
             def get_go():
                 layout = QHBoxLayout()
                 
-                self.home_pb = QPushButton("Home all")
-                self.home_pb.clicked.connect(self.home)
-                layout.addWidget(self.home_pb)
+                self.ret0_pb = QPushButton("Home all")
+                self.ret0_pb.clicked.connect(self.ret0)
+                layout.addWidget(self.ret0_pb)
         
                 self.mv_abs_pb = QPushButton("Go abs all")
                 self.mv_abs_pb.clicked.connect(self.mv_abs)
@@ -695,11 +698,15 @@ class CNCGUI(QMainWindow):
         # nah...just have it in the config
         # d = QFileDialog.getExistingDirectory(self, 'Select snapshot directory', snapshot_dir)
 
-        layout.addWidget(QLabel('File name'), 0, 0)
         self.snapshot_serial = -1
+        layout.addWidget(QLabel('File name'), 0, 0)
         self.snapshot_fn_le = QLineEdit('')
-        layout.addWidget(self.snapshot_fn_le, 0, 1)
-
+        self.snapshot_suffix_le = QLineEdit('.jpg')
+        hl = QHBoxLayout()
+        hl.addWidget(self.snapshot_fn_le)
+        hl.addWidget(self.snapshot_suffix_le)
+        layout.addLayout(hl, 0, 1)
+        
         layout.addWidget(QLabel('Auto-number?'), 1, 0)
         self.auto_number_cb = QCheckBox()
         self.auto_number_cb.setChecked(True)
@@ -715,29 +722,33 @@ class CNCGUI(QMainWindow):
         layout.addWidget(self.snapshot_pb, 2, 0)
         
         gb.setLayout(layout)
+        print 'snap serial'
         self.snapshot_next_serial()
         return gb
     
     def snapshot_next_serial(self):
         if not self.auto_number_cb.isChecked():
-                return
+            print 'snap serial not checked'
+            return
         prefix = self.snapshot_fn_le.text().split('.')[0]
         if prefix == '':
+            print 'no base'
             self.snapshot_serial = 0
             prefix = 'snapshot_'
         else:
             dbg('Image prefix: %s' % prefix)
             m = re.search('([a-zA-z0-9_\-]*_)([0-9]+)', prefix)
             if m:
-                dbg('Group 1: ' + m.group(1))
-                dbg('Group 2: ' + m.group(2))
+                dbg('snapshot Group 1: ' + m.group(1))
+                dbg('snapshot Group 2: ' + m.group(2))
                 prefix = m.group(1)
                 self.snapshot_serial = int(m.group(2))
 
         while True:
             self.snapshot_serial += 1
-            fn_base = '%s00%u' % (prefix, self.snapshot_serial)
-            fn_full = os.path.join(self.uscope_config['imager']['snapshot_dir'], fn_base)
+            fn_base = '%s%03u' % (prefix, self.snapshot_serial)
+            fn_full = os.path.join(self.uscope_config['imager']['snapshot_dir'], fn_base + str(self.snapshot_suffix_le.text()))
+            print 'check %s' % fn_full
             if os.path.exists(fn_full):
                 dbg('Snapshot %s already exists, skipping' % fn_full)
                 continue
@@ -773,19 +784,19 @@ class CNCGUI(QMainWindow):
         self.log('RX image for saving')
         def try_save():
             image = self.capture_sink.pop_image(image_id)
-            txt = str(self.snapshot_fn_le.text())
-            if '.' not in txt:
-                txt = txt + '.jpg'
-            elif '.jpg' not in txt:
-                self.log('WARNING: refusing to take bad image file name %s' % txt)
-                return
+            txt = str(self.snapshot_fn_le.text()) + str(self.snapshot_suffix_le.text())
+            
             fn_full = os.path.join(self.uscope_config['imager']['snapshot_dir'], txt)
             if os.path.exists(fn_full):
                 self.log('WARNING: refusing to overwrite %s' % fn_full)
                 return
             factor = float(self.uscope_config['imager']['scalar'])
             # Use a reasonably high quality filter
-            get_scaled(image, factor, Image.ANTIALIAS).save(fn_full)
+            try:
+                get_scaled(image, factor, Image.ANTIALIAS).save(fn_full)
+            # FIXME: refine
+            except Exception:
+                self.log('WARNING: failed to save %s' % fn_full)
         try_save()
         
         # That image is done, get read for the next

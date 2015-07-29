@@ -135,6 +135,10 @@ class MockHal(Hal):
     def axes(self):
         return self._axes
         
+    def home(self, axes):
+        for axis in axes:
+            self._pos[axis] = 0.0
+        
     def take_picture(self, file_name):
         self._log('taking picture to %s' % file_name)
 
