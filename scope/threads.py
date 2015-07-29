@@ -98,13 +98,20 @@ class CncThread(QThread):
                 self.hal.home(axes)
                 return self.hal.pos()
             
+            def forever(*args):
+                self.hal.forever(*args)
+                return self.hal.pos()
+            
+            print 'cnc thread: dispatch %s' % cmd
+            # Maybe I should just always emit the pos
             ret = {
                 'mv_abs':   mv_abs,
                 'mv_rel':   mv_rel,
+                'forever':  forever,
+                'home':     home,
                 'stop':     self.hal.stop,
                 'estop':    self.hal.estop,
                 'unestop':  self.hal.unestop,
-                'home':     home,
             }.get(cmd, default)(*args)
             self.cmd_done(cmd, args, ret)
     

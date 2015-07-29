@@ -98,10 +98,12 @@ class Hal(object):
         '''Supplementary info to add to run log'''
         return {}
 
-    def forever_pos(self):
-        raise Exception("Not supported")
-
-    def forever_neg(self):
+    def forever(self, axes, run, progress):
+        '''
+        axes: dict of axis to sign (1 or -1)
+        run: threading.event.  Continue moving as long as set
+        progress: gets position ocassionally to provide updates during move
+        '''
         raise Exception("Not supported")
 
     def settle(self):
@@ -158,6 +160,18 @@ class MockHal(Hal):
     def settle(self):
         # No hardware to let settle
         pass
+
+    #[axis], sign, self.jog_done, lambda: axis.emit_pos())
+    def forever(self, axes, run, progress):
+        while run.is_set():
+            # Axes may be updated
+            # Copy it so that don't crash if its updated during an iteration
+            for axis, sign in dict(axes).iteritems():
+                self._pos[axis] += sign * 1
+                # most of the time is just one axis
+                # quicker gui updates by only updating it
+                progress({axis: self._pos[axis]})
+            time.sleep(0.1)
 
 '''
 Legacy uvscada.mc adapter

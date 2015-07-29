@@ -191,6 +191,9 @@ class CNCGUI(QMainWindow):
         QMainWindow.__init__(self)
         self.showMaximized()
         self.uscope_config = uscope_config
+
+        self.jog_run = None
+        self.jog_running = {}
         
         # must be created early to accept early logging
         # not displayed until later though
@@ -266,17 +269,17 @@ class CNCGUI(QMainWindow):
     def hal_progress(self, pos):
         self.emit(SIGNAL('pos'), pos)
         
+    def emit_pos(self, pos):
+        self.emit(SIGNAL('pos'), pos)
+    
     def cmd_done(self, cmd, args, ret):
         def default(*args):
             pass
         
-        def emit_pos(pos):
-            self.emit(SIGNAL('pos'), pos)
-        
         {
-            'mv_abs': emit_pos,
-            'mv_rel': emit_pos,
-            'home': emit_pos,
+            'mv_abs': self.emit_pos,
+            'mv_rel': self.emit_pos,
+            'home': self.emit_pos,
         }.get(cmd, default)(ret)
     
     def reload_obj_cb(self):
@@ -617,6 +620,9 @@ class CNCGUI(QMainWindow):
     def stop(self):
         '''Stop operations after the next operation'''
         self.cnc_thread.stop()
+        # just in case
+        if self.jog_run:
+            self.jog_run.clear()
         
     def estop(self):
         '''Stop operations immediately.  Position state may become corrupted'''
@@ -873,30 +879,32 @@ class CNCGUI(QMainWindow):
         # Focus is sensitive...should step slower?
         # worry sonce focus gets re-integrated
         
-        axis = { Qt.Key_Left:   'x',
-                Qt.Key_Up:      'y',
-                Qt.Key_PageDown:'z', 
+        axis = {
+                # Upper left origin
+                Qt.Key_Left:    ('x', -1),
+                Qt.Key_Right:   ('x', 1),
+                Qt.Key_Up:      ('y', -1),
+                Qt.Key_Down:    ('y', 1),
+                Qt.Key_PageUp:  ('z', 1),
+                Qt.Key_PageDown:('z', -1),
                 } .get(k, None)       
         if axis:
-            dbg('Key %s+' % axis)
-            axis = self.axes[axis]
-            if axis.jog_done:
-                return
-            axis.jog_done = threading.Event()
-            axis.axis.forever_neg(axis.jog_done, lambda: axis.emit_pos())
-            return
+            axis, sign = axis
+            dbg('Key jogging %s%c' % (axis, {1: '+', -1: '-'}[sign]))
 
-        axis = { Qt.Key_Right:  'x',
-                Qt.Key_Down:    'y',
-                Qt.Key_PageUp:  'z', 
-                }.get(k, None)       
-        if axis:
-            dbg('Key %s-' % axis)
-            axis = self.axes[axis]
-            if axis.jog_done:
-                return
-            axis.jog_done = threading.Event()
-            axis.axis.forever_pos(axis.jog_done, lambda: axis.emit_pos())
+            # Cancel running jog (if any)
+            if self.jog_run:
+                self.jog_run.clear()
+                self.jog_run = None
+            # Add the new axis to jog
+            self.jog_running[axis] = sign
+            # Get jog running with new axis
+            self.jog_run = threading.Event()
+            self.jog_run.set()
+            # Note: jog_running may be updated with additional axes
+            # Thread must be careful not to iterate over it directly
+            # and should be aware that it may change
+            self.cnc_thread.cmd('forever', self.jog_running, self.jog_run, lambda pos: self.emit_pos(pos))
             return
             
         if k == Qt.Key_Escape:
@@ -920,9 +928,15 @@ class CNCGUI(QMainWindow):
                 Qt.Key_PageUp:  'z',
                 }.get(k, None)
         if axis:
-            self.axes[axis].jog_done.set()
-            self.axes[axis].jog_done = None
-            self.axes[axis].emit_pos()
+            # No longer jogging this axis
+            # Note: if the user pressed both directions could already be cleared
+            # (bad user: stop mashing the keyboard!)
+            if axis in self.jog_running:
+                del self.jog_running[axis]
+                if len(self.jog_running) == 0:
+                    # Cancel running jog
+                    self.jog_run.clear()
+                    self.jog_run = None
         
 def excepthook(excType, excValue, tracebackobj):
     print '%s: %s' % (excType, excValue)
