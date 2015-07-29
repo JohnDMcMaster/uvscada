@@ -132,6 +132,9 @@ class MockHal(Hal):
         else:
             self.log('Mock: ' + msg)
 
+    def axes(self):
+        return self._axes
+        
     def take_picture(self, file_name):
         self._log('taking picture to %s' % file_name)
 

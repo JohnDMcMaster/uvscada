@@ -24,7 +24,8 @@ class LCNCRPCCommand:
         return self.server.wait_complete(*args, **kwargs)
 
 class LCNCRPC:
-    def __init__(self, host, port):
+    # X-58 Y-59 => 22617
+    def __init__(self, host='localhost', port=22617):
         self.server = xmlrpclib.ServerProxy('http://%s:%d' % (host, port), allow_none=True)
         for k, v in self.server.constants().iteritems():
             setattr(self, k, v)
@@ -35,11 +36,15 @@ class LCNCRPC:
     def command(self):
         return LCNCRPCCommand(self.server)
 
+'''
+Remotely spawns the server and creates ssh tunnels
+'''
+class SshLCNCRPC(LCNCRPC):
+    def __init__(self, host):
+        raise Exception("FIXME")
+
 if __name__ == '__main__':
-    host = 'localhost'
-    # X-58 Y-59 => 22617
-    port = 22617
-    lcncrpc = LCNCRPC(host, port)
+    lcncrpc = LCNCRPC()
     
     s = lcncrpc.stat()
     c = lcncrpc.command()
@@ -54,3 +59,5 @@ if __name__ == '__main__':
         c.mdi("G0 X5")
         time.sleep(1)
         c.mdi("G0 X0")
+
+    

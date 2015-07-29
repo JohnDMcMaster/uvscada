@@ -17,6 +17,7 @@ from PyQt4.QtCore import *
 import os.path
 import re
 import signal
+import socket
 import sys
 import traceback
 import threading
@@ -47,7 +48,7 @@ def dbg(*args):
         print 'main: ' + (args[0] % args[1:])
 
 def get_cnc_hal(log):
-    engine = config['cnc']['engine']
+    engine = uscope_config['cnc']['engine']
     if engine == 'mock':
         return planner_hal.MockHal(log=log)
     elif engine == 'lcnc-py':
@@ -55,9 +56,12 @@ def get_cnc_hal(log):
         
         return planner_hal.LcncPyHal(linuxcnc=linuxcnc, log=log)
     elif engine == 'lcnc-rpc':
-        from uvscada.lcnc.client import LCNCRPC
+        from uvscada.lcnc.client import SshLCNCRPC
         
-        return planner_hal.LcncPyHal(linuxcnc=LCNCRPC(host='localhost'), log=log)
+        try:
+            return planner_hal.LcncPyHal(linuxcnc=SshLCNCRPC(host='mk-xray'), log=log)
+        except socket.error:
+            raise Exception("Failed to connect to LCNCRPC")
     elif engine == 'lcnc-rsh':
         return planner_hal.LcncRshHal(log=log)
     else:
@@ -82,10 +86,13 @@ def get_cnc_hal(log):
     '''
 
 class AxisWidget(QWidget):
-    def __init__(self, axis, parent = None):
+    def __init__(self, axis, cnc_thread, parent = None):
         QWidget.__init__(self, parent)
         
-        self.gb = QGroupBox('Axis %s' % self.axis.name)
+        self.axis = axis
+        self.cnc_thread = cnc_thread
+        
+        self.gb = QGroupBox('Axis %s' % self.axis)
         self.gl = QGridLayout()
         self.gb.setLayout(self.gl)
         row = 0
@@ -96,13 +103,13 @@ class AxisWidget(QWidget):
         row += 1
         
         # Return to 0 position
-        self.home_pb = QPushButton("Home axis")
-        self.home_pb.clicked.connect(self.home)
-        self.gl.addWidget(self.home_pb, row, 0)
+        self.ret0_pb = QPushButton("Ret0")
+        self.ret0_pb.clicked.connect(self.ret0)
+        self.gl.addWidget(self.ret0_pb, row, 0)
         # Set the 0 position
-        self.set_home_pb = QPushButton("Set home")
-        self.set_home_pb.clicked.connect(self.set_home)
-        self.gl.addWidget(self.set_home_pb, row, 1)
+        self.home_pb = QPushButton("Home")
+        self.home_pb.clicked.connect(self.home)
+        self.gl.addWidget(self.home_pb, row, 1)
         row += 1
         
         self.abs_pos_le = QLineEdit('0.0')
@@ -119,6 +126,7 @@ class AxisWidget(QWidget):
         self.gl.addWidget(self.mv_rel_pb, row, 1)
         row += 1
 
+        '''
         self.meas_label = QLabel("Meas (um)")
         self.gl.addWidget(self.meas_label, row, 0)
         self.meas_value = QLabel("Unknown")
@@ -130,10 +138,23 @@ class AxisWidget(QWidget):
         self.axisSet.connect(self.update_meas)
         self.gl.addWidget(self.meas_reset_pb, row, 0)
         row += 1
+        '''
         
         self.l = QHBoxLayout()
         self.l.addWidget(self.gb)
         self.setLayout(self.l)
+    
+    def home(self):
+        self.cnc_thread.cmd('home', [self.axis])
+
+    def ret0(self):
+        self.cnc_thread.cmd('mv_abs', {self.axis: 0.0})
+
+    def mv_rel(self):
+        self.cnc_thread.cmd('mv_rel', {self.axis: float(str(self.rel_pos_le.text()))})
+        
+    def mv_abs(self):
+        self.cnc_thread.cmd('mv_abs', {self.axis: float(str(self.abs_pos_le.text()))})
 
 class GstImager(Imager):
     def __init__(self, gui):
@@ -268,9 +289,14 @@ class CNCGUI(QMainWindow):
         self.obj_configi = self.obj_cb.currentIndex()
         self.obj_config = self.uscope_config['objective'][self.obj_configi]
         self.log('Selected objective %s' % self.obj_config['name'])
-        self.obj_mag.setText('Magnification: %0.2f' % self.obj_config["mag"])
-        self.obj_x_view.setText('X view (um): %0.3f' % self.obj_config["x_view"])
-        self.obj_y_view.setText('Y view (um): %0.3f' % self.obj_config["y_view"])
+        #self.obj_mag.setText('Magnification: %0.2f' % self.obj_config["mag"])
+
+        im_w_pix = int(self.uscope_config['imager']['width'])
+        im_h_pix = int(self.uscope_config['imager']['height'])
+        im_w_um = self.obj_config["x_view"]
+        im_h_um = im_w_um * im_h_pix / im_w_pix
+        self.obj_x_view.setText('X view (um): %0.3f' % im_w_um)
+        self.obj_y_view.setText('Y view (um): %0.3f' % im_h_um)
     
     def get_config_layout(self):
         cl = QGridLayout()
@@ -451,7 +477,10 @@ class CNCGUI(QMainWindow):
     def ret0(self):
         pos = dict([(k, 0.0) for k in self.axes])
         self.cnc_thread.cmd('mv_abs', pos)
-            
+    
+    def home(self):
+        self.cnc_thread.cmd('home', [k for k in self.axes])
+    
     def mv_rel(self):
         pos = dict([(k, float(str(axis.rel_pos_le.text()))) for k, axis in self.axes.iteritems()])
         self.cnc_thread.cmd('mv_rel', pos)
@@ -564,22 +593,6 @@ class CNCGUI(QMainWindow):
         self.setControlsEnabled(False)
         self.log_fd = open(os.path.join(out_dir, 'log.txt'), 'w')
         
-        '''
-        #eeeee not working as well as I hoped
-        # tracked it down to python video capture library operating on windows GUI frame buffer
-        # now that switching over to Linux should be fine to be multithreaded
-        # If need to use the old layer again should use signals to block GUI for minimum time
-        if config['multithreaded']:
-            dbg("Running multithreaded")
-            self.pt.start()
-        else:
-            dbg("Running single threaded")
-            def start_hook(out_dir):
-                if not self.dry_cb.isChecked():
-                    self.log_fd = open(os.path.join(out_dir, 'log.txt'), 'w')
-            self.pt.run(start_hook=start_hook)
-        '''
-        dbg("Running multithreaded")
         self.pt.start()
     
     def setControlsEnabled(self, yes):
@@ -658,9 +671,9 @@ class CNCGUI(QMainWindow):
         layout.addLayout(get_general_layout())
 
         self.axes = dict()
-        dbg('Axes: %u' % len(self.cnc_thread.axes))
+        dbg('Axes: %u' % len(self.cnc_thread.hal.axes()))
         for axis in self.cnc_thread.hal.axes():
-            axisw = AxisWidget(axis)
+            axisw = AxisWidget(axis, self.cnc_thread)
             self.axes[axis] = axisw
             layout.addWidget(axisw)
         
