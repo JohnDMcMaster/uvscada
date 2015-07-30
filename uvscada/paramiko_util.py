@@ -1,21 +1,25 @@
+# Not very enthusiastic about this bit of code but it does seem to work
+# Why isn't this functionality part of the paramiko library?
+# maybe should look at paramiko harder
+
 try:
     import SocketServer
 except ImportError:
     import socketserver as SocketServer
-import paramiko
 import select
-
-g_verbose = True
-
-def verbose(s):
-    if g_verbose:
-        print(s)
 
 class ForwardServer (SocketServer.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
 
 class Handler (SocketServer.BaseRequestHandler):
+    def __init__(self, *args, **kwargs):
+        self.verbose = False
+        SocketServer.BaseRequestHandler.__init__(self, *args, **kwargs)
+    
+    def _verbose(self, s):
+        if self.verbose:
+            print(s)
 
     def handle(self):
         try:
@@ -23,16 +27,16 @@ class Handler (SocketServer.BaseRequestHandler):
                                                    (self.chain_host, self.chain_port),
                                                    self.request.getpeername())
         except Exception as e:
-            verbose('Incoming request to %s:%d failed: %s' % (self.chain_host,
+            self._verbose('Incoming request to %s:%d failed: %s' % (self.chain_host,
                                                               self.chain_port,
                                                               repr(e)))
             return
         if chan is None:
-            verbose('Incoming request to %s:%d was rejected by the SSH server.' %
+            self._verbose('Incoming request to %s:%d was rejected by the SSH server.' %
                     (self.chain_host, self.chain_port))
             return
 
-        verbose('Connected!  Tunnel open %r -> %r -> %r' % (self.request.getpeername(),
+        self._verbose('Connected!  Tunnel open %r -> %r -> %r' % (self.request.getpeername(),
                                                             chan.getpeername(), (self.chain_host, self.chain_port)))
         while True:
             r, w, x = select.select([self.request, chan], [], [])
@@ -50,7 +54,7 @@ class Handler (SocketServer.BaseRequestHandler):
         peername = self.request.getpeername()
         chan.close()
         self.request.close()
-        verbose('Tunnel closed from %r' % (peername,))
+        self._verbose('Tunnel closed from %r' % (peername,))
 
 def forward_tunnel(local_port, remote_host, remote_port, transport):
     # this is a little convoluted, but lets me configure things for the Handler
@@ -60,5 +64,5 @@ def forward_tunnel(local_port, remote_host, remote_port, transport):
         chain_host = remote_host
         chain_port = remote_port
         ssh_transport = transport
-    ForwardServer(('', local_port), SubHander).serve_forever()
-
+    #ForwardServer(('', local_port), SubHander).serve_forever()
+    return ForwardServer(('', local_port), SubHander)
