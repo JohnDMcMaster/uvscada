@@ -19,15 +19,27 @@ class Server(object):
     def poll(self):
         self.s.poll()
         ret = {}
-        for attr in ['estop', 'enabled', 'homed', 'interp_state']:
-            ret[attr] = getattr(self.s, attr)
+        #for attr in ['axis', 'axes', 'estop', 'enabled', 'homed', 'interp_state']:
+        #    ret[attr] = getattr(self.s, attr)
+        for k, v in self.s.__dict__.iteritems():
+            if k.startswith('_'):
+                continue
+            if not type(v) in [int, str]:
+                continue
+            ret[k] = v
+        # dict
+        ret['axis'] = self.s.axis
         return ret
 
     def constants(self):
-        return {
-            'MODE_MDI': linuxcnc.MODE_MDI,
-            'INTERP_IDLE': linuxcnc.INTERP_IDLE,
-            }
+        ret = {}
+        for k, v in linuxcnc.__dict__.iteritems():
+            if k.startswith('_'):
+                continue
+            if not type(v) in [int, str]:
+                continue
+            ret[k] = v
+        return ret
 
     def run(self):
         print 'Starting server'
