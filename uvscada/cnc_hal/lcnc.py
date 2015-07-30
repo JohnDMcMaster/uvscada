@@ -39,6 +39,29 @@ class LcncPyHal(LcncHal):
         self.linuxcnc = linuxcnc
         self.stat = self.linuxcnc.stat()
         self.command = self.linuxcnc.command()
+
+        self.command.state(self.linuxcnc.STATE_ON)
+        self._home()
+        self.command.mode(self.linuxcnc.MODE_MDI)
+    
+    def _home(self):
+        # prevent "can't do that (EMC_AXIS_HOME:123) in MDI mode"
+        self.command.mode(self.linuxcnc.MODE_MANUAL)
+        for axisi in xrange(self.stat.axes):
+            print 'Home: check axis %d' % axisi
+            axis = self.stat.axis[axisi]
+            if axis['homed']:
+                print '  Already homed'
+                continue
+            # prevent "homing already in progress"
+            if not axis['homing']:
+                tstart = time.time()
+                self.command.home(axisi)
+            print '  Waiting for home...'
+            while axis['homing']:
+                self.stat.poll()
+                time.sleep(0.1)
+            print '  homed after %0.1f' % (time.time() - tstart,)
     
     def ok_for_mdi(self):
         self.stat.poll()
