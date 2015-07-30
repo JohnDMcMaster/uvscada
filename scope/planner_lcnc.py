@@ -4,9 +4,8 @@ Planner test harness
 '''
 
 from uvscada import planner
-from uvscada import planner_hal
+from uvscada.cnc_hal import lcnc
 from uvscada.lcnc.client import LCNCRPC
-from uvscada.imager import MockImager
 
 import argparse        
 
@@ -24,9 +23,7 @@ if __name__ == "__main__":
     else:
         import linuxcnc
     
-    imager = MockImager()
-
-    hal = planner_hal.LcncPyHal(dry=True, log=None, imager=imager, linuxcnc=linuxcnc)
+    hal = lcnc.LcncPyHal(dry=True, log=None, linuxcnc=linuxcnc)
     # 20x objective
     p = planner.Planner(args.scan_json, hal, img_sz=(544, 400), out_dir=args.out,
                 progress_cb=None,

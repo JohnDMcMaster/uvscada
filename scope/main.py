@@ -36,7 +36,7 @@ except ImportError:
         print 'Failed to import a gstreamer package when gstreamer is required'
         raise
 
-debug = 1
+debug = 0
 def dbg(*args):
     if not debug:
         return

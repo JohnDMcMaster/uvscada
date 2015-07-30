@@ -1,6 +1,7 @@
 import xmlrpclib
-from xmlrpclib import Binary
 import time
+
+PORT=22617
 
 class LCNCRPCStat:
     def __init__(self, server):
@@ -25,7 +26,7 @@ class LCNCRPCCommand:
 
 class LCNCRPC:
     # X-58 Y-59 => 22617
-    def __init__(self, host='localhost', port=22617):
+    def __init__(self, host='localhost', port=PORT):
         self.server = xmlrpclib.ServerProxy('http://%s:%d' % (host, port), allow_none=True)
         for k, v in self.server.constants().iteritems():
             setattr(self, k, v)

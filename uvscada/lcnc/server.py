@@ -1,5 +1,9 @@
+'''
+WARNING: this file is deployed standalone to remote systems
+Do not add uvscada dependencies
+'''
+
 from SimpleXMLRPCServer import SimpleXMLRPCServer
-from xmlrpclib import Binary
 import linuxcnc
 
 class Server(object):
@@ -37,5 +41,6 @@ class Server(object):
         print 'Running'
         self.server.serve_forever()
 
-s = Server()
-s.run()
+if __name__ == '__main__':
+    s = Server()
+    s.run()
