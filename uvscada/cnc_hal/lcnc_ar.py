@@ -15,6 +15,7 @@ import time
 import subprocess
 
 DEVNULL = open(os.devnull, 'wb')
+RSH_PORT = 5007
 
 class LcncPyHalAr(LcncPyHal):
     def __init__(self, *args, **kwargs):
@@ -52,7 +53,7 @@ class LcncPyHalAr(LcncPyHal):
             src = os.path.join(os.path.dirname(__file__), '..', 'lcnc', 'server.py')
             sftp.put(src, dst)
         
-        if 0:
+        if not self.remote_port_up(RSH_PORT):
             print 'Launching linuxcnc'
             ini = '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS/CRAMPS-linuxcncrsh.ini'
             transport = self.ssh.get_transport()
@@ -67,9 +68,9 @@ class LcncPyHalAr(LcncPyHal):
             # Although unused is a good indicator
             # note: if you are using axis gui this will freeze
             # need to poke around and see how we can do better
-            self.wait_remote_port(5007)
+            self.wait_remote_port(RSH_PORT)
         
-        if 0:
+        if not self.remote_port_up(PORT):
             print 'Launching remote agent'
             transport = self.ssh.get_transport()
             channel = transport.open_session()
@@ -81,35 +82,37 @@ class LcncPyHalAr(LcncPyHal):
             self.thread_server.start()
             self.wait_remote_port(PORT)
         
-        if 1:
+        if not self.local_port_up(PORT):
             print 'Creating SSH tunnel'
             self.thread_tunnel = threading.Thread(target=self.run_tunnel)
             self.thread_tunnel.start()
-            time.sleep(1)
         self.wait_local_port(PORT)
         
         linuxcnc = LCNCRPC('localhost')
         LcncPyHal.__init__(self, linuxcnc=linuxcnc, log=log, dry=dry)
     
+    def local_port_up(self, port):
+        rc = subprocess.call('exec 6<>/dev/tcp/127.0.0.1/%s' % port, shell=True, stdout=DEVNULL, stderr=DEVNULL, executable='/bin/bash')
+        return rc == 0
+    
     def wait_local_port(self, port):
         print 'Checking local port %d' % port
-        while True:
-            rc = subprocess.call('exec 6<>/dev/tcp/127.0.0.1/%s' % port, shell=True, stdout=DEVNULL, stderr=DEVNULL, executable='/bin/bash')
-            if rc == 0:
-                print 'port is open'
-                break
+        while not self.local_port_up(port):
+            time.sleep(0.1)
+        print 'port open'
+    
+    def remote_port_up(self, port):
+        channel = self.ssh.transport().open_session()
+        # exec 6<>/dev/tcp/127.0.0.1/22617
+        channel.exec_command('exec 6<>/dev/tcp/127.0.0.1/%s' % port)
+        rc = channel.recv_exit_status()
+        return rc == 0
     
     def wait_remote_port(self, port):
         print 'Checking remote port %d' % port
-        while True:
-            channel = self.ssh.transport().open_session()
-            # exec 6<>/dev/tcp/127.0.0.1/22617
-            channel.exec_command('exec 6<>/dev/tcp/127.0.0.1/%s' % port)
-            rc = channel.recv_exit_status()
-            print rc
-            if rc == 0:
-                print 'port is open'
-                break
+        while not self.remote_port_up(port):
+            time.sleep(0.1)
+        print 'port is open'
     
     def __del__(self):
         self.ar_stop()
