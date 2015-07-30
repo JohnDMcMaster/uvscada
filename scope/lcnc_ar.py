@@ -20,6 +20,7 @@ if __name__ == "__main__":
         time.sleep(1)
         print 'getting ready to hal'
         hal.do_cmd('G90 G0 X1')
+        print 'Movement done'
         #hal.mv_rel({'x': )
     finally:
         print 'Shutting down hal'

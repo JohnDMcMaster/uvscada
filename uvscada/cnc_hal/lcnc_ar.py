@@ -40,8 +40,8 @@ class LcncPyHalAr(LcncPyHal):
         remote_tmp = '/tmp/lcnc_ar'
         dst = os.path.join(remote_tmp, 'server.py')
         
-        if 0:
-            print 'Copying remote agent'
+        if 1:
+            print 'Remote agent: updating'
             sftp = self.ssh.open_sftp()
             #sftp.rmdir(remote_tmp)
             # TODO: will probably throw exception if it exists
@@ -53,37 +53,45 @@ class LcncPyHalAr(LcncPyHal):
             src = os.path.join(os.path.dirname(__file__), '..', 'lcnc', 'server.py')
             sftp.put(src, dst)
         
-        if not self.remote_port_up(RSH_PORT):
-            print 'Launching linuxcnc'
+        if self.remote_port_up(RSH_PORT):
+            print 'linuxcnc: already running'
+        else:
+            print 'linuxcnc: launching'
             ini = '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS/CRAMPS-linuxcncrsh.ini'
             transport = self.ssh.get_transport()
-            channel = transport.open_session()
+            self.linuxcnc_channel = transport.open_session()
             # http://stackoverflow.com/questions/7734679/paramiko-and-exec-command-killing-remote-process
             # Makes sure process dies when we close connection
-            channel.get_pty()
-            self.stdin, self.stdout, self.stderr = channel.exec_command('linuxcnc %s' % ini) 
+            self.linuxcnc_channel.get_pty()
+            #self.linuxcnc_stdin, self.linuxcnc_stdout, self.linuxcnc_stderr = self.ssh.exec_command('linuxcnc %s' % ini) 
+            self.linuxcnc_channel.exec_command('linuxcnc %s' % ini) 
             self.thread_linuxcnc = threading.Thread(target=self.run_linuxcnc)
             self.thread_linuxcnc.start()
-            time.sleep(5)
+            #time.sleep(5)
             # Although unused is a good indicator
             # note: if you are using axis gui this will freeze
             # need to poke around and see how we can do better
             self.wait_remote_port(RSH_PORT)
         
-        if not self.remote_port_up(PORT):
-            print 'Launching remote agent'
+        if self.remote_port_up(PORT):
+            print 'Remote agent: appears to be already running'
+        else:
+            print 'Remote agent: launching '
             transport = self.ssh.get_transport()
-            channel = transport.open_session()
+            self.server_channel = transport.open_session()
             # http://stackoverflow.com/questions/7734679/paramiko-and-exec-command-killing-remote-process
             # Makes sure process dies when we close connection
-            channel.get_pty()
-            self.stdin, self.stdout, self.stderr = channel.exec_command('python %s' % dst) 
+            self.server_channel.get_pty()
+            #self.server_stdin, self.server_stdout, self.server_stderr = self.ssh.exec_command('python %s' % dst) 
+            self.server_channel.exec_command('python %s' % dst) 
             self.thread_server = threading.Thread(target=self.run_server)
             self.thread_server.start()
             self.wait_remote_port(PORT)
         
-        if not self.local_port_up(PORT):
-            print 'Creating SSH tunnel'
+        if self.local_port_up(PORT):
+            print 'SSH tunnel: alrady running'
+        else:
+            print 'SSH tunnel: creating'
             self.thread_tunnel = threading.Thread(target=self.run_tunnel)
             self.thread_tunnel.start()
         self.wait_local_port(PORT)
@@ -102,7 +110,7 @@ class LcncPyHalAr(LcncPyHal):
         print 'port open'
     
     def remote_port_up(self, port):
-        channel = self.ssh.transport().open_session()
+        channel = self.ssh.get_transport().open_session()
         # exec 6<>/dev/tcp/127.0.0.1/22617
         channel.exec_command('exec 6<>/dev/tcp/127.0.0.1/%s' % port)
         rc = channel.recv_exit_status()
@@ -125,6 +133,23 @@ class LcncPyHalAr(LcncPyHal):
             self.tunnel.shutdown()
         self.ssh.close()
     
+    def run_linuxcnc(self):
+        '''
+        while self.running:
+            for f in [self.linuxcnc_stdout, self.linuxcnc_stderr]:
+                sys.stdout.write(f.read())
+                sys.stdout.flush()
+                time.sleep(0.1)
+        '''
+        while self.running:
+            [rdy_r, _rdy_w, _rdy_x] = select.select([self.linuxcnc_channel], [], [])
+            if len(rdy_r):
+                # TODO: consider log file instead
+                sys.stdout.write(self.linuxcnc_channel.recv(1024))
+                sys.stdout.flush()
+        
+        print 'linuxcnc thread exiting'
+    
     def run_server(self):
         '''
         # AttributeError: 'ChannelFile' object has no attribute 'fileno'
@@ -141,14 +166,24 @@ class LcncPyHalAr(LcncPyHal):
                 sys.stdout.flush()
         '''
 
-        import time
+        while self.running:
+            [rdy_r, _rdy_w, _rdy_x] = select.select([self.server_channel], [], [])
+            if len(rdy_r):
+                # TODO: consider log file instead
+                sys.stdout.write(self.server_channel.recv(1024))
+                sys.stdout.flush()
+
+
         # http://sebastiandahlgren.se/2012/10/11/using-paramiko-to-send-ssh-commands/
         # weird they didn't conform to the file api at all with fds
+        '''
         while self.running:
-            for f in [self.stdout, self.stderr]:
+            for f in [self.server_stdout, self.server_stderr]:
                 sys.stdout.write(f.read())
                 sys.stdout.flush()
                 time.sleep(0.1)
+        '''
+        
         print 'Server thread exiting'
 
     def run_tunnel(self):

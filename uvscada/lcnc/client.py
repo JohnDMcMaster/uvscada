@@ -7,23 +7,21 @@ PORT=22617
 class LCNCRPCStat:
     def __init__(self, server):
         self.server = server
+        self.poll()
 
     def poll(self):
-        for k, v in self.server.poll().iteritems():
+        for k, v in self.server.s_poll().iteritems():
             setattr(self, k, v)
 
 class LCNCRPCCommand:
     def __init__(self, server):
         self.server = server
-    
-    def mdi(self, *args, **kwargs):
-        return self.server.mdi(*args, **kwargs)
-
-    def mode(self, *args, **kwargs):
-        return self.server.mode(*args, **kwargs)
-
-    def wait_complete(self, *args, **kwargs):
-        return self.server.wait_complete(*args, **kwargs)
+        def func(server, f):
+            def wrap(*args, **kwargs):
+                return getattr(server, 'c_' + f)(*args, **kwargs)
+            return wrap
+        for f in ['mdi', 'mode', 'wait_complete', 'state', 'home']:
+            setattr(self, f, func(self.server, f))
 
 class LCNCRPC:
     def __init__(self, host='localhost', port=PORT):

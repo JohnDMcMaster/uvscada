@@ -41,15 +41,23 @@ class LcncPyHal(LcncHal):
         self.command = self.linuxcnc.command()
 
         self.command.state(self.linuxcnc.STATE_ON)
+        self.stat.poll()
+        print 'Enabled: %s' % self.stat.enabled
+        
         self._home()
         self.command.mode(self.linuxcnc.MODE_MDI)
+        self.stat.poll()
+        print 'Enabled: %s' % self.stat.enabled
     
     def _home(self):
         # prevent "can't do that (EMC_AXIS_HOME:123) in MDI mode"
         self.command.mode(self.linuxcnc.MODE_MANUAL)
         for axisi in xrange(self.stat.axes):
             print 'Home: check axis %d' % axisi
+            self.stat.poll()
+            print 'Enabled: %s' % self.stat.enabled
             axis = self.stat.axis[axisi]
+            #print axis
             if axis['homed']:
                 print '  Already homed'
                 continue
@@ -70,12 +78,17 @@ class LcncPyHal(LcncHal):
     def wait_mdi_idle(self):
         while not self.ok_for_mdi():
             # TODO: notify self.progress
+            print self.stat.estop, self.stat.enabled, self.stat.homed, self.stat.interp_state, self.linuxcnc.INTERP_IDLE
             time.sleep(0.1)
         
     def do_cmd(self, cmd):
+        print 'waiting mdi idle'
         self.wait_mdi_idle()
+        print 'executing command'
         self.command.mdi(cmd)            
+        print 'waiting idle'
         self.wait_mdi_idle()
+        print 'command done'
     
 # LinuxCNC remote connection
 class LcncRshHal(LcncHal):
