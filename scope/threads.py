@@ -58,6 +58,7 @@ class CncThread(QThread):
             self.normal_running.set()
         else:
             self.normal_running.clear()
+    
     def wait_idle(self):
         while True:
             time.sleep(0.15)

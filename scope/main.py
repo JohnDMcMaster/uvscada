@@ -6,6 +6,9 @@ from uvscada.img_util import get_scaled
 from uvscada.benchmark import Benchmark
 from uvscada.imager import MockImager
 from uvscada.cnc_hal import hal as cnc_hal
+from uvscada.cnc_hal import lcnc_ar
+from uvscada.cnc_hal import lcnc as lcnc_hal
+from uvscada.lcnc.client import LCNCRPC
 from uvscada import gst_util
 
 from threads import CncThread, PlannerThread
@@ -54,16 +57,16 @@ def get_cnc_hal(log):
     elif engine == 'lcnc-py':
         import linuxcnc
         
-        return cnc_hal.LcncPyHal(linuxcnc=linuxcnc, log=log)
+        return lcnc_hal.LcncPyHal(linuxcnc=linuxcnc, log=log)
     elif engine == 'lcnc-rpc':
-        from uvscada.lcnc.client import SshLCNCRPC
-        
         try:
-            return cnc_hal.LcncPyHal(linuxcnc=SshLCNCRPC(host='mk-xray'), log=log)
+            return lcnc_hal.LcncPyHal(linuxcnc=LCNCRPC(host='mk-xray'), log=log)
         except socket.error:
             raise Exception("Failed to connect to LCNCRPC")
+    elif engine == 'lcnc-arpc':
+        return lcnc_ar.LcncPyHalAr(host='mk-xray', log=log)
     elif engine == 'lcnc-rsh':
-        return cnc_hal.LcncRshHal(log=log)
+        return lcnc_hal.LcncRshHal(log=log)
     else:
         raise Exception("Unknown CNC engine %s" % engine)
 
@@ -243,6 +246,18 @@ class CNCGUI(QMainWindow):
         
         if self.uscope_config['cnc']['startup_run']:
             self.run()
+        
+    def __del__(self):
+        self.shutdown()
+    
+    def shutdown(self):
+        self.cnc_thread.hal.ar_stop()
+        if self.cnc_thread:
+            self.cnc_thread.stop()
+            self.cnc_thread = None
+        if self.pt:
+            self.pt.stop()
+            self.pt = None
         
     def log(self, s='', newline=True):
         if newline:
@@ -954,8 +969,12 @@ if __name__ == '__main__':
     gobject.threads_init()
     
     app = QApplication(sys.argv)
-    _gui = CNCGUI()
+    gui = CNCGUI()
     # XXX: what about the gstreamer message bus?
     # Is it simply not running?
     # must be what pygst is doing
-    sys.exit(app.exec_())
+    try:
+        sys.exit(app.exec_())
+    finally:
+        gui.shutdown()
+

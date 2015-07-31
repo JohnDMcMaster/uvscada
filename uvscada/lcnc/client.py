@@ -35,13 +35,6 @@ class LCNCRPC:
     def command(self):
         return LCNCRPCCommand(self.server)
 
-'''
-Remotely spawns the server and creates ssh tunnels
-'''
-class SshLCNCRPC(LCNCRPC):
-    def __init__(self, host):
-        raise Exception("FIXME")
-
 if __name__ == '__main__':
     lcncrpc = LCNCRPC()
     

@@ -19,7 +19,8 @@ if __name__ == "__main__":
         hal = lcnc_ar.LcncPyHalAr(host=args.host, dry=True, log=None)
         time.sleep(1)
         print 'getting ready to hal'
-        hal.do_cmd('G90 G0 X1')
+        hal.do_cmd('G90 G0 X100')
+        hal.do_cmd('G90 G0 X0')
         print 'Movement done'
         #hal.mv_rel({'x': )
     finally:
