@@ -59,8 +59,11 @@ class Benchmark:
             if delta_t > 0.000001:
                 rate = self.cur_items / (delta_t)
                 rate_s = '%f items / sec' % rate
-                remaining = (self.max_items - self.cur_items) / rate
-                eta_str = self.time_str(remaining)
+                if rate == 0:
+                    eta_str = 'inf'
+                else:
+                    remaining = (self.max_items - self.cur_items) / rate
+                    eta_str = self.time_str(remaining)
             else:
                 eta_str = "indeterminate"
             return '%d / %d, ETA: %s @ %s' % (self.cur_items, self.max_items, eta_str, rate_s)

@@ -29,10 +29,13 @@ class Hal(object):
         self.log = log
         # seconds to wait before snapping picture
         self.t_settle = 4.0
+        self.rt_sleep = 0.0
         
         # Overwrite to get updates while moving
         # (if supported)
         self.progress = lambda pos: None
+        
+        self.mv_lastt = time.time()
 
     def axes(self):
         '''Return supported axes'''
@@ -44,7 +47,7 @@ class Hal(object):
         
     def ret0(self):
         '''Return to origin'''
-        self.mv_abs(dict([(k, 0.0) for k in self.axes]))
+        self.mv_abs(dict([(k, 0.0) for k in self.axes()]))
 
     def mv_abs(self, pos):
         '''Absolute move to positions specified by pos dict'''
@@ -136,6 +139,7 @@ class MockHal(Hal):
             self._pos[axis] = 0.0
 
     def _log(self, msg):
+        print '_log'
         if self.dry:
             self.log('Mock-dry: ' + msg)
         else:

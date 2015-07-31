@@ -13,6 +13,7 @@ defaults = {
     "live_video": True,
     "objective_json": "objective.json",
     "scan_json": "scan.json",
+    "out_dir":"out",
     "imager": {
         "engine":'mock',
         "snapshot_dir":"snapshot",
@@ -25,7 +26,6 @@ defaults = {
         "engine": "mock",
         "startup_run": False,
         "startup_run_exit": False,
-        "out_dir":"out",
         "overwrite":False,
         # Default to no action, make movement explicit
         # Note that GUI can override this

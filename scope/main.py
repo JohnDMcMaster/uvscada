@@ -12,6 +12,7 @@ from uvscada.lcnc.client import LCNCRPC
 from uvscada import gst_util
 
 from threads import CncThread, PlannerThread
+from cStringIO import StringIO
 
 from PyQt4 import Qt
 from PyQt4.QtGui import *
@@ -39,7 +40,7 @@ except ImportError:
         print 'Failed to import a gstreamer package when gstreamer is required'
         raise
 
-debug = 0
+debug = 1
 def dbg(*args):
     if not debug:
         return
@@ -51,6 +52,7 @@ def dbg(*args):
         print 'main: ' + (args[0] % args[1:])
 
 def get_cnc_hal(log):
+    print 'get_cnc_hal', log
     engine = uscope_config['cnc']['engine']
     if engine == 'mock':
         return cnc_hal.MockHal(log=log)
@@ -166,8 +168,8 @@ class GstImager(Imager):
         self.image_ready = threading.Event()
         self.image_id = None
         
-    def take_picture(self, file_name_out = None):
-        self.gui.emit_log('gstreamer imager: taking image to %s' % file_name_out)
+    def get(self):
+        #self.gui.emit_log('gstreamer imager: taking image to %s' % file_name_out)
         def emitSnapshotCaptured(image_id):
             self.gui.emit_log('Image captured reported: %s' % image_id)
             self.image_id = image_id
@@ -183,8 +185,9 @@ class GstImager(Imager):
         factor = float(uscope_config['imager']['scalar'])
         # Use a reasonably high quality filter
         scaled = get_scaled(image, factor, Image.ANTIALIAS)
-        if not self.gui.dry():
-            scaled.save(file_name_out)
+        #if not self.gui.dry():
+        #    scaled.save(file_name_out)
+        return scaled
 
 class CNCGUI(QMainWindow):
     cncProgress = pyqtSignal(int, int, str, int)
@@ -524,9 +527,6 @@ class CNCGUI(QMainWindow):
             self.log(str(self.bench))
             
         self.pb.setValue(pictures_taken)
-        # Update position GUI
-        for axis in self.axes.values():
-            axis.emit_pos()
         
     def dry(self):
         return self.dry_cb.isChecked()
@@ -547,7 +547,7 @@ class CNCGUI(QMainWindow):
     
     def run(self):
         if not self.snapshot_pb.isEnabled():
-            print "Wait for snapshot to complete before CNC'ing"
+            self.log("Wait for snapshot to complete before CNC'ing")
             return
         
         dry = self.dry()
@@ -578,9 +578,15 @@ class CNCGUI(QMainWindow):
                 image = ''
             self.cncProgress.emit(pictures_to_take, pictures_taken, image, first)
         
-        out_dir = str(self.job_name_le.text())
-        if not dry and os.path.exists(out_dir):
-            raise Exception("job name dir %s already exists" % out_dir)
+        if not dry and not os.path.exists(self.uscope_config['out_dir']):
+            os.mkdir(self.uscope_config['out_dir'])
+        
+        out_dir = os.path.join(self.uscope_config['out_dir'], str(self.job_name_le.text()))
+        if os.path.exists(out_dir):
+            self.log("job name dir %s already exists" % out_dir)
+            return
+        if not dry:
+            os.mkdir(out_dir)
 
         rconfig = {
                 'cnc_hal': self.cnc_thread.hal,
@@ -607,13 +613,17 @@ class CNCGUI(QMainWindow):
         
         # If user had started some movement before hitting run wait until its done
         dbg("Waiting for previous movement (if any) to cease")
+        # TODO: make this not block GUI
         self.cnc_thread.wait_idle()
         
         self.pt = PlannerThread(self, rconfig)
         self.connect(self.pt, SIGNAL('log'), self.log)
         self.pt.plannerDone.connect(self.plannerDone)
         self.setControlsEnabled(False)
-        self.log_fd = open(os.path.join(out_dir, 'log.txt'), 'w')
+        if dry:
+            self.log_fd = StringIO()
+        else:
+            self.log_fd = open(os.path.join(out_dir, 'log.txt'), 'w')
         
         self.pt.start()
     
@@ -628,6 +638,7 @@ class CNCGUI(QMainWindow):
         # Cleanup camera objects
         self.log_fd = None
         self.pt = None
+        self.cnc_thread.hal.dry = False
         self.setControlsEnabled(True)
         if self.uscope_config['cnc']['startup_run_exit']:
             print 'Planner debug break on completion'

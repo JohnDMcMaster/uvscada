@@ -56,8 +56,6 @@ class PlannerAxis(object):
                 view_um,
                 # How much the imager can see (in pixels)
                 view_pix,
-                # Actual sensor dimension may be oversampled, scale down as needed
-                imager_scalar,
                 # start and end absolute positions (in um)
                 # Inclusive such that 0:0 means image at position 0 only
                 start, end,
@@ -68,7 +66,7 @@ class PlannerAxis(object):
         self.log = log
         # How many the pixels the imager sees after scaling
         # XXX: is this global scalar playing correctly with the objective scalar?
-        self.view_pixels = view_pix * imager_scalar
+        self.view_pixels = view_pix
         #self.pos = 0.0
         self.name = name
         '''
@@ -91,7 +89,7 @@ class PlannerAxis(object):
 
         # Its actually less than this but it seems it takes some stepping
         # to get it out of the system
-        self.backlash = 50
+        self.backlash = 0.050
         '''
         Backlash compensation
         0: no compensation
@@ -167,7 +165,7 @@ class PlannerAxis(object):
             yield self.start + i * step
     
 class Planner(object):
-    def __init__(self, scan_config, hal,
+    def __init__(self, scan_config, hal, imager,
                 # (w, h) in pixels
                 img_sz,
                 # 10 => each pixel is 10 um x 10 um
@@ -175,15 +173,16 @@ class Planner(object):
                 out_dir,
                 progress_cb=None,
                 overwrite=False, dry=False,
-                img_scalar=1,
                 log=None, verbosity=2):
         if log is None:
             def log(msg='', verbosity=None):
                 print msg
-        self.log = log
+        self._log = log
         self.v = verbosity
         self.hal = hal
+        self.imager = imager
         self.dry = dry
+        self.hal.dry = dry
         # os.path.join(config['cnc']['out_dir'], self.rconfig.job_name)
         self.out_dir = out_dir
         self.overwrite = overwrite
@@ -209,15 +208,15 @@ class Planner(object):
         Planar test run
         plane calibration corner ended at 0.0000, 0.2674, -0.0129
         '''
-    
+        
         start = (float(scan_config['start']['x']), float(scan_config['start']['y']))
         end = (float(scan_config['end']['x']), float(scan_config['end']['y']))
         self.axes = OrderedDict([
                 ('x', PlannerAxis('X', ideal_overlap,
-                    img_sz[0] * um_per_pix, img_sz[0], img_scalar,
+                    img_sz[0] * um_per_pix, img_sz[0],
                     start[0], end[0], log=self.log)),
                 ('y', PlannerAxis('Y', ideal_overlap,
-                    img_sz[1] * um_per_pix, img_sz[1], img_scalar,
+                    img_sz[1] * um_per_pix, img_sz[1],
                     start[1], end[1], log=self.log)),
                 ])
         self.x = self.axes['x']
@@ -230,7 +229,7 @@ class Planner(object):
             self.log('  %f to %f' % (axis.start, axis.end), 2)
             self.log('  Ideal overlap: %f, actual %g' % (ideal_overlap, axis.step_percent()), 2)
             self.log('  full delta: %f' % (self.x.delta()), 2)
-            self.log('  view: %f' % (axis.view,), 2)
+            self.log('  view: %d pix' % (axis.view_pixels,), 2)
             
         # A true useful metric of efficieny loss is how many extra pictures we had to take
         # Maybe overhead is a better way of reporting it
@@ -252,8 +251,6 @@ class Planner(object):
             for p in self.gen_xys():
                 self.log('    ' + str(p))
             raise Exception('See above')
-        self.notify_progress(None, True)
-        self.img_ext = '.jpg'
 
         # Total number of images taken
         self.all_imgs = 0
@@ -261,9 +258,13 @@ class Planner(object):
         # May be different than all_imags if image stacking
         self.xy_imgs = 0
 
-    def _log(self, msg='', verbosity=2):
+        self.img_ext = '.jpg'
+
+        self.notify_progress(None, True)
+
+    def log(self, msg='', verbosity=2):
         if verbosity <= self.v:
-            self.log(msg)
+            self._log(msg)
 
     def stack_init(self):
         if 'stack' in self.config:
@@ -300,18 +301,15 @@ class Planner(object):
         
         # TODO: write out coordinate map
         
+    
     def prepare_image_output(self):
         if self.dry:
             self.log('DRY: mkdir(%s)' % self.out_dir)
             return
         
-        if os.path.exists(self.out_dir):
-            if not self.overwrite:
-                raise Exception("Output dir %s already exists" % self.out_dir)
-            self.log('WARNING: overwriting old output')
-            shutil.rmtree(self.out_dir)
-        self.log('Creating output directory %s' % self.out_dir)
-        os.mkdir(self.out_dir)
+        if not os.path.exists(self.out_dir):
+            self.log('Creating output directory %s' % self.out_dir)
+            os.mkdir(self.out_dir)
             
     def img_fn(self, stack_suffix=''):
         return os.path.join(self.out_dir,
@@ -319,7 +317,8 @@ class Planner(object):
         
     def take_picture(self, fn):
         self.hal.settle()
-        self.imager.get().save(fn)
+        if not self.dry:
+            self.imager.get().save(fn)
         self.all_imgs += 1
     
     def take_pictures(self):
@@ -358,8 +357,8 @@ class Planner(object):
         #do = cur_x > 3048 and cur_y > 3143
         x_tol = 3.0
         y_tol = 3.0
-        xmax = cur_x + self.x.view
-        ymax = cur_y + self.y.view
+        xmax = cur_x + self.x.view_um
+        ymax = cur_y + self.y.view_um
         
         fail = False
         
@@ -384,8 +383,8 @@ class Planner(object):
             self.log('  Row: %g' % cur_row)
             self.log('  Col: %g' % cur_col)
             raise Exception('Bad point (%g + %g = %g, %g + %g = %g) for range (%g, %g) to (%g, %g)' % (
-                    cur_x, self.x.view, xmax,
-                    cur_y, self.y.view, ymax,
+                    cur_x, self.x.view_um, xmax,
+                    cur_y, self.y.view_um, ymax,
                     self.x.start, self.y.start,
                     self.x.end, self.y.end))
     
@@ -462,7 +461,7 @@ class Planner(object):
             self.comment('Image size: %0.1f GP' % (mp/1000,))
         else:
             self.comment('Image size: %0.1f MP' % (mp,))
-        self.comment('x fov: %f, y fov: %f' % (self.x.view, self.y.view))
+        self.comment('x fov: %f, y fov: %f' % (self.x.view_um, self.y.view_um))
         self.comment('x_step: %f, y_step: %f' % (self.x.step(), self.y.step()))
         
         self.comment('pictures: %d' % self.pictures_to_take)
@@ -501,8 +500,8 @@ class Planner(object):
                 self.log('Suppressing for exclusion: pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.xy_imgs))
             else:
                 raise Exception('pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.xy_imgs))
-           
-        self.write_meta()
+        if not self.dry:
+            self.write_meta()
         
     def meta(self):
         '''Can only be called after run'''

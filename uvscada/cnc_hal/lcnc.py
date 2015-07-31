@@ -4,18 +4,23 @@ import time
 
 # Camera always local
 class LcncHal(Hal):
-    def __init__(self, rsh, log=None, dry=False):
+    def __init__(self, log=None, dry=False):
         Hal.__init__(self, log, dry)
 
     def sleep(self, sec, why):
-        self.log('Sleep %s' % (format_t(sec), why), 3)
+        ts = format_t(sec)
+        s = 'Sleep %s: %s' % (why, ts)
+        self.log(s, 3)
         self.rt_sleep += sec
+        if not self.dry:
+            time.sleep(sec)
 
     def cmd(self, cmd):
         if self.dry:
             self.log(cmd)
         else:
             self._cmd(cmd)
+            self.mv_lastt = time.time()
             
     def _cmd(self, cmd):
         raise Exception("Required")
@@ -46,7 +51,7 @@ class LcncHal(Hal):
 # making these identical for the time being
 class LcncPyHal(LcncHal):
     def __init__(self, linuxcnc, log=None, dry=False):
-        LcncHal.__init__(self, log, dry)
+        LcncHal.__init__(self, log=log, dry=dry)
         
         self.ax_c2i = {'x': 0, 'y': 1}
         self.ax_i2c = {0: 'x', 1: 'y'}
@@ -109,6 +114,8 @@ class LcncPyHal(LcncHal):
         return not self.stat.estop and self.stat.enabled and self.stat.homed and self.stat.interp_state == self.linuxcnc.INTERP_IDLE
         
     def wait_mdi_idle(self):
+        if self.dry:
+            return
         while not self.ok_for_mdi():
             # TODO: notify self.progress
             #print self.stat.estop, self.stat.enabled, self.stat.homed, self.stat.interp_state, self.linuxcnc.INTERP_IDLE
@@ -156,7 +163,7 @@ class LcncPyHal(LcncHal):
 # LinuxCNC remote connection
 class LcncRshHal(LcncHal):
     def __init__(self, rsh, log=None, dry=False):
-        LcncHal.__init__(self, log, dry)
+        LcncHal.__init__(self, log=log, dry=dry)
         self.rsh = rsh
         
     def _cmd(self, cmd):

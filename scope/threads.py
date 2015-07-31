@@ -66,7 +66,7 @@ class CncThread(QThread):
     def wait_idle(self):
         while True:
             time.sleep(0.15)
-            if self.idle():
+            if self.idle.is_set():
                 break
         
     def cmd(self, cmd, *args):
@@ -159,12 +159,12 @@ class PlannerThread(QThread):
             im_w_pix = int(rconfig['uscope']['imager']['width'])
             im_h_pix = int(rconfig['uscope']['imager']['height'])
             x_um = float(obj['x_view'])
-            self.planner = Planner(scan_config=scan_config, hal=rconfig['cnc_hal'],
+            self.planner = Planner(scan_config=scan_config, hal=rconfig['cnc_hal'], imager=rconfig['imager'],
                     img_sz=(im_w_pix, im_h_pix), um_per_pix=(x_um / im_w_pix),
                     out_dir=rconfig['out_dir'],
                     progress_cb=rconfig['progress_cb'],
                     overwrite=rconfig['overwrite'], dry=rconfig['dry'],
-                    img_scalar=float(rconfig['uscope']['imager']['scalar']),
+                    #img_scalar=float(rconfig['uscope']['imager']['scalar']),
                     log=self.log, verbosity=2)
             self.log('Running planner')
             b = Benchmark()
