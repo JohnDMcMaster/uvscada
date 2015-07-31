@@ -1,6 +1,9 @@
 import time
 from uvscada.imager import Imager
 
+class AxisExceeded(ValueError):
+    pass
+
 def format_t(dt):
     s = dt % 60
     m = int(dt / 60 % 60)
@@ -115,6 +118,10 @@ class Hal(object):
             if sleept > 0.0:
                 self.sleep(sleept, 'settle')
 
+    def limit(self, axes=None):
+        if axes is None:
+            axes = self.axes()
+        return dict([(axis, (-1000, 1000)) for axis in axes])
 '''
 Has no actual hardware associated with it
 '''

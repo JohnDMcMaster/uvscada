@@ -18,13 +18,13 @@ from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 
 import os.path
+from PIL import Image
 import re
 import signal
 import socket
 import sys
 import traceback
 import threading
-from PIL import Image
 
 uscope_config = get_config()
 
@@ -210,6 +210,7 @@ class CNCGUI(QMainWindow):
         hal = get_cnc_hal(log=self.emit_log)
         hal.progress = self.hal_progress
         self.cnc_thread = CncThread(hal=hal, cmd_done=self.cmd_done)
+        self.connect(self.cnc_thread, SIGNAL('log'), self.log)
         self.initUI()
         
         # Must not be initialized until after layout is set
@@ -694,9 +695,9 @@ class CNCGUI(QMainWindow):
             
         layout.addLayout(get_general_layout())
 
-        self.axes = dict()
+        self.axes = {}
         dbg('Axes: %u' % len(self.cnc_thread.hal.axes()))
-        for axis in self.cnc_thread.hal.axes():
+        for axis in sorted(self.cnc_thread.hal.axes()):
             axisw = AxisWidget(axis, self.cnc_thread)
             self.axes[axis] = axisw
             layout.addWidget(axisw)

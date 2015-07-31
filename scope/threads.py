@@ -1,5 +1,6 @@
 from uvscada.planner import Planner
 from uvscada.benchmark import Benchmark
+from uvscada.cnc_hal.hal import AxisExceeded
 
 import Queue
 import threading
@@ -52,6 +53,9 @@ class CncThread(QThread):
         self.normal_running = threading.Event()
         self.normal_running.set()
         self.cmd_done = cmd_done
+
+    def log(self, msg):
+        self.emit(SIGNAL('log'), msg)
         
     def setRunning(self, running):
         if running:
@@ -88,11 +92,17 @@ class CncThread(QThread):
                 raise Exception("Bad command %s" % (cmd,))
             
             def mv_abs(pos):
-                self.hal.mv_abs(pos)
+                try:
+                    self.hal.mv_abs(pos)
+                except AxisExceeded as e:
+                    self.log(str(e))
                 return self.hal.pos()
 
-            def mv_rel(pos):
-                self.hal.mv_rel(pos)
+            def mv_rel(delta):
+                try:
+                    self.hal.mv_rel(delta)
+                except AxisExceeded as e:
+                    self.log(str(e))
                 return self.hal.pos()
             
             def home(axes):

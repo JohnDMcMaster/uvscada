@@ -1,4 +1,4 @@
-from hal import Hal, format_t
+from hal import Hal, format_t, AxisExceeded
 
 import time
 
@@ -21,14 +21,24 @@ class LcncHal(Hal):
         raise Exception("Required")
    
     def mv_abs(self, pos):
-        # Unlike DIY controllers, all axes can be moved concurrently
-        # Don't waste time moving them individually
-        self.cmd('G90 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
+        limit = self.limit()
+        for k, v in pos.iteritems():
+            if v < limit[k][0] or v > limit[k][1]:
+                raise AxisExceeded("Axis %c to %s exceeds liimt (%s, %s)" % (k, v, limit[k][0], limit[k][1]))
+        
+        self.cmd('G90 G0' + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
         
     def mv_rel(self, delta):
+        limit = self.limit()
+        pos = self.pos()
+        for k, v in delta.iteritems():
+            dst = pos[k] + v
+            if dst < limit[k][0] or dst > limit[k][1]:
+                raise AxisExceeded("Axis %c to %s (%s + %s) exceeds liimt (%s, %s)" % (k, dst, pos[k], v, limit[k][0], limit[k][1]))
+        
         # Unlike DIY controllers, all axes can be moved concurrently
         # Don't waste time moving them individually
-        self.cmd('G91 G0' + ' '.join(['%c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
+        self.cmd('G91 G0' + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
 
 # http://linuxcnc.org/docs/html/common/python-interface.html
 # LinuxCNC python connection
@@ -51,23 +61,31 @@ class LcncPyHal(LcncHal):
         
         # prevent "can't do that (EMC_AXIS_HOME:123) in MDI mode"
         # You must home all axes, not just those used
+        self.command.mode(self.linuxcnc.MODE_MANUAL)
         for axisi in xrange(self.stat.axes):
             self._home(axisi=axisi)
-        
-        # Home puts into MODE_MANUAL
         self.command.mode(self.linuxcnc.MODE_MDI)
+        
         self.stat.poll()
         print 'Enabled: %s' % self.stat.enabled
+
+        self._limit = {}
+        for axisc in self.axes():
+            axis = self.stat.axis[self.ax_c2i[axisc]]
+            self._limit[axisc] = (axis['min_position_limit'], axis['max_position_limit'])
     
-    def home(self, axes):
+    def home(self, axes=None):
+        if axes is None:
+            axes = self.axes()
+        self.command.mode(self.linuxcnc.MODE_MANUAL)
         for axis in axes:
             self._home(axis)
+        self.command.mode(self.linuxcnc.MODE_MDI)
     
     def _home(self, axisc=None, axisi=None):
         if axisi is None:
             axisi = self.ax_c2i[axisc]
         
-        self.command.mode(self.linuxcnc.MODE_MANUAL)
         print 'Home: check axis %d' % axisi
         self.stat.poll()
         print 'Enabled: %s' % self.stat.enabled
@@ -110,12 +128,15 @@ class LcncPyHal(LcncHal):
         print 'command done'
 
     def forever(self, axes, run, progress):
+        print 'forever'
         while run.is_set():
             # Axes may be updated
             # Copy it so that don't crash if its updated during an iteration
             for axis, sign in dict(axes).iteritems():
                 self.mv_rel({axis: sign * 1})
-                progress(self.pos())
+                pos = self.pos()
+                print 'emitting progress: %s' % str(pos)
+                progress(pos)
             time.sleep(0.1)
 
     # FIXME
@@ -128,6 +149,9 @@ class LcncPyHal(LcncHal):
         for axis in self.axes():
             ret[axis] = self.stat.axis[ord(axis) - ord('x')]['output']
         return ret
+
+    def limit(self, axes=None):
+        return self._limit
 
 # LinuxCNC remote connection
 class LcncRshHal(LcncHal):
