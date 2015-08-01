@@ -57,14 +57,18 @@ class LcncPyHalAr(LcncPyHal):
             print 'linuxcnc: already running'
         else:
             print 'linuxcnc: launching'
-            ini = '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS/CRAMPS-linuxcncrsh.ini'
+            #ini = '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS/CRAMPS-linuxcncrsh.ini'
+            ini = '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS/simplified-rsh.ini'
             transport = self.ssh.get_transport()
             self.linuxcnc_channel = transport.open_session()
             # http://stackoverflow.com/questions/7734679/paramiko-and-exec-command-killing-remote-process
             # Makes sure process dies when we close connection
             self.linuxcnc_channel.get_pty()
             #self.linuxcnc_stdin, self.linuxcnc_stdout, self.linuxcnc_stderr = self.ssh.exec_command('linuxcnc %s' % ini) 
-            self.linuxcnc_channel.exec_command('linuxcnc %s' % ini) 
+            if 1:
+                self.linuxcnc_channel.exec_command('screen -t linuxcnc linuxcnc %s' % ini) 
+            else:
+                self.linuxcnc_channel.exec_command('linuxcnc %s' % ini) 
             self.thread_linuxcnc = threading.Thread(target=self.run_linuxcnc)
             self.thread_linuxcnc.start()
             #time.sleep(5)
@@ -83,7 +87,10 @@ class LcncPyHalAr(LcncPyHal):
             # Makes sure process dies when we close connection
             self.server_channel.get_pty()
             #self.server_stdin, self.server_stdout, self.server_stderr = self.ssh.exec_command('python %s' % dst) 
-            self.server_channel.exec_command('python %s' % dst) 
+            if 1:
+                self.server_channel.exec_command('screen -t lcnc_ar python %s' % dst)
+            else:
+                self.server_channel.exec_command('python %s' % dst)
             self.thread_server = threading.Thread(target=self.run_server)
             self.thread_server.start()
             self.wait_remote_port(PORT)
