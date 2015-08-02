@@ -257,6 +257,8 @@ class GXS700:
     '''
     
     def _init(self):
+        #self.rst()
+        
         state = self.state()
         print 'Init state: %d' % state
         if state == 0x08:

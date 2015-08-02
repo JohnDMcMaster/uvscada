@@ -4,7 +4,7 @@ import usb1
 # Bare ctype wrapper, inspired from library C header file.
 import libusb1
 import argparse
-from util import open_dev
+from uvscada.gxs700_util import open_dev
 import os
 from uvscada import gxs700
 

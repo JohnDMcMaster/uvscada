@@ -51,6 +51,7 @@ class XrayImager(Imager):
         self.fire_last = 0
         
         self.gxs = uvscada.gxs700_util.ez_open(verbose=False)
+        
         self.gxs.wait_trig_cb = self.fire
 
     def fire(self):
@@ -87,7 +88,8 @@ class XrayImager(Imager):
         
         if self.dry:
             # Takes a while to download and want this to be quick
-            self.gxs.sw_trig()
+            #self.gxs.sw_trig()
+            self.gxs.hw_trig_disarm()
             raise DryCheckpoint()
 
     def get(self):
@@ -95,10 +97,11 @@ class XrayImager(Imager):
             img_bin = self.gxs.cap_bin()
         except DryCheckpoint:
             if self.dry:
+                print 'DRY: skipping image'
                 return None
             raise
         print 'x-ray: decoding'
-        img_dec = gxs700.GXS700.decode(img_bin)
+        img_dec = uvscada.gxs700.GXS700.decode(img_bin)
         # Cheat a little
         img_dec.raw = img_bin
         return img_dec
