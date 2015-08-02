@@ -24,7 +24,7 @@ class Hal(object):
     def __init__(self, log, dry):
         self.dry = dry
         if log is None:
-            def log(msg=''):
+            def log(msg='', lvl=2):
                 print msg
         self.log = log
         # seconds to wait before snapping picture

@@ -30,7 +30,7 @@ if __name__ == "__main__":
         shutil.rmtree(args.out)
     os.mkdir(args.out)
     
-    hal = lcnc_ar.LcncPyHalAr(host=args.host, dry=args.dry)
+    hal = lcnc_ar.LcncPyHalAr(host=args.host, local_ini='config/xray/rsh.ini', dry=args.dry)
     imager = MockImager()
     try:
         #config = get_config()

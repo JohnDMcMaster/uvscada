@@ -17,6 +17,8 @@ import subprocess
 DEVNULL = open(os.devnull, 'wb')
 RSH_PORT = 5007
 
+# http://stackoverflow.com/questions/4409502/directory-transfers-on-paramiko
+
 class LcncPyHalAr(LcncPyHal):
     def __init__(self, *args, **kwargs):
         try:
@@ -26,7 +28,12 @@ class LcncPyHalAr(LcncPyHal):
             self.ar_stop()
             raise
     
-    def _init(self, host, log=None, dry=False):
+    # Machine configuration directory is '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS'
+    # Machine configuration file is 'simplified-rsh.ini'
+    def _init(self, host, local_ini=None, remote_ini=None, log=None, dry=False):
+        self.running = True
+        self.tunnel = None
+        
         print 'Creating SSH connection'
         self.ssh = paramiko.SSHClient()
         self.ssh.load_system_host_keys()
@@ -34,12 +41,10 @@ class LcncPyHalAr(LcncPyHal):
         self.ssh.connect(hostname=host, port=22, username='machinekit', key_filename=None,
                        look_for_keys=True, password=None)
         
-        self.running = True
-        self.tunnel = None
-        
         remote_tmp = '/tmp/lcnc_ar'
         dst = os.path.join(remote_tmp, 'server.py')
-        
+
+        sftp = None
         if 1:
             print 'Remote agent: updating'
             sftp = self.ssh.open_sftp()
@@ -56,9 +61,15 @@ class LcncPyHalAr(LcncPyHal):
         if self.remote_port_up(RSH_PORT):
             print 'linuxcnc: already running'
         else:
+            if local_ini:
+                remote_ini = os.path.join(remote_tmp, 'config', os.path.basename(local_ini))
+                if sftp is None:
+                    sftp = self.ssh.open_sftp()
+                paramiko_util.sftp_putdir(sftp, os.path.dirname(local_ini), os.path.join(remote_tmp, 'config'))
+            elif remote_ini is None:
+                remote_ini = '/home/machinekit/machinekit/configs/default/default.ini'
+            
             print 'linuxcnc: launching'
-            #ini = '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS/CRAMPS-linuxcncrsh.ini'
-            ini = '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS/simplified-rsh.ini'
             transport = self.ssh.get_transport()
             self.linuxcnc_channel = transport.open_session()
             # http://stackoverflow.com/questions/7734679/paramiko-and-exec-command-killing-remote-process
@@ -66,9 +77,9 @@ class LcncPyHalAr(LcncPyHal):
             self.linuxcnc_channel.get_pty()
             #self.linuxcnc_stdin, self.linuxcnc_stdout, self.linuxcnc_stderr = self.ssh.exec_command('linuxcnc %s' % ini) 
             if 1:
-                self.linuxcnc_channel.exec_command('screen -t linuxcnc linuxcnc %s' % ini) 
+                self.linuxcnc_channel.exec_command('screen -t linuxcnc linuxcnc %s' % remote_ini) 
             else:
-                self.linuxcnc_channel.exec_command('linuxcnc %s' % ini) 
+                self.linuxcnc_channel.exec_command('linuxcnc %s' % remote_ini) 
             self.thread_linuxcnc = threading.Thread(target=self.run_linuxcnc)
             self.thread_linuxcnc.start()
             #time.sleep(5)
