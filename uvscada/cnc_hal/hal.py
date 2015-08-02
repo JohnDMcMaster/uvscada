@@ -22,7 +22,6 @@ Hal is not thread safe with exception of the following:
 '''
 class Hal(object):
     def __init__(self, log, dry):
-        self.dry = dry
         if log is None:
             def log(msg='', lvl=2):
                 print msg
@@ -36,7 +35,18 @@ class Hal(object):
         self.progress = lambda pos: None
         
         self.mv_lastt = time.time()
+        self.dry = None
+        self.set_dry(dry)
 
+    def set_dry(self, dry):
+        if dry == self.dry:
+            return
+        if dry:
+            self._dry_pos = self.pos()
+        else:
+            self._dry_pos = None
+        self.dry = dry
+    
     def axes(self):
         '''Return supported axes'''
         raise Exception("Required")

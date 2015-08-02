@@ -89,7 +89,10 @@ class PlannerAxis(object):
 
         # Its actually less than this but it seems it takes some stepping
         # to get it out of the system
-        self.backlash = 0.050
+        #self.backlash = 0.050
+        # sort out later
+        self.backlash = None
+        
         '''
         Backlash compensation
         0: no compensation
@@ -519,9 +522,10 @@ class Planner(object):
         
     def backlash_init(self):
         # TODO: rethink this for non-0 start
-        self.hal.mv_abs({'x': -self.x.backlash, 'y': -self.y.backlash})
-        self.x.comp = -1
-        self.y.comp = -1
+        if self.x.backlash:
+            self.hal.mv_abs({'x': -self.x.backlash, 'y': -self.y.backlash})
+        self.x.comp = 1
+        self.y.comp = 1
         
     def mv_abs_backlash(self, move_to):
         '''Do an absolute move with backlash compensation'''
@@ -531,17 +535,20 @@ class Planner(object):
         blsh_mv = {}
         for axisc in move_to.keys():
             axis = self.axes[axisc]
+            if not axis.backlash:
+                continue
+            delta = move_to[axisc] - pos[axisc]
+            #print 'planner back', axisc, axis.comp, delta, move_to[axisc], pos[axisc]
             
             # Going right but was not compensating right?
-            if (move_to[axisc] - pos[axisc] > 0) and (axis.comp <= 0):
-                self.log('Axis %c: compensate for changing to increasing' % axisc, 3)
-                blsh_mv[axisc] = move_to[axisc] - axis.backlash
+            if delta > 0 and axis.comp <= 0:
+                self.log('Axis %c: compensate for changing to increasing' % axisc, 2)
+                blsh_mv[axisc] = -axis.backlash
                 axis.comp = 1
             # Going left but was not compensating left?
-            elif (move_to[axisc] - pos[axisc] < 0) and (axis.comp >= 0):
-                self.log('Axis %c: compensate for changing to decreasing' % axisc, 3)
-                blsh_mv[axisc] = move_to[axisc] + axis.backlash
+            elif delta < 0 and axis.comp >= 0:
+                self.log('Axis %c: compensate for changing to decreasing' % axisc, 2)
+                blsh_mv[axisc] = +axis.backlash
                 axis.comp = -1
-        self.hal.mv_abs(blsh_mv)
-        
+        self.hal.mv_rel(blsh_mv)
         self.hal.mv_abs(move_to)

@@ -27,14 +27,22 @@ class LcncHal(Hal):
         raise Exception("Required")
    
     def mv_abs(self, pos):
+        if len(pos) == 0:
+            return
         limit = self.limit()
         for k, v in pos.iteritems():
             if v < limit[k][0] or v > limit[k][1]:
                 raise AxisExceeded("Axis %c to %s exceeds liimt (%s, %s)" % (k, v, limit[k][0], limit[k][1]))
         
-        self.cmd('G90' + self.g_feed() + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
+        if self.dry:
+            for k, v in pos.iteritems():
+                self._dry_pos[k] = v 
+        self.cmd('G90 ' + self.g_feed() + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
         
     def mv_rel(self, delta):
+        if len(delta) == 0:
+            return
+        
         limit = self.limit()
         pos = self.pos()
         for k, v in delta.iteritems():
@@ -42,6 +50,9 @@ class LcncHal(Hal):
             if dst < limit[k][0] or dst > limit[k][1]:
                 raise AxisExceeded("Axis %c to %s (%s + %s) exceeds liimt (%s, %s)" % (k, dst, pos[k], v, limit[k][0], limit[k][1]))
         
+        if self.dry:
+            for k, v in delta.iteritems():
+                self._dry_pos[k] += v 
         # Unlike DIY controllers, all axes can be moved concurrently
         # Don't waste time moving them individually
         self.cmd('G91 ' + self.g_feed() + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
@@ -58,8 +69,6 @@ class LcncHal(Hal):
 # making these identical for the time being
 class LcncPyHal(LcncHal):
     def __init__(self, linuxcnc, log=None, dry=False):
-        LcncHal.__init__(self, log=log, dry=dry)
-        
         self.ax_c2i = {'x': 0, 'y': 1}
         self.ax_i2c = {0: 'x', 1: 'y'}
         
@@ -67,16 +76,18 @@ class LcncPyHal(LcncHal):
         self.stat = self.linuxcnc.stat()
         self.command = self.linuxcnc.command()
 
-        self.command.state(self.linuxcnc.STATE_ON)
+        if not dry:
+            self.command.state(self.linuxcnc.STATE_ON)
         self.stat.poll()
         print 'Enabled: %s' % self.stat.enabled
         
         # prevent "can't do that (EMC_AXIS_HOME:123) in MDI mode"
         # You must home all axes, not just those used
-        self.command.mode(self.linuxcnc.MODE_MANUAL)
-        for axisi in xrange(self.stat.axes):
-            self._home(axisi=axisi)
-        self.command.mode(self.linuxcnc.MODE_MDI)
+        if not dry:
+            self.command.mode(self.linuxcnc.MODE_MANUAL)
+            for axisi in xrange(self.stat.axes):
+                self._home(axisi=axisi)
+            self.command.mode(self.linuxcnc.MODE_MDI)
         
         self.stat.poll()
         print 'Enabled: %s' % self.stat.enabled
@@ -85,6 +96,8 @@ class LcncPyHal(LcncHal):
         for axisc in self.axes():
             axis = self.stat.axis[self.ax_c2i[axisc]]
             self._limit[axisc] = (axis['min_position_limit'], axis['max_position_limit'])
+
+        LcncHal.__init__(self, log=log, dry=dry)
     
     def home(self, axes=None):
         if axes is None:
@@ -159,6 +172,8 @@ class LcncPyHal(LcncHal):
         return self.ax_c2i.keys()
 
     def pos(self):
+        if self.dry:
+            return self._dry_pos
         ret = {}
         for axis in self.axes():
             ret[axis] = self.stat.axis[ord(axis) - ord('x')]['output']
