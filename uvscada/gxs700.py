@@ -24,7 +24,7 @@ General notes
 FRAME_SZ = 4972800
 
 class GXS700:
-    def __init__(self, usbcontext, dev, verbose=False, init=True):
+    def __init__(self, usbcontext=None, dev=None, verbose=False, init=True):
         self.verbose = verbose
         self.usbcontext = usbcontext
         self.dev = dev

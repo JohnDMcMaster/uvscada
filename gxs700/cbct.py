@@ -18,7 +18,7 @@ import threading
 import pycurl
 import time
 
-from util import open_dev, IOTimestamp, IOLog
+from uvscada.gxs700_util import open_dev, IOTimestamp, IOLog
 from uvscada.pr0ndexer import Indexer
 from uvscada import gxs700
 

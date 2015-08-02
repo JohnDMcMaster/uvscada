@@ -11,7 +11,7 @@ import binascii
 import sys
 import argparse
 import time
-import util
+import gxs700_util
 
 def stage1(dev):
     # Generated from packet 107/108
@@ -86,7 +86,7 @@ def stage1(dev):
     # Generated from packet 129/130
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x00")
 
-def stage2():
+def stage2(dev):
     # enter reset
     # Generated from packet 131/132
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x01")
@@ -807,7 +807,7 @@ def load_all(wait=False):
         print 'Waiting for device to come up'
         tstart = time.time()
         while time.time() - tstart < 3.0:
-            udev = util.check_device()
+            udev = gxs700_util.check_device()
             if udev:
                 break
         else:
@@ -820,9 +820,9 @@ def load(dev):
     # Source data: cap1.cap
     # Source range: 107 - 286
     
-    stage1()
+    stage1(dev)
     # xxx: should sleep here?
-    stage2()
+    stage2(dev)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
