@@ -314,12 +314,12 @@ class Planner(object):
             
     def img_fn(self, stack_suffix=''):
         return os.path.join(self.out_dir,
-                'c%03d_r%03d%s%s' % (self.cur_col, self.cur_row, stack_suffix, self.img_ext))
+                'c%03d_r%03d%s' % (self.cur_col, self.cur_row, stack_suffix))
         
     def take_picture(self, fn):
         self.hal.settle()
         if not self.dry:
-            self.imager.get().save(fn)
+            self.imager.get().save(fn + self.img_ext)
         self.all_imgs += 1
     
     def take_pictures(self):

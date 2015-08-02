@@ -26,13 +26,13 @@ SW_HV = 1
 SW_FIL = 2
 
 def switch(n, on):
-     state = 'ON' if on else 'OFF'
-     c = pycurl.Curl()
-     c.setopt(c.URL, 'http://energon/outlet?%d=%s' % (n, state))
-     c.setopt(c.WRITEDATA, open('/dev/null', 'w'))
-     c.setopt(pycurl.USERPWD, '%s:%s' % (os.getenv('WPS7_USER', 'admin'), os.getenv('WPS7_PASS', '')))
-     c.perform()
-     c.close()
+    state = 'ON' if on else 'OFF'
+    c = pycurl.Curl()
+    c.setopt(c.URL, 'http://energon/outlet?%d=%s' % (n, state))
+    c.setopt(c.WRITEDATA, open('/dev/null', 'w'))
+    c.setopt(pycurl.USERPWD, '%s:%s' % (os.getenv('WPS7_USER', 'admin'), os.getenv('WPS7_PASS', '')))
+    c.perform()
+    c.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')

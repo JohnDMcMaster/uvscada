@@ -86,7 +86,7 @@ class LcncPyHal(LcncHal):
         if not dry:
             self.command.mode(self.linuxcnc.MODE_MANUAL)
             for axisi in xrange(self.stat.axes):
-                self._home(axisi=axisi)
+                self._home(axisi=axisi, lazy=True)
             self.command.mode(self.linuxcnc.MODE_MDI)
         
         self.stat.poll()
@@ -107,7 +107,7 @@ class LcncPyHal(LcncHal):
             self._home(axis)
         self.command.mode(self.linuxcnc.MODE_MDI)
     
-    def _home(self, axisc=None, axisi=None):
+    def _home(self, axisc=None, axisi=None, lazy=False):
         if axisi is None:
             axisi = self.ax_c2i[axisc]
         
@@ -116,7 +116,7 @@ class LcncPyHal(LcncHal):
         print 'Enabled: %s' % self.stat.enabled
         axis = self.stat.axis[axisi]
         #print axis
-        if axis['homed']:
+        if lazy and axis['homed']:
             print '  Already homed'
             return
         # prevent "homing already in progress"
@@ -160,7 +160,7 @@ class LcncPyHal(LcncHal):
             # Axes may be updated
             # Copy it so that don't crash if its updated during an iteration
             for axis, sign in dict(axes).iteritems():
-                self.mv_rel({axis: sign * 1})
+                self.mv_rel({axis: sign * 0.05})
                 pos = self.pos()
                 print 'emitting progress: %s' % str(pos)
                 progress(pos)
