@@ -6,6 +6,7 @@ import time
 class LcncHal(Hal):
     def __init__(self, log=None, dry=False):
         Hal.__init__(self, log, dry)
+        self.feedrate = 30
 
     def sleep(self, sec, why):
         ts = format_t(sec)
@@ -31,7 +32,7 @@ class LcncHal(Hal):
             if v < limit[k][0] or v > limit[k][1]:
                 raise AxisExceeded("Axis %c to %s exceeds liimt (%s, %s)" % (k, v, limit[k][0], limit[k][1]))
         
-        self.cmd('G90 G0' + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
+        self.cmd('G90' + self.g_feed() + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in pos.iteritems()]))
         
     def mv_rel(self, delta):
         limit = self.limit()
@@ -43,7 +44,13 @@ class LcncHal(Hal):
         
         # Unlike DIY controllers, all axes can be moved concurrently
         # Don't waste time moving them individually
-        self.cmd('G91 G0' + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
+        self.cmd('G91 ' + self.g_feed() + ''.join([' %c%0.3f' % (k.upper(), v) for k, v in delta.iteritems()]))
+
+    def g_feed(self):
+        if self.feedrate is None:
+            return 'G0'
+        else:
+            return 'G1 F%0.3f' % self.feedrate
 
 # http://linuxcnc.org/docs/html/common/python-interface.html
 # LinuxCNC python connection
