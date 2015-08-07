@@ -1,4 +1,4 @@
-#!/usr/bin/env 
+#!/usr/bin/env python
 import argparse
 import numpy as np
 import struct

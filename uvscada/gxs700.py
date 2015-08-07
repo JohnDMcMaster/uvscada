@@ -119,7 +119,7 @@ class GXS700:
                 timeout=self.timeout)
     
     def trig_param_r(self):
-        '''Write trigger parameter'''
+        '''Read trigger parameter'''
         return self.dev.controlRead(0xC0, 0xB0, 0x25, 0, 6, timeout=self.timeout)
 
     def i2c_r(self, addr, n):
@@ -226,6 +226,8 @@ class GXS700:
         
     def trig_param_w(self, pix_clust_ctr_thresh, bin_thresh):
         '''Set trigger parameters?'''
+        # FIXME: looks like I messed something up here
+        # bin_thresh is unused
         buff = bytearray()
         buff.append((pix_clust_ctr_thresh >> 8) & 0xFF)
         buff.append((pix_clust_ctr_thresh >> 0) & 0xFF)
@@ -258,6 +260,9 @@ class GXS700:
     
     def _init(self):
         #self.rst()
+
+        # If a capture was still in progress init will have problems without this
+        self.hw_trig_disarm()
         
         state = self.state()
         print 'Init state: %d' % state
