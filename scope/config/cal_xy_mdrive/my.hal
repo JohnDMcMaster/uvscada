@@ -26,13 +26,8 @@ loadrt [EMCMOT]EMCMOT servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[TRAJ]AX
 # load low-level drivers
 loadrt hal_bb_gpio output_pins=816,822,823,824,825,826,914,923,925 input_pins=807,808,809,810,817,911,913
 loadrt [PRUCONF](DRIVER) prucode=$(HAL_RTMOD_DIR)/[PRUCONF](PRUBIN) [PRUCONF](CONFIG) halname=hpg
-loadrt pid count=2
 loadrt limit1 count=2
 
-
-# Python user-mode HAL module to read ADC value and generate a thermostat output for PWM
-# c = analog input channel and thermistor table
-loadusr -Wn Therm hal_temp_bbb -n Therm -c 04:epcos_B57560G1104,05:epcos_B57560G1104 -b CRAMPS
 
 # ################################################
 # THREADS
@@ -42,8 +37,6 @@ addf hpg.capture-position   servo-thread
 addf bb_gpio.read                         servo-thread
 addf motion-command-handler               servo-thread
 addf motion-controller                    servo-thread
-addf pid.0.do-pid-calcs                   servo-thread
-addf pid.1.do-pid-calcs                   servo-thread
 addf limit1.0                             servo-thread
 addf limit1.1                             servo-thread
 addf hpg.update             servo-thread
@@ -191,44 +184,4 @@ setp bb_gpio.p9.in-13.invert 1
 #net limit-y-min => axis.1.home-sw-in
 #net limit-y-min => axis.1.neg-lim-sw-in
 #net limit-y-max => axis.1.pos-lim-sw-in
-
-# ################
-# Servo signals
-# ################
-
-# There is currently no driver to generate pulses for actual
-# radio-control style servos, but the buffered 5V output
-# signals can be used as GPIO
-
-# !!! WARNING !!!
-# BBB on-board eMMC *MUST* be disabled in order to use these!
-# Drive eMMC-disabled signal high to enable signals that overlap
-# with the eMMC pins on P8, otherwise they are tri-stated
-#
-# You also need to edit the setup.sh file to enable the GPIO pins
-
-# Signal the hardware that eMMC has been disabled and it is safe
-# to drive the signals connected to eMMC lines (active low)
-newsig eMMC-disabled bit
-sets eMMC-disabled 0
-net eMMC-disabled bb_gpio.p8.out-16
-setp bb_gpio.p8.out-16.invert 1
-
-# Servo signals, output only, driven by an 'ACT125
-
-newsig servo.1 bit
-newsig servo.2 bit
-newsig servo.3 bit
-newsig servo.4 bit
-
-sets servo.1 0
-sets servo.2 0
-sets servo.3 0
-sets servo.4 0
-
-net servo.1 bb_gpio.p8.out-25
-net servo.2 bb_gpio.p8.out-24
-net servo.3 bb_gpio.p8.out-23
-net servo.4 bb_gpio.p8.out-22
-
 
