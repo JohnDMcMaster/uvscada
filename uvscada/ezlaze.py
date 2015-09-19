@@ -83,6 +83,7 @@ import fdpexpect
 
 class EzLaze(object):
     def __init__(self, port="/dev/ttyUSB0", ser_timeout=1.0):
+        self.verbose = 0
         self.ser = serial.Serial(port,
                 baudrate=9600,
                 bytesize=serial.EIGHTBITS,
@@ -157,7 +158,8 @@ class EzLaze(object):
         # command should be echoed.  Ignore
         self.expect('Y')
         self.expect('\n')
-        print 'cmd %s: before %s' % (cmd, self.e.before.strip())
+        if self.verbose:
+            print 'cmd %s: before %s' % (cmd, self.e.before.strip())
     
     def query(self, cmd):
         cmd = str(cmd)
@@ -170,7 +172,8 @@ class EzLaze(object):
         self.expect('N')
         self.expect('\n')
         response = self.e.before.strip()
-        print 'query %s: before %s' % (cmd, response)
+        if self.verbose:
+            print 'query %s: before %s' % (cmd, response)
         return int(response)
 
     # @   -   Laser On/Off

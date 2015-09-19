@@ -5,8 +5,9 @@ import time
 # Camera always local
 class LcncHal(Hal):
     def __init__(self, log=None, dry=False):
-        Hal.__init__(self, log, dry)
+        self.verbose = 0
         self.feedrate = 30
+        Hal.__init__(self, log, dry)
 
     def sleep(self, sec, why):
         ts = format_t(sec)
@@ -18,7 +19,8 @@ class LcncHal(Hal):
 
     def cmd(self, cmd):
         if self.dry:
-            self.log(cmd)
+            if self.verbose:
+                self.log(cmd)
         else:
             self._cmd(cmd)
             self.mv_lastt = time.time()
@@ -79,7 +81,8 @@ class LcncPyHal(LcncHal):
         if not dry:
             self.command.state(self.linuxcnc.STATE_ON)
         self.stat.poll()
-        print 'Enabled: %s' % self.stat.enabled
+        if self.verbose:
+            print 'Enabled: %s' % self.stat.enabled
         
         # prevent "can't do that (EMC_AXIS_HOME:123) in MDI mode"
         # You must home all axes, not just those used
@@ -90,7 +93,8 @@ class LcncPyHal(LcncHal):
             self.command.mode(self.linuxcnc.MODE_MDI)
         
         self.stat.poll()
-        print 'Enabled: %s' % self.stat.enabled
+        if self.verbose:
+            print 'Enabled: %s' % self.stat.enabled
 
         self._limit = {}
         for axisc in self.axes():
@@ -111,23 +115,28 @@ class LcncPyHal(LcncHal):
         if axisi is None:
             axisi = self.ax_c2i[axisc]
         
-        print 'Home: check axis %d' % axisi
+        if self.verbose:
+            print 'Home: check axis %d' % axisi
         self.stat.poll()
-        print 'Enabled: %s' % self.stat.enabled
+        if self.verbose:
+            print 'Enabled: %s' % self.stat.enabled
         axis = self.stat.axis[axisi]
         #print axis
         if lazy and axis['homed']:
-            print '  Already homed'
+            if self.verbose:
+                print '  Already homed'
             return
         # prevent "homing already in progress"
         if not axis['homing']:
             tstart = time.time()
             self.command.home(axisi)
-        print '  Waiting for home...'
+        if self.verbose:
+            print '  Waiting for home...'
         while axis['homing']:
             self.stat.poll()
             time.sleep(0.1)
-        print '  homed after %0.1f' % (time.time() - tstart,)
+        if self.verbose:
+            print '  homed after %0.1f' % (time.time() - tstart,)
     
     def ok_for_mdi(self):
         self.stat.poll()
@@ -139,30 +148,37 @@ class LcncPyHal(LcncHal):
         while not self.ok_for_mdi():
             # TODO: notify self.progress
             #print self.stat.estop, self.stat.enabled, self.stat.homed, self.stat.interp_state, self.linuxcnc.INTERP_IDLE
-            print 'Pos: commanded %d actual %s' % (self.stat.axis[0]['input'], self.stat.axis[0]['output'])
+            if self.verbose:
+                print 'Pos: commanded %d actual %s' % (self.stat.axis[0]['input'], self.stat.axis[0]['output'])
             time.sleep(0.1)
         
     def _cmd(self, cmd):
-        print
-        print
-        print cmd
-        print 'waiting mdi idle (entry)'
+        if self.verbose:
+            print
+            print
+            print cmd
+            print 'waiting mdi idle (entry)'
         self.wait_mdi_idle()
-        print 'executing command'
+        if self.verbose:
+            print 'executing command'
         self.command.mdi(cmd)            
-        print 'waiting mdi idle (exit)'
+        if self.verbose:
+            print 'waiting mdi idle (exit)'
         self.wait_mdi_idle()
-        print 'command done'
+        if self.verbose:
+            print 'command done'
 
     def forever(self, axes, run, progress):
-        print 'forever'
+        if self.verbose:
+            print 'forever'
         while run.is_set():
             # Axes may be updated
             # Copy it so that don't crash if its updated during an iteration
             for axis, sign in dict(axes).iteritems():
                 self.mv_rel({axis: sign * 0.05})
                 pos = self.pos()
-                print 'emitting progress: %s' % str(pos)
+                if self.verbose:
+                    print 'emitting progress: %s' % str(pos)
                 progress(pos)
             time.sleep(0.1)
 

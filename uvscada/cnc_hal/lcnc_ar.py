@@ -33,6 +33,7 @@ class LcncPyHalAr(LcncPyHal):
     def _init(self, host, local_ini=None, remote_ini=None, log=None, dry=False):
         self.running = True
         self.tunnel = None
+        self.verbose = 0
         
         print 'Creating SSH connection'
         self.ssh = paramiko.SSHClient()
