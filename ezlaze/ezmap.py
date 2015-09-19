@@ -14,8 +14,7 @@ def main(hal, el, im):
     '''
     SPOT = 0.33
     # lets make it 30 to improve contrast better
-    #SHOTS = 30
-    SHOTS = 0
+    SHOTS = 30
     if args.dry:
         SHOTS = 0
 
