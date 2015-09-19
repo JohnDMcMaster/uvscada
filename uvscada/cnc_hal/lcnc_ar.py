@@ -58,7 +58,11 @@ class LcncPyHalAr(LcncPyHal):
             src = os.path.join(os.path.dirname(__file__), '..', 'lcnc', 'server.py')
             sftp.put(src, dst)
         
-        if self.remote_port_up(RSH_PORT):
+        port_up = self.remote_port_up(PORT)
+        
+        if port_up:
+            print 'linuxcnc: assuming running since RPC agent running '
+        elif self.remote_port_up(RSH_PORT):
             print 'linuxcnc: already running'
         else:
             if local_ini:
@@ -88,7 +92,7 @@ class LcncPyHalAr(LcncPyHal):
             # need to poke around and see how we can do better
             self.wait_remote_port(RSH_PORT)
         
-        if self.remote_port_up(PORT):
+        if port_up:
             print 'Remote agent: appears to be already running'
         else:
             print 'Remote agent: launching '
