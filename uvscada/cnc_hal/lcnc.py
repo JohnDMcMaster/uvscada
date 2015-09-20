@@ -6,7 +6,7 @@ import time
 class LcncHal(Hal):
     def __init__(self, log=None, dry=False):
         self.verbose = 0
-        self.feedrate = 30
+        self.feedrate = None
         Hal.__init__(self, log, dry)
 
     def sleep(self, sec, why):
