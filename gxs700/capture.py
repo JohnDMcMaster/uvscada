@@ -7,6 +7,7 @@ import argparse
 from uvscada.gxs700_util import open_dev
 import os
 from uvscada import gxs700
+import glob
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
@@ -22,7 +23,7 @@ if __name__ == "__main__":
     
     taken = 0
     imagen = 0
-    while os.path.exists('capture_%03d.bin' % imagen):
+    while glob.glob('capture_%03d*' % imagen):
         imagen += 1
     print 'Taking first image to %s' % ('capture_%03d.bin' % imagen,)
     
