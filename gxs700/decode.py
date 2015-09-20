@@ -54,7 +54,7 @@ if __name__ == "__main__":
         if args.hist_eq:
             args.fout = args.fout.replace('.png', '_e.png')
 
-    print 'Reading image...'
+    print 'Reading %s...' % args.fin
     buff = open(args.fin, 'r').read()
     if args.hist_eq:
         print 'Equalizing histogram...'
