@@ -111,7 +111,7 @@ def take_picture(fn_base):
     img_dec = planner.imager.get()
     if not planner.dry:
         open(fn_base + '.bin', 'w').write(img_dec.raw)
-        img_dec.save(fn_base + '.tif')
+        img_dec.save(fn_base + '.png')
     planner.all_imgs += 1
 
 if __name__ == "__main__":
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument('--host', default='mk-test', help='Host.  Activates remote mode')
     parser.add_argument('--port', default=22617, type=int, help='Host port')
     parser.add_argument('--overwrite', action='store_true')
-    add_bool_arg(parser, '--dry', default=True)
+    add_bool_arg(parser, '--dry', default=True, help='Due to health hazard, default is True')
     parser.add_argument('scan_json', nargs='?', default='scan.json', help='Scan parameters JSON')
     parser.add_argument('out', nargs='?', default='out/default', help='Output directory')
     args = parser.parse_args()
@@ -128,7 +128,8 @@ if __name__ == "__main__":
         if not args.overwrite:
             raise Exception("Refusing to overwrite")
         shutil.rmtree(args.out)
-    os.mkdir(args.out)
+    if not args.dry:
+        os.mkdir(args.out)
 
     imager = XrayImager(dry=args.dry)
     #imager = MockImager()
@@ -143,7 +144,7 @@ if __name__ == "__main__":
         # about 25 / 1850
         img_sz = (1850, 1344)
         planner = uvscada.planner.Planner(json.load(open(args.scan_json)), hal, imager=imager,
-                    img_sz=img_sz, unit_per_pix=(1.5/img_sz[0]),
+                    img_sz=img_sz, unit_per_pix=(25.4 * 1.5/img_sz[0]),
                     out_dir=args.out,
                     progress_cb=None,
                     dry=args.dry,
