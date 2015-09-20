@@ -51,6 +51,8 @@ if __name__ == "__main__":
         if args.fin.find('.bin') < 0:
             raise Exception("Can't guess output file name")
         args.fout = args.fin.replace('.bin', '.png')
+        if args.hist_eq:
+            args.fout = args.fout.replace('.png', '_e.png')
 
     print 'Reading image...'
     buff = open(args.fin, 'r').read()
