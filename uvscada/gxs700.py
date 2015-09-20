@@ -507,12 +507,13 @@ class GXS700:
     @staticmethod
     def decode(buff):
         '''Given bin return PIL image object'''
+        # FIXME: hack to make widthwise so it fits on screen better
         height = 1850
         width = 1344
         depth = 2
         
         # no need to reallocate each loop
-        img = Image.new("I", (width, height), "White")
+        img = Image.new("I", (height, width), "White")
         
         for y in range(height):
             line0 = buff[y * width * depth:(y + 1) * width * depth]
@@ -529,7 +530,7 @@ class GXS700:
                 # compliment to give in conventional form per above
                 G = 0xFFFF - G
                 
-                img.putpixel((x, y), G)
+                img.putpixel((y, x), G)
         return img
 
     def _setup_fpga1(self):
