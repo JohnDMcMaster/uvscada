@@ -45,3 +45,4 @@ if __name__ == "__main__":
         imagen += 1
     
     gxs.cap_binv(args.number, cb)
+
