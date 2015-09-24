@@ -42,6 +42,15 @@ class XrayImager(Imager):
         self.shot_on = 3
         # 10% duty cycle
         self.shot_off = 27
+        # XXX FIXME TODO
+        # I'm actually firing at 60V @ 8A => 480W
+        # With 100W dissapation I can actually run at about 20% duty cycle
+        # need some way to more accurately measure thermals
+        # in the meantime hack this in half
+        watt = 60 * 8
+        print 'WARNING: set for %dW duty cycle.  Running at higher power may damage head' % watt
+        self.shot_off = self.shot_on * watt / 100 - self.shot_on
+        print 'Shot off time: %0.1f' % self.shot_off
 
         print 'Warming filament...'
         # Should dry do this?
@@ -65,9 +74,9 @@ class XrayImager(Imager):
                 time.sleep(wait)
         
         print 'Checking head temp'
-        wait = self.fire_last - time.time() - self.fire_last
+        wait = self.shot_off - (time.time() - self.fire_last)
+        print 'Waiting %0.1f sec for head to cool...' % wait
         if wait > 0:
-            print 'Waiting %0.1f sec for head to cool...' % wait
             if self.dry:
                 print 'DRY: skip wait'
             else:
