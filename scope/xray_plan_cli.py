@@ -151,9 +151,13 @@ if __name__ == "__main__":
         # 10 TPI stage
         # Run in inch mode long run but for now stage is set for mm
         # about 25 / 1850
-        img_sz = (1850, 1344)
+        #img_sz = (1850, 1344)
+        # mechanically this is better
+        # Post process data
+        img_sz = (1344, 1850)
+        mm_per_pix = 25.4 * 1.4/1850
         planner = uvscada.planner.Planner(json.load(open(args.scan_json)), hal, imager=imager,
-                    img_sz=img_sz, unit_per_pix=(25.4 * 1.5/img_sz[0]),
+                    img_sz=img_sz, unit_per_pix=mm_per_pix,
                     out_dir=args.out,
                     progress_cb=None,
                     dry=args.dry,
@@ -162,3 +166,4 @@ if __name__ == "__main__":
         planner.run()
     finally:
         hal.ar_stop()
+

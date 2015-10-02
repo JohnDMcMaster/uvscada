@@ -479,6 +479,8 @@ class Planner(object):
             self.cur_col = -1
             # columns
             for ((cur_x, cur_y), (self.cur_col, self.cur_row)) in self.gen_xycr():
+                self.log('')
+                self.log('Pictures taken: %d / %d' % (self.xy_imgs, self.pictures_to_take))
                 if not self.normal_running.is_set():
                     self.log('Planner paused')
                     self.normal_running.wait()
@@ -497,9 +499,8 @@ class Planner(object):
             self.log()
             self.log()
             self.log()
-            #self.comment('Statistics:')
-            #self.comment('Pictures: %d' % pictures_taken)
-            if not self.xy_imgs == self.pictures_to_take:
+            self.log('Pictures taken: %d / %d' % (self.xy_imgs, self.pictures_to_take))
+            if self.xy_imgs != self.pictures_to_take:
                 if self.config.get('exclude', []):
                     self.log('Suppressing for exclusion: pictures taken mismatch (taken: %d, to take: %d)' % (self.pictures_to_take, self.xy_imgs))
                 else:

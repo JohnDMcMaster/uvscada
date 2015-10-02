@@ -430,7 +430,7 @@ class GXS700:
             if state != 0x01:
                 #print 'Non-1 state: 0x%02X' % state
                 if state == 0x08:
-                    print 'Go go go'
+                    #print 'Go go go'
                     break
             
             # Generated from packet 863/864
@@ -448,13 +448,13 @@ class GXS700:
         #buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
         # NOTE:: req max 128 but got 8
         #validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 783/784", True)
-        print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
+        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
         
         # Generated from packet 785/786
         #buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
         # NOTE:: req max 128 but got 8
         #validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 785/786", True)
-        print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
+        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
         
         # Generated from packet 787/788
         #buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
@@ -467,7 +467,7 @@ class GXS700:
         #buff = self.dev.controlRead(0xC0, 0xB0, 0x0051, 0x0000, 28)
         # NOTE:: req max 28 but got 12
         #validate_read("\x00\x05\x00\x0A\x00\x03\x00\x06\x00\x04\x00\x05", buff, "packet 789/790")
-        self.versions()
+        #self.versions()
         
         # Generated from packet 791/792
         #buff = dev.controlRead(0xC0, 0xB0, 0x0004, 0x0000, 2)
@@ -753,17 +753,17 @@ class GXS700:
         if self.state() != 1:
             raise Exception('Unexpected state')
         
-        print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
+        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
         
         if self.state() != 1:
             raise Exception('Unexpected state')
         
-        print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
+        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
         
         if self.error():
             raise Exception('Unexpected error')
         
-        self.versions()
+        #self.versions()
         
         if self.state() != 1:
             raise Exception('Unexpected state')
