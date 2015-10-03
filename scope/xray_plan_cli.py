@@ -125,7 +125,7 @@ def take_picture(fn_base):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Planner module command line')
-    parser.add_argument('--host', default='mk-test', help='Host.  Activates remote mode')
+    parser.add_argument('--host', default='mk-xray', help='Host.  Activates remote mode')
     parser.add_argument('--port', default=22617, type=int, help='Host port')
     parser.add_argument('--overwrite', action='store_true')
     add_bool_arg(parser, '--dry', default=True, help='Due to health hazard, default is True')
