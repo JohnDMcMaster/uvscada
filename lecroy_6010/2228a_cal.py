@@ -57,10 +57,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Use LeCroy 2228A test mode to collect calibration data')
     parser.add_argument('--port', default='/dev/ttyUSB0', help='GPIB serial port')
     parser.add_argument('--csv', default=None, help='csv output file')
-    parser.add_argument('n', type=int, help='Slot number')
-    parser.add_argument('cycles', nargs='?', default=1, type=int, help='Slot number')
+    parser.add_argument('--cycles', default=None, type=int, help='How many iterations to do')
+    parser.add_argument('n', nargs='+', type=int, help='Slot numbers')
     args = parser.parse_args()
 
+    if args.cycles is None:
+        args.cycles = 999999999
+    
     # Init time: 0.505
     # this can't be helped unless I disable hte clear
     tstart = time.time()
@@ -75,34 +78,36 @@ if __name__ == "__main__":
     else:
         csvw = None
 
-    # N time: 0.016
-    tstart = time.time()
-    l.n = args.n
-    print 'N time: %0.3f' % (time.time() - tstart,)
-    
-    # Initialize
-    '''
-    pg 17
-    IMPORTANT: The unit should always be initialized with an F(24)
-    (Disable LAM) or an F(26) (Enable LAM) and an F(10) (Clear LAM)
-    whenever the crate power is turned on.
-    '''
-    l.cami(n=args.n, f=24, a=0)
-    l.cami(n=args.n, f=10, a=0)
+    for n in args.n:
+        # N time: 0.016
+        #tstart = time.time()
+        l.n = n
+        #print 'N time: %0.3f' % (time.time() - tstart,)
+        
+        # Initialize
+        '''
+        pg 17
+        IMPORTANT: The unit should always be initialized with an F(24)
+        (Disable LAM) or an F(26) (Enable LAM) and an F(10) (Clear LAM)
+        whenever the crate power is turned on.
+        '''
+        l.cami(n=n, f=24, a=0)
+        l.cami(n=n, f=10, a=0)
     
     for cycle in xrange(args.cycles):
-        # Trigger test generator
-        l.cami(n=args.n, f=25, a=0)
-        
-        t = time.time()
-        print 'Cycle %d @ %0.1f' % (cycle, t)
-        # Read channels, clearning on last read
-        vs = []
-        for ch in xrange(8):
-            v = l.cami(n=args.n, f=2, a=ch)
-            vs.append(v)
-            print '  CH%d: 0x%06X' % (ch, v)
-        if csvw:
-            csvw.writerow([args.n, cycle, '%0.1f' % t] + vs)
-            csvf.flush()
+        for n in args.n:
+            # Trigger test generator
+            l.cami(n=n, f=25, a=0)
+            
+            t = time.time()
+            print 'N%d cycle %d @ %0.1f' % (n, cycle, t)
+            # Read channels, clearning on last read
+            vs = []
+            for ch in xrange(8):
+                v = l.cami(n=n, f=2, a=ch)
+                vs.append(v)
+                print '  CH%d: 0x%06X' % (ch, v)
+            if csvw:
+                csvw.writerow([n, cycle, '%0.1f' % t] + vs)
+                csvf.flush()
 

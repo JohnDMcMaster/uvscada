@@ -71,20 +71,21 @@ if __name__ == "__main__":
     
     # Plot everything together
     if 1:
-        colors = 'rgbybmcr'
-        pargs = []
-        for i in xrange(8):
-            pargs.extend([ts, vs[i], colors[i]])
-        plt.plot(*pargs)
-        
-        #plt.semilogy([small for (t, small, large) in data])
-        #plt.plotting(semilogy)
-        
-        plt.title('All drift over %s' % hms(total_t))
-        plt.xlabel('Sample #')
-        plt.ylabel('ADC delta')
-        #plt.show()
-        plt.savefig(os.path.join(args.dir, 'all.png'))
+        for 
+            colors = 'rgbybmcr'
+            pargs = []
+            for i in xrange(8):
+                pargs.extend([ts, vs[i], colors[i]])
+            plt.plot(*pargs)
+            
+            #plt.semilogy([small for (t, small, large) in data])
+            #plt.plotting(semilogy)
+            
+            plt.title('All drift over %s' % hms(total_t))
+            plt.xlabel('Sample #')
+            plt.ylabel('ADC delta')
+            #plt.show()
+            plt.savefig(os.path.join(args.dir, 'all.png'))
 
     # Individual
     if 1:
