@@ -8,6 +8,19 @@ Unfortunately IA isn't a mode
 For most of these applications we are stitching to maps which are "best effort" for online viewing
 High precision applications will continue to work on raw data
 TODO: look into options for combining layers to form tiffs etc
+
+Known issues:
+-cpfind
+    LA: no
+    RGBA: yes
+-Hugin
+    LA: ?
+    RGBA: no
+-nona, enblend
+    RBGA: yes
+
+Generate as simple .jpgs with gray during .pto creation
+Then before actual stitching switch to RBGA or LA
 '''
 import argparse
 import os
@@ -18,11 +31,16 @@ import glob
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Mask 16 bit grayscale into 8 bit grayscale with alpha')
     parser.add_argument('--overwrite', action='store_true', help='')
+    parser.add_argument('--gray', '-g', action='store_true', help='Whiten (noise?) unused instead of alpha')
+    parser.add_argument('--jpg', '-j', action='store_true', help='force jpg output')
     parser.add_argument('dir_in', help='')
-    parser.add_argument('dir_out', help='')
+    parser.add_argument('dir_out', nargs='?', help='')
     args = parser.parse_args()
     
     #mask = Image.open('mask.png').convert('L')
+    
+    if not args.dir_out:
+        args.dir_out = args.dir_in + '_mask'
     
     if os.path.exists(args.dir_out):
         if not args.overwrite:
@@ -36,24 +54,24 @@ if __name__ == "__main__":
 
     for fn in glob.glob(os.path.join(args.dir_in, '*.png')):
         print
-        print
-        print 'orig'
+        #print
+        #print 'orig'
         print fn
         imi = Image.open(fn)
-        print imi.mode
-        print [imi.getpixel((i, i)) for i in xrange(0, 600, 50)]
+        #print imi.mode
+        #print [imi.getpixel((i, i)) for i in xrange(0, 600, 50)]
         
         # IA is not supported
         # truncate to L so we can make LA
-        print
-        print 'L'
+        #print
+        #print 'L'
         iml = im_i2l(imi)
-        print iml.mode
-        print [iml.getpixel((i, i)) for i in xrange(0, 600, 50)]
+        #print iml.mode
+        #print [iml.getpixel((i, i)) for i in xrange(0, 600, 50)]
         
-        print
-        print 'LA'
-        mask = Image.new('L', iml.size, color=0)
+        #print
+        #print 'LA'
+        mask = Image.new('L', imi.size, color=0)
         draw = ImageDraw.Draw(mask)
         #draw.rectangle((50,80,100,200), fill=0)
         # opened in image editor to get approx coords
@@ -64,8 +82,20 @@ if __name__ == "__main__":
                         5: (285, 1335),        4: (1570, 1335),
                     }
         draw.polygon(polym.values(), fill=255)
-        iml.putalpha(mask)
-        print iml.mode
-        print [iml.getpixel((i, i)) for i in xrange(0, 600, 50)]
-        iml.save(os.path.join(args.dir_out, os.path.basename(fn)))
-        #break
+        if args.gray:
+            print 'MASK: gray'
+            imr = Image.new('RGB', imi.size, color=(128, 128, 128))
+            imr.paste(iml, mask=mask)
+            imo = imr
+        else:
+            print 'MASK: alpha'
+            iml.putalpha(mask)
+            #print iml.mode
+            #print [iml.getpixel((i, i)) for i in xrange(0, 600, 50)]
+            imo = iml
+        
+        fn_out = os.path.join(args.dir_out, os.path.basename(fn))
+        if args.jpg:
+            imo.save(fn_out.replace('.png', '.jpg'), quality=90)
+        else:
+            imo.save(fn_out)
