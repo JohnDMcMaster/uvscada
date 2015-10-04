@@ -63,6 +63,8 @@ if __name__ == "__main__":
     if os.path.isdir(args.fin):
         if args.fout is None:
             raise Exception("dir requires fout")
+        if not os.path.exists(args.fout):
+            os.mkdir(args.fout)
         for fn in glob.glob(os.path.join(args.fin, '*.bin')):
             fout = os.path.join(args.fout, os.path.basename(fn).replace('.bin', '.png'))
             process(fn, fout)
