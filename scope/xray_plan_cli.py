@@ -147,6 +147,19 @@ if __name__ == "__main__":
     try:
         #config = get_config()
     
+        '''
+        2015-10-03 improved calibration
+        p4/x-ray/04_l_65kvp_75map/png/c000_r000.png
+        slot length meas: 5.4 mm
+        398 - 101 pix = 297 pix
+        297 / 5.4 mm = 55 pix / mm
+        mm / pix = 1 / 55. = 0.018181818
+        Was using: 0.019221622 (1.400 x 1.017")
+        This makes the sensor (including unusable areas):
+            1344 / 55 = 24.4 mm => 0.962"
+            1850 / 55 = 33.6 mm => 1.324"
+            1.324 x 0.962"
+        '''
         # Sensor *roughly* 1 x 1.5"
         # 10 TPI stage
         # Run in inch mode long run but for now stage is set for mm
@@ -155,7 +168,9 @@ if __name__ == "__main__":
         # mechanically this is better
         # Post process data
         img_sz = (1344, 1850)
-        mm_per_pix = 25.4 * 1.4/1850
+        # Wonder if this is exact?
+        # should measure broken sensor under microscope
+        mm_per_pix = 1 / 55.
         planner = uvscada.planner.Planner(json.load(open(args.scan_json)), hal, imager=imager,
                     img_sz=img_sz, unit_per_pix=mm_per_pix,
                     out_dir=args.out,
