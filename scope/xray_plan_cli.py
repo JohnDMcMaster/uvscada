@@ -180,5 +180,9 @@ if __name__ == "__main__":
         planner.take_picture = take_picture
         planner.run()
     finally:
+        print 'Forcing x-ray off at exit'
+        switch(SW_HV, 0)
+        time.sleep(0.2)
+        switch(SW_FIL, 0)
         hal.ar_stop()
 
