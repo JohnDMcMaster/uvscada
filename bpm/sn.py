@@ -25,37 +25,11 @@ def replay(dev):
     load_fx2(dev)
     
     time.sleep(0.002)
-    if 0:
-        # Generated from packet 181/182
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0086, "")
-        time.sleep(0.001)
-        # Generated from packet 183/184
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0002, "")
-        time.sleep(0.001)
-        # Generated from packet 185/186
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0088, "")
-        time.sleep(0.001)
     # Generated from packet 187/188
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
     validate_read("\x00\x00\x00", buff, "packet 187/188")
     time.sleep(0.002)
-    if 0:
-        # Generated from packet 189/190
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0086, "")
-        time.sleep(0.001)
-        # Generated from packet 191/192
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0002, "")
-        time.sleep(0.001)
-        # Generated from packet 193/194
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0088, "")
-        time.sleep(0.001)
     # Generated from packet 195/196
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
@@ -66,19 +40,6 @@ def replay(dev):
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 197/198")
     time.sleep(0.006)
-    if 0:
-        # Generated from packet 199/200
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0086, "")
-        time.sleep(0.004)
-        # Generated from packet 201/202
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0002, "")
-        time.sleep(0.001)
-        # Generated from packet 203/204
-        # CLEAR_FEATURE (0x01): 0x00 (ENDPOINT_HALT)
-        controlWrite(0x02, 0x01, 0x0000, 0x0088, "")
-        time.sleep(0.002)
     # Generated from packet 205/206
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
