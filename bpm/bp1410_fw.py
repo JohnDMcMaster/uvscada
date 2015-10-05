@@ -2,7 +2,7 @@ import time
 
 import bp1410_fw_fx2
 
-def load_fx2(dev):
+def usb_wraps(dev):
     def bulkRead(endpoint, length, timeout=None):
         if timeout is None:
             timeout = 1000
@@ -30,7 +30,12 @@ def load_fx2(dev):
         #time.sleep(.05)
         dev.controlWrite(request_type, request, value, index, data,
                      timeout=timeout)
-    
+    return bulkRead, bulkWrite, controlRead, controlWrite
+
+
+def load_fx2(dev):
+    _bulkRead, _bulkWrite, _controlRead, controlWrite = usb_wraps(dev)
+
     # hold fx2 in reset
     # Generated from packet 129/130
     controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x01")

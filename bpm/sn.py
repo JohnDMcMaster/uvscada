@@ -6,7 +6,7 @@ import binascii
 import time
 import usb1
 
-from bp1410_fw import load_fx2
+from bp1410_fw import load_fx2, usb_wraps
 
 def validate_read(expected, actual, msg):
     if expected != actual:
@@ -17,30 +17,7 @@ def validate_read(expected, actual, msg):
 
 
 def replay(dev):
-    def bulkRead(endpoint, length, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        return dev.bulkRead(endpoint, length, timeout=timeout)
-
-    def bulkWrite(endpoint, data, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        dev.bulkWrite(endpoint, data, timeout=timeout)
-    
-    def controlRead(request_type, request, value, index, length,
-                    timeout=None):
-        if timeout is None:
-            timeout = 1000
-        return dev.controlRead(request_type, request, value, index, length,
-                    timeout=timeout)
-
-    def controlWrite(request_type, request, value, index, data,
-                     timeout=None):
-        if timeout is None:
-            timeout = 1000
-        dev.controlWrite(request_type, request, value, index, data,
-                     timeout=timeout)
-
+    bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
 
     # Generated from packet 169/170
     # ...
