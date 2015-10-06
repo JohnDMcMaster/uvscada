@@ -9,10 +9,15 @@ testdata
 *.o
 *.lib
 *.bin
+*.bin2
+*.hex
 *.png
 captures
 test
 *.log
 MANIFEST
 dist
+
+.project
+.pydevproject
 
