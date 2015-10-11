@@ -706,7 +706,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00", buff, "packet 413/414")
 
 scalars = {
-    # 15V: -3.5V: leftover after below
+    # -3.5V: leftover after below
     # also gave a weird value when I tried to scale other ADCs
     0x01: -3.476 / 0x38F0,
     # 30V:  best guess based on scaling other readings
@@ -715,8 +715,10 @@ scalars = {
     0x05: -4.93 / 0x31D0,
     # 0V: very likely based on 0 reading
     0x15: 37.28 / 0xBA70,
-    # +5V: best guess based on scaling other readings
-    0x0c: 37.28 / 0xBA70 / 2,
+    # +5V: reasonable confidence
+    # removing, reconnecting J1 shifts +5V by 100 mV or so as well as +15V, and +35V
+    # +15V and +35V are already known and this was already suspected to be +5V
+    0x0c: 5.44 / 0x3310,
     # 15V: confident
     # Disconnecting causes this to go up by 1.5 times, no other channel changes
     # (good thing it didn't damage anything...)
