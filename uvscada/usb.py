@@ -1,7 +1,7 @@
 import libusb1
 import binascii
 
-from util import hexdump
+from util import hexdump, str2hex
 
 def usb_wraps(dev):
     # Shorten stack traces to simplify errors
