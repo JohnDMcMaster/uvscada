@@ -7,29 +7,18 @@ import uvscada.planner
 from uvscada.cnc_hal import lcnc_ar
 #from config import get_config
 from uvscada.util import add_bool_arg
-from uvscada.imager import MockImager
 from uvscada.imager import Imager
 import uvscada.gxs700_util
+from uvscada.wps7 import WPS7
 
 import argparse
 import json
 import os
 import shutil
-import threading
-import pycurl
 import time
 
 SW_HV = 1
 SW_FIL = 2
-
-def switch(n, on):
-    state = 'ON' if on else 'OFF'
-    c = pycurl.Curl()
-    c.setopt(c.URL, 'http://energon/outlet?%d=%s' % (n, state))
-    c.setopt(c.WRITEDATA, open('/dev/null', 'w'))
-    c.setopt(pycurl.USERPWD, '%s:%s' % (os.getenv('WPS7_USER', 'admin'), os.getenv('WPS7_PASS', '')))
-    c.perform()
-    c.close()
 
 class DryCheckpoint(Exception):
     pass
@@ -55,7 +44,7 @@ class XrayImager(Imager):
         print 'Warming filament...'
         # Should dry do this?
         # Tests WPS connectivity and shouldn't fire the x-ray
-        switch(SW_FIL, 1)
+        wps.on(SW_FIL)
         self.fil_on = time.time()
         self.fire_last = 0
         
@@ -88,12 +77,12 @@ class XrayImager(Imager):
                 print 'DRY: not firing'
             else:
                 print 'X-RAY: BEAM ON %0.1f sec' % self.shot_on
-                switch(SW_HV, 1)
+                wps.on(SW_HV)
                 time.sleep(self.shot_on)
                 self.fire_last = time.time()
         finally:
             print 'X-RAY: BEAM OFF'
-            switch(SW_HV, 0)
+            wps.off(SW_HV)
         
         if self.dry:
             # Takes a while to download and want this to be quick
@@ -144,6 +133,7 @@ if __name__ == "__main__":
     #imager = MockImager()
 
     hal = lcnc_ar.LcncPyHalAr(host=args.host, local_ini='config/xray/rsh.ini', dry=args.dry)
+    wps = WPS7()
     try:
         #config = get_config()
     
@@ -181,8 +171,8 @@ if __name__ == "__main__":
         planner.run()
     finally:
         print 'Forcing x-ray off at exit'
-        switch(SW_HV, 0)
+        wps.off(SW_HV)
         time.sleep(0.2)
-        switch(SW_FIL, 0)
+        wps.off(SW_FIL)
         hal.ar_stop()
 

@@ -1,17 +1,26 @@
 import binascii
 import time
 import usb1
+import sys
+from uvscada.wps7 import WPS7
+from uvscada.util import hexdump
 
-from bp1410_fw import load_fx2, usb_wraps
-import bp1410_fw_sn
+from uvscada.usb import usb_wraps
+from uvscada.bpm.bp1410_fw import load_fx2
+from uvscada.bpm import bp1410_fw_sn
 
 def validate_read(expected, actual, msg):
     if expected != actual:
         print 'Failed %s' % msg
         print '  Expected; %s' % binascii.hexlify(expected,)
+        hexdump(expected, indent='    ')
         print '  Actual:   %s' % binascii.hexlify(actual,)
+        hexdump(actual, indent='    ')
         #raise Exception('failed validate: %s' % msg)
 
+def dexit():
+    print 'Debug break'
+    sys.exit(0)
 
 def replay_init(dev):
     # cmd: /home/mcmaster/bin/usbrply bp1410_15_startup_cold.cap --comment --fx2 --device 24 -r 169:264 --sleep
@@ -42,6 +51,8 @@ def replay_init(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 207/208")
+
+    # Will change after a firmware load
     # Generated from packet 209/210
     bulkWrite(0x02, "\x01")
     # Generated from packet 211/212
@@ -56,6 +67,7 @@ def replay_init(dev):
               "\x00\x00\x64\x1B\x00\x00\x66\x1B\x00\x00\x68\x1B\x00\x00\x44\x1C"
               "\x00\x00\x70\x1B\x00\x00\x30\x11\x00\x00\x34\x11\x00\x00\x74\x1B"
               "\x00\x00\x81\x00", buff, "packet 211/212")
+    
     # Generated from packet 213/214
     bulkWrite(0x02, "\x43\x19\x00\x00\x00\x3B\x66\x1B\x00\x00\xFE\xFF\x3B\x64\x1B\x00"
               "\x00\xFE\xFF\x00")
@@ -63,6 +75,7 @@ def replay_init(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 5
     validate_read("\x08\xA4\x06\x02\x00", buff, "packet 215/216")
+    
     # Generated from packet 217/218
     bulkWrite(0x02, "\x01")
     # Generated from packet 219/220
@@ -79,38 +92,66 @@ def replay_init(dev):
               "\x00\x00\x81\x00", buff, "packet 219/220")
     # Generated from packet 221/222
     bulkWrite(0x02, "\x43\x19\x00\x00\x00\x11\xF0\xFF")
-    
+
     '''
     The following are fired in rapid succession without waiting for ack
     Appears to be some sort of firmware load
     '''
-    # Generated from packet 223/228
-    bulkWrite(0x02, bp1410_fw_sn.p223)
-    # Generated from packet 224/229
-    bulkWrite(0x02, bp1410_fw_sn.p224)
-    # Generated from packet 225/230
-    bulkWrite(0x02, bp1410_fw_sn.p225)
-    # Generated from packet 226/231
-    bulkWrite(0x02, bp1410_fw_sn.p226)
-    # Generated from packet 227/232
-    bulkWrite(0x02, bp1410_fw_sn.p227)
+    if 0:
+        # Generated from packet 223/228
+        bulkWrite(0x02, bp1410_fw_sn.p223)
+        # Generated from packet 224/229
+        bulkWrite(0x02, bp1410_fw_sn.p224)
+        # Generated from packet 225/230
+        bulkWrite(0x02, bp1410_fw_sn.p225)
+        # Generated from packet 226/231
+        bulkWrite(0x02, bp1410_fw_sn.p226)
+        # Generated from packet 227/232
+        bulkWrite(0x02, bp1410_fw_sn.p227)
+    if 1:
+        ts = set()
+        for i, p in enumerate([bp1410_fw_sn.p223, bp1410_fw_sn.p224, bp1410_fw_sn.p225, bp1410_fw_sn.p226, bp1410_fw_sn.p227]):
+            t = dev.getTransfer()
+            t.setBulk(0x02, p, callback=None, user_data=i, timeout=1000)
+            ts.add(t)
+            t.submit()
+        while any(x.isSubmitted() for x in ts):
+            usbcontext.handleEvents()
+        
+    '''
+    Replay
+    Expected; 08800100
+    Actual:   08830100
     
+    second byte is sequence number
+    starts at 80 and increases from there
+    loop below doesn't work...wonder why
+    '''
     # Generated from packet 233/234
     bulkWrite(0x02, "\x5A")
     # Generated from packet 235/236
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x80\x01\x00", buff, "packet 235/236")
+    time.sleep(0.1)
+    
     # Generated from packet 237/238
     bulkWrite(0x02, "\x11\x10\x00")
     # Generated from packet 239/240
     bulkWrite(0x02, "\xEA\xCC\x64\x01\x00\x08\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x3F")
+    
     # Generated from packet 241/242
     bulkWrite(0x02, "\xA6")
     # Generated from packet 243/244
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
+    '''
+    replay
+      Expected; 08810100
+      Actual:   08860100
+    '''
     validate_read("\x08\x81\x01\x00", buff, "packet 243/244")
+    
     # Generated from packet 245/246
     bulkWrite(0x02, "\x11\x4E\x00")
     # Generated from packet 247/248
@@ -119,18 +160,26 @@ def replay_init(dev):
               "\x01\x00\x66\x8B\x02\x66\x89\x83\x00\x00\x01\x00\x83\xC2\x02\x83"
               "\xC3\x02\x83\xE9\x02\x75\xEB\x8C\xC8\x50\xB8\xF0\xFF\x01\x00\x50"
               "\x0F\x20\xC0\x0D\x00\x00\x00\x60\x0F\x22\xC0\x0F\x09\xC3")
+    
     # Generated from packet 249/250
     bulkWrite(0x02, "\xDB")
     # Generated from packet 251/252
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
+    '''
+    replay
+      Expected; 08820100
+      Actual:   08890100
+    '''
     validate_read("\x08\x82\x01\x00", buff, "packet 251/252")
+    
     # Generated from packet 253/254
     bulkWrite(0x02, "\x82")
     # Generated from packet 255/256
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 255/256")
+    
     # Generated from packet 257/258
     bulkWrite(0x02, "\x01")
     # Generated from packet 259/260
@@ -145,6 +194,7 @@ def replay_init(dev):
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
               "\x00\x00\xC0\x1E\x00\x00\x85\x00", buff, "packet 259/260")
+    
     # Generated from packet 261/262
     bulkWrite(0x02, "\x0E\x00")
     # Generated from packet 263/264
@@ -170,12 +220,32 @@ def replay_init(dev):
     validate_read("\x08\x14\x00\x54\x41\x38\x34\x56\x4C\x56\x5F\x46\x58\x34\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3E"
               "\x2C\x20\x00", buff, "packet 267/268")
+    
+    
+    
+    
+    '''
+    First non-matching packet
+    appears to have been caused by
+        capture: no socket module
+        now: had socket module
+    removed socket module and now perfectly matches
+    '''
+    
+    print 'Socked module checkpoint'
     # Generated from packet 269/270
     bulkWrite(0x02, "\x03")
     # Generated from packet 271/272
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 5
     validate_read("\x08\x71\x04\x02\x00", buff, "packet 271/272")
+    
+    
+    
+    
+    
+    
+    
     # Generated from packet 273/274
     bulkWrite(0x02, "\x03")
     # Generated from packet 275/276
@@ -190,6 +260,7 @@ def replay_init(dev):
     validate_read("\x08\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\x20\x00", buff, "packet 279/280")
+    
     # Generated from packet 281/282
     bulkWrite(0x02, "\x01")
     # Generated from packet 283/284
@@ -204,18 +275,29 @@ def replay_init(dev):
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
               "\x00\x00\xC0\x1E\x00\x00\x85\x00", buff, "packet 283/284")
+    
     # Generated from packet 285/286
     bulkWrite(0x02, "\x43\x19\x00\x00\x00")
+    
     # Generated from packet 287/288
     bulkWrite(0x02, "\x20\x01\x00\x0C\x04")
+    
     # Generated from packet 289/290
     bulkWrite(0x02, "\x41\x00\x00")
+    
     # Generated from packet 291/292
     bulkWrite(0x02, "\x10\x80\x02")
     # Generated from packet 293/294
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 9
     validate_read("\x08\x80\x00\x00\x00\x09\x00\x06\x00", buff, "packet 293/294")
+    
+    
+    '''
+    registration
+    '''
+
+    
     # Generated from packet 295/296
     bulkWrite(0x02, "\x45\x01\x00\x00\x31\x00\x06")
     # Generated from packet 297/298
@@ -726,10 +808,11 @@ def replay_init(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00", buff, "packet 377/378")
 
 
-def replay_pwr(dev):
+def replay_pwr(dev, usbcontext):
     # cmd: /home/mcmaster/bin/usbrply bp1410_02_ps.cap --comment --fx2 --sleep --device 9
     bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
     
+    print 'Replaying pwr'
     # doesn't help
     #print 'sleeping'
     #time.sleep(20)
@@ -744,7 +827,12 @@ def replay_pwr(dev):
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 13/14")
     time.sleep(0.001)
+    
+    # First different packet
+    # socket difference maybe?
+    # consider generating trace in current state
     # Generated from packet 15/16
+    # putting LA on didn't fix, but it did make BP sw start working
     bulkWrite(0x02, "\x01")
     time.sleep(0.001)
     # Generated from packet 17/18
@@ -1585,6 +1673,7 @@ def replay_pwr(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00", buff, "packet 195/196")
     time.sleep(0.002)
+    
     # Generated from packet 197/198
     bulkWrite(0x02, "\x02")
     time.sleep(0.001)
@@ -1654,12 +1743,34 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     args = parser.parse_args()
 
+    if 0:
+        print 'Cycling'
+        wps = WPS7(host='raijin')
+        wps.cycle([1, 2], t=2.0)
+        # 1 second too short
+        time.sleep(3)
+        print 'Cycled'
+
     usbcontext = usb1.USBContext()
     dev = open_dev(usbcontext)
     dev.claimInterface(0)
     #dev.resetDevice()
-    replay_init(dev)
-    replay_pwr(dev)
 
-
-    # Done!
+    if 1:
+        replay_init(dev)
+        replay_pwr(dev, usbcontext)
+    if 0:
+        
+        cap_02_1_init.replay(dev)
+        #load_fx2(dev)
+        print
+        print
+        # didn't fix 17/18 issue
+        #time.sleep(5)
+        print
+        
+        if 1:
+            pwr_pkt.replay_setup(dev)
+            read_adc(dev)
+        
+    print 'Complete'

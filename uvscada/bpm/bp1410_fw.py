@@ -1,37 +1,7 @@
 import time
-
+import libusb1
 import bp1410_fw_fx2
-
-def usb_wraps(dev):
-    def bulkRead(endpoint, length, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        #time.sleep(.05)
-        return dev.bulkRead(endpoint, length, timeout=timeout)
-
-    def bulkWrite(endpoint, data, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        #time.sleep(.05)
-        dev.bulkWrite(endpoint, data, timeout=timeout)
-    
-    def controlRead(request_type, request, value, index, length,
-                    timeout=None):
-        if timeout is None:
-            timeout = 1000
-        #time.sleep(.05)
-        return dev.controlRead(request_type, request, value, index, length,
-                    timeout=timeout)
-
-    def controlWrite(request_type, request, value, index, data,
-                     timeout=None):
-        if timeout is None:
-            timeout = 1000
-        #time.sleep(.05)
-        dev.controlWrite(request_type, request, value, index, data,
-                     timeout=timeout)
-    return bulkRead, bulkWrite, controlRead, controlWrite
-
+from uvscada.usb import usb_wraps
 
 def load_fx2(dev):
     _bulkRead, _bulkWrite, _controlRead, controlWrite = usb_wraps(dev)

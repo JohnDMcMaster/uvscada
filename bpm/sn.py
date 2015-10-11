@@ -6,8 +6,9 @@ import binascii
 import time
 import usb1
 
-from bp1410_fw import load_fx2, usb_wraps
-import bp1410_fw_sn
+from uvscada.usb import usb_wraps
+from uvscada.bpm.bp1410_fw import load_fx2
+from uvscada.bpm import bp1410_fw_sn
 
 def validate_read(expected, actual, msg):
     if expected != actual:
@@ -29,6 +30,7 @@ def replay(dev):
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
     validate_read("\x00\x00\x00", buff, "packet 187/188")
+    
     # Generated from packet 195/196
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
@@ -37,6 +39,7 @@ def replay(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 197/198")
+    
     # Generated from packet 205/206
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
@@ -45,6 +48,7 @@ def replay(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 207/208")
+    
     # Generated from packet 209/210
     bulkWrite(0x02, "\x01")
     # Generated from packet 211/212
@@ -59,6 +63,7 @@ def replay(dev):
               "\x00\x00\x64\x1B\x00\x00\x66\x1B\x00\x00\x68\x1B\x00\x00\x44\x1C"
               "\x00\x00\x70\x1B\x00\x00\x30\x11\x00\x00\x34\x11\x00\x00\x74\x1B"
               "\x00\x00\x81\x00", buff, "packet 211/212")
+    
     # Generated from packet 213/214
     bulkWrite(0x02, "\x43\x19\x00\x00\x00\x3B\x66\x1B\x00\x00\xFE\xFF\x3B\x64\x1B\x00"
               "\x00\xFE\xFF\x00")
@@ -66,6 +71,7 @@ def replay(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 5
     validate_read("\x08\xA4\x06\x02\x00", buff, "packet 215/216")
+    
     # Generated from packet 217/218
     bulkWrite(0x02, "\x01")
     # Generated from packet 219/220
@@ -80,6 +86,7 @@ def replay(dev):
               "\x00\x00\x64\x1B\x00\x00\x66\x1B\x00\x00\x68\x1B\x00\x00\x44\x1C"
               "\x00\x00\x70\x1B\x00\x00\x30\x11\x00\x00\x34\x11\x00\x00\x74\x1B"
               "\x00\x00\x81\x00", buff, "packet 219/220")
+
     # Generated from packet 221/222
     bulkWrite(0x02, "\x43\x19\x00\x00\x00\x11\xF0\xFF")
     
@@ -104,15 +111,19 @@ def replay(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x80\x01\x00", buff, "packet 235/236")
+    
     # Generated from packet 237/238
     bulkWrite(0x02, "\x11\x10\x00")
+    
     # Generated from packet 239/240
     bulkWrite(0x02, "\xEA\xCC\x64\x01\x00\x08\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x3F")
+    
     # Generated from packet 241/242
     bulkWrite(0x02, "\xA6")
     # Generated from packet 243/244
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
+    
     validate_read("\x08\x81\x01\x00", buff, "packet 243/244")
     # Generated from packet 245/246
     bulkWrite(0x02, "\x11\x4E\x00")
