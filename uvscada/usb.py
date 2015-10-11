@@ -47,17 +47,17 @@ def validate_read_e(expected, actual, msg):
 def validate_read_h(expected, actual, msg):
     if expected != actual:
         print 'Failed %s' % msg
-        print '  Expected; %s' % binascii.hexlify(expected,)
+        print '  Expected; %d' % len(expected)
         hexdump(expected, indent='    ')
-        print '  Actual:   %s' % binascii.hexlify(actual,)
+        print '  Actual:   ' % len(actual)
         hexdump(actual, indent='    ')
 
 def validate_read_he(expected, actual, msg):
     if expected != actual:
         print 'Failed %s' % msg
-        print '  Expected; %s' % binascii.hexlify(expected,)
+        print '  Expected; %d %s' % (len(expected), binascii.hexlify(expected))
         hexdump(expected, indent='    ')
-        print '  Actual:   %s' % binascii.hexlify(actual,)
+        print '  Actual:   %d %s' % (len(actual), binascii.hexlify(actual))
         hexdump(actual, indent='    ')
         raise Exception('failed validate: %s' % msg)
 
@@ -65,8 +65,8 @@ def validate_readv_he(expecteds, actual, msg):
     if actual not in expecteds:
         print 'Failed %s' % msg
         for expected in expecteds:
-            print '  Expected; %s' % binascii.hexlify(expected,)
+            print '  Expected; %d %s' % (len(expected), binascii.hexlify(expected))
             hexdump(expected, indent='    ')
-        print '  Actual:   %s' % binascii.hexlify(actual,)
+        print '  Actual:   %d %s' % (len(actual), binascii.hexlify(actual))
         hexdump(actual, indent='    ')
         raise Exception('failed validate: %s' % msg)

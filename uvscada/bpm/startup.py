@@ -11,8 +11,14 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
 from uvscada.util import str2hex
 
-def bulk2(dev, cmd, target=None):
+def bulk2(dev, cmd, target=None, donef=None):
     bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    
+    if donef is None:
+        if target is None:
+            raise Exception("requires target")
+        def donef(buff):
+            return len(buff) >= target
     
     bulkWrite(0x02, cmd)
     
@@ -28,15 +34,13 @@ def bulk2(dev, cmd, target=None):
             raise Exception("Bad length")
         return p[1:-2]
 
-    if target is None:
-        return nxt()
-    
     buff = ''
-    while len(buff) < target:
+    while not donef(buff):
         if buff:
             print 'NOTE: split packet'
         buff += nxt()
-    if len(buff) > target:
+    #print 'Done w/ buff len %d' % len(buff)
+    if target and len(buff) > target:
         raise Exception('Buffer grew too big')
     return buff
 
@@ -169,7 +173,11 @@ r01_glitch_154 = (
           "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
           "\x00\x00\xC0\x1E\x00\x00\x85\x00")
 
-r01_glitch2 = binascii.unhexlify("0884a406020026004300c0030008102400003000820010010900c000000009000800ff00c41e0000cc1e0000b4460000d01e0000c01e0100b01e01000000305501000000000002008001d00102000100000056100000a025000084250000000001007c2500007e2500008025000074460000381100003c1100004011000044110000c01e00008500")
+# rarer responses
+r01_glitches = [
+    binascii.unhexlify("84a406020026004300c0030008102400003000820010010900c000000009000800ff00c41e0000cc1e0000b4460000d01e0000c01e0100b01e01000000305501000000000002008001d00102000100000056100000a025000084250000000001007c2500007e2500008025000074460000381100003c1100004011000044110000c01e0000"),
+    binascii.unhexlify('84a406020026004300c0030008102400003000830030010900c000000009000800ff00c41e0000cc1e0000b4460000d01e0000c01e0100b01e01000000305501000000000002008001c00102000100000056100000a025000084250000000001007c2500007e2500008025000074460000381100003c1100004011000044110000c01e0000'),
+    ]
 
 def replay(dev):
     bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
@@ -208,9 +216,14 @@ def replay(dev):
     
     # Generated from packet 66/67
     # FIXME: len(cold) != len(warm)
-    buff = bulk2(dev, '\x01', target=None)
-        
-    validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154), trim(r01_glitch2)], buff, "packet 68/69 (warm/cold)")
+    # not perfect but should catch most errors
+    # how does BP handle this?
+    # am I supposed to be decoding this data structure as I go to determine the length?
+    def donef(buff):
+        return len(buff) == 129 or len(buff) == 133
+    buff = bulk2(dev, '\x01', donef=donef)
+    
+    validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154)] + r01_glitches, buff, "packet 68/69 (warm/cold)")
     glitch_154 = False
     if buff == trim(r01_cold):
         print 'Cold boot'
@@ -225,7 +238,7 @@ def replay(dev):
         glitch_154 = True
         # 70-76
         boot_warm(dev, True)
-    elif buff == trim(r01_glitch2):
+    elif buff in r01_glitches:
         print 'Warm boot (glitch2)'
         # 70-76
         boot_warm(dev, True)
