@@ -48,22 +48,7 @@ def boot_cold(dev):
     # NOTE:: req max 512 but got 5
     validate_read("\x08\xA4\x06\x02\x00", buff, "packet 72/73")
     
-    '''
     # Generated from packet 74/75
-    bulkWrite(0x02, "\x01")
-    # Generated from packet 76/77
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 132
-    validate_read("\x08\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
-              "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
-              "\x08\x00\xFF\x00\xE0\x14\x00\x00\xE8\x14\x00\x00\x84\x1C\x00\x00"
-              "\xEC\x14\x00\x00\xD0\x19\xFF\xFF\xC0\x19\xFF\xFF\x00\x00\xF0\x3C"
-              "\xFF\xFF\x00\x00\x00\x00\x02\x00\x80\x01\xD0\x01\x02\x00\x01\x00"
-              "\x00\x00\x56\x10\x00\x00\x88\x1B\x00\x00\x6C\x1B\x00\x00\x00\x00"
-              "\x00\x00\x64\x1B\x00\x00\x66\x1B\x00\x00\x68\x1B\x00\x00\x44\x1C"
-              "\x00\x00\x70\x1B\x00\x00\x30\x11\x00\x00\x34\x11\x00\x00\x74\x1B"
-              "\x00\x00\x81\x00", buff, "packet 76/77")
-    '''
     buff = cmd_01(dev, target=(132 - 3))
     validate_read("\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
               "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
@@ -124,11 +109,9 @@ def boot_cold(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 112/113")
+    
     # Generated from packet 114/115
-    bulkWrite(0x02, "\x01")
-    # Generated from packet 116/117
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 136
+    buff = cmd_01(dev, target=(136 - 3))
     validate_read("\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
               "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
@@ -137,7 +120,7 @@ def boot_cold(dev):
               "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
-              "\x00\x00\xC0\x1E\x00\x00\x85\x00", buff, "packet 116/117")
+              "\x00\x00\xC0\x1E\x00\x00\x85\x00"[1:-2], buff, "packet 116/117")
 
 def boot_warm(dev, glitch_154=False):
     bulkRead, bulkWrite, controlRead, _controlWrite = usb_wraps(dev)
@@ -150,14 +133,7 @@ def boot_warm(dev, glitch_154=False):
     # NOTE:: req max 512 but got 5
     validate_read("\x08\xA4\x06\x02\x00", buff, "packet 72/73")
     
-    '''
     # Generated from packet 74/75
-    bulkWrite(0x02, "\x01")
-    # Generated from packet 76/77
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 136
-    validate_readv([r01_warm, r01_glitch_154], buff, "packet 76/77")
-    '''
     buff = cmd_01(dev, target=(136 - 3))
     validate_readv((r01_warm[1:-2], r01_glitch_154[1:-2]), buff, "packet 76/77")
 
