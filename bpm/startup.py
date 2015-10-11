@@ -4,6 +4,7 @@ from uvscada.wps7 import WPS7
 
 import usb1
 import time
+import sys
 
 def open_dev(usbcontext=None):
     if usbcontext is None:
@@ -30,6 +31,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     add_bool_arg(parser, '--cycle', default=False, help='') 
+    add_bool_arg(parser, '--loop', default=False, help='') 
     args = parser.parse_args()
 
     if args.cycle:
@@ -44,7 +46,7 @@ if __name__ == "__main__":
     dev = open_dev(usbcontext)
     dev.claimInterface(0)
     
-    if 0:
+    if args.loop:
         i = 0
         good = 0
         bad = 0
@@ -56,9 +58,9 @@ if __name__ == "__main__":
             except Exception:
                 print 'Error'
                 bad += 1
+                raise
             i += 1
 
-    
     #dev.resetDevice()
     startup.replay(dev)
 
