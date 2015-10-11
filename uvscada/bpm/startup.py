@@ -3,17 +3,12 @@
 # cmd: /home/mcmaster/bin/usbrply bp1410_15_startup_cold.cap --comment --fx2 --device 24 -r 169:264 --sleep
         
 import binascii
-import time
-import usb1
 
 from uvscada.usb import usb_wraps
 from uvscada.usb import validate_read_he as validate_read
 from uvscada.usb import validate_readv_he as validate_readv
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
-from uvscada.wps7 import WPS7
-from uvscada.util import hexdump, add_bool_arg
-from uvscada.util import str2hex
 
 def boot_cold(dev):
     bulkRead, bulkWrite, controlRead, _controlWrite = usb_wraps(dev)
@@ -1036,45 +1031,3 @@ def replay(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00", buff, "packet 238/239")
 
 
-def open_dev(usbcontext=None):
-    if usbcontext is None:
-        usbcontext = usb1.USBContext()
-    
-    print 'Scanning for devices...'
-    for udev in usbcontext.getDeviceList(skip_on_error=True):
-        vid = udev.getVendorID()
-        pid = udev.getProductID()
-        if (vid, pid) == (0x14b9, 0x0001):
-            print
-            print
-            print 'Found device'
-            print 'Bus %03i Device %03i: ID %04x:%04x' % (
-                udev.getBusNumber(),
-                udev.getDeviceAddress(),
-                vid,
-                pid)
-            return udev.open()
-    raise Exception("Failed to find a device")
-
-if __name__ == "__main__":
-    import argparse 
-    
-    parser = argparse.ArgumentParser(description='Replay captured USB packets')
-    add_bool_arg(parser, '--cycle', default=False, help='') 
-    args = parser.parse_args()
-
-    if args.cycle:
-        print 'Cycling'
-        wps = WPS7(host='raijin')
-        wps.cycle([1, 2], t=2.0)
-        # 1 second too short
-        time.sleep(3)
-        print 'Cycled'
-
-    usbcontext = usb1.USBContext()
-    dev = open_dev(usbcontext)
-    dev.claimInterface(0)
-    #dev.resetDevice()
-    replay(dev)
-
-    # Done!
