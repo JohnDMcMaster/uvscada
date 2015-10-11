@@ -44,6 +44,9 @@ def bulk2(dev, cmd, target=None, donef=None):
         raise Exception('Buffer grew too big')
     return buff
 
+def trim(s):
+    return s[1:-2]
+
 def boot_cold(dev):
     bulkRead, bulkWrite, controlRead, _controlWrite = usb_wraps(dev)
     
@@ -127,7 +130,7 @@ def boot_cold(dev):
     buff = bulk2(dev, '\x01', target=len(exp))
     validate_read(exp, buff, "packet 116/117")
 
-def boot_warm(dev, glitch_154=False):
+def boot_warm(dev):
     # Generated from packet 70/71
     buff = bulk2(dev,
             "\x43\x19\x00\x00\x00\x3B\x7E\x25\x00\x00\xFE\xFF\x3B\x7C\x25\x00"
@@ -137,7 +140,7 @@ def boot_warm(dev, glitch_154=False):
     
     # Generated from packet 74/75
     buff = bulk2(dev, '\x01', target=(136 - 3))
-    validate_readv((r01_warm[1:-2], r01_glitch_154[1:-2]), buff, "packet 76/77")
+    validate_readv((r01_warm[1:-2], r01_glitch_154[1:-2], r01_glitches[1]), buff, "packet 76/77")
 
 r01_cold = ("\x08\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
           "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
@@ -211,9 +214,6 @@ def replay(dev):
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 64/65")
 
-    def trim(s):
-        return s[1:-2]
-    
     # Generated from packet 66/67
     # FIXME: len(cold) != len(warm)
     # not perfect but should catch most errors
@@ -224,7 +224,8 @@ def replay(dev):
     buff = bulk2(dev, '\x01', donef=donef)
     
     validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154)] + r01_glitches, buff, "packet 68/69 (warm/cold)")
-    glitch_154 = False
+    # Seems to be okay if we always do this although its only sometimes needed
+    glitch_154 = True
     if buff == trim(r01_cold):
         print 'Cold boot'
         # 70-117
@@ -237,11 +238,11 @@ def replay(dev):
         print 'Warm boot (glitch)'
         glitch_154 = True
         # 70-76
-        boot_warm(dev, True)
+        boot_warm(dev)
     elif buff in r01_glitches:
         print 'Warm boot (glitch2)'
         # 70-76
-        boot_warm(dev, True)
+        boot_warm(dev)
     else:
         raise Exception("Bad warm/cold response")
 
@@ -319,7 +320,9 @@ def replay(dev):
               "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
-              "\x00\x00\xC0\x1E\x00\x00"              
+              "\x00\x00\xC0\x1E\x00\x00",
+              
+              r01_glitches[1],
               ), buff, "packet 140/141")
     # Generated from packet 142/143
     bulkWrite(0x02, "\x43\x19\x00\x00\x00")
