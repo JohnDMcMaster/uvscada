@@ -11,10 +11,10 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
 from uvscada.util import str2hex
 
-def bulk2(dev, target):
+def bulk2(dev, cmd, target):
     bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
-    bulkWrite(0x02, "\x01")
+    bulkWrite(0x02, cmd)
     
     def nxt():
         p = bulkRead(0x86, 0x0200)
@@ -44,15 +44,15 @@ def boot_cold(dev):
     bulkRead, bulkWrite, controlRead, _controlWrite = usb_wraps(dev)
     
     # Generated from packet 70/71
-    bulkWrite(0x02, "\x43\x19\x00\x00\x00\x3B\x66\x1B\x00\x00\xFE\xFF\x3B\x64\x1B\x00"
-              "\x00\xFE\xFF\x00")
-    # Generated from packet 72/73
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
-    validate_read("\x08\xA4\x06\x02\x00", buff, "packet 72/73")
+    buff = bulk2(dev,
+            "\x43\x19\x00\x00\x00\x3B\x66\x1B\x00\x00\xFE\xFF\x3B\x64\x1B\x00"
+            "\x00\xFE\xFF\x00",
+            target=2)
+    validate_read("\xA4\x06", buff, "packet 72/73")
+    
     
     # Generated from packet 74/75
-    buff = bulk2(dev, target=(132 - 3))
+    buff = bulk2(dev, '\x01', target=(132 - 3))
     validate_read("\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
               "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xE0\x14\x00\x00\xE8\x14\x00\x00\x84\x1C\x00\x00"
@@ -114,7 +114,7 @@ def boot_cold(dev):
     validate_read("\x08\x16\x01\x00", buff, "packet 112/113")
     
     # Generated from packet 114/115
-    buff = bulk2(dev, target=(136 - 3))
+    buff = bulk2(dev, '\x01', target=(136 - 3))
     validate_read("\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
               "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
@@ -137,7 +137,7 @@ def boot_warm(dev, glitch_154=False):
     validate_read("\x08\xA4\x06\x02\x00", buff, "packet 72/73")
     
     # Generated from packet 74/75
-    buff = bulk2(dev, target=(136 - 3))
+    buff = bulk2(dev, '\x01', target=(136 - 3))
     validate_readv((r01_warm[1:-2], r01_glitch_154[1:-2]), buff, "packet 76/77")
 
 r01_cold = ("\x08\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
@@ -221,7 +221,7 @@ def replay(dev):
         
         # Generated from packet 66/67
         # FIXME: len(cold) != len(warm)
-        buff = bulk2(dev, target=None)
+        buff = bulk2(dev, '\x01', target=None)
         
     validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154), trim(r01_glitch2)], buff, "packet 68/69 (warm/cold)")
     glitch_154 = False
