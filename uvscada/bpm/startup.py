@@ -11,14 +11,14 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
 from uvscada.util import str2hex
 
-def cmd_01(dev, target):
+def bulk2(dev, target):
     bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     bulkWrite(0x02, "\x01")
     
     def nxt():
         p = bulkRead(0x86, 0x0200)
-        print str2hex(p)
+        #print str2hex(p)
         if ord(p[0]) != 0x08:
             raise Exception("Bad prefix")
         if ord(p[-1]) != 0x00:
@@ -27,6 +27,9 @@ def cmd_01(dev, target):
             print ord(p[-2]), len(p) - 3, len(p)
             raise Exception("Bad length")
         return p[1:-2]
+
+    if target is None:
+        return nxt()
     
     buff = ''
     while len(buff) < target:
@@ -49,7 +52,7 @@ def boot_cold(dev):
     validate_read("\x08\xA4\x06\x02\x00", buff, "packet 72/73")
     
     # Generated from packet 74/75
-    buff = cmd_01(dev, target=(132 - 3))
+    buff = bulk2(dev, target=(132 - 3))
     validate_read("\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
               "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xE0\x14\x00\x00\xE8\x14\x00\x00\x84\x1C\x00\x00"
@@ -111,7 +114,7 @@ def boot_cold(dev):
     validate_read("\x08\x16\x01\x00", buff, "packet 112/113")
     
     # Generated from packet 114/115
-    buff = cmd_01(dev, target=(136 - 3))
+    buff = bulk2(dev, target=(136 - 3))
     validate_read("\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
               "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
@@ -134,7 +137,7 @@ def boot_warm(dev, glitch_154=False):
     validate_read("\x08\xA4\x06\x02\x00", buff, "packet 72/73")
     
     # Generated from packet 74/75
-    buff = cmd_01(dev, target=(136 - 3))
+    buff = bulk2(dev, target=(136 - 3))
     validate_readv((r01_warm[1:-2], r01_glitch_154[1:-2]), buff, "packet 76/77")
 
 r01_cold = ("\x08\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
@@ -205,28 +208,37 @@ def replay(dev):
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 64/65")
 
-
-
-    # Generated from packet 66/67
-    bulkWrite(0x02, "\x01")
-    # Generated from packet 68/69
-    buff = bulkRead(0x86, 0x0200)
-    validate_readv([r01_cold, r01_warm, r01_glitch_154, r01_glitch2], buff, "packet 68/69 (warm/cold)")
+    if 0:
+        # Generated from packet 66/67
+        bulkWrite(0x02, "\x01")
+        # Generated from packet 68/69
+        buff = bulkRead(0x86, 0x0200)
+        def trim(s):
+            return s
+    else:
+        def trim(s):
+            return s[1:-2]
+        
+        # Generated from packet 66/67
+        # FIXME: len(cold) != len(warm)
+        buff = bulk2(dev, target=None)
+        
+    validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154), trim(r01_glitch2)], buff, "packet 68/69 (warm/cold)")
     glitch_154 = False
-    if buff == r01_cold:
+    if buff == trim(r01_cold):
         print 'Cold boot'
         # 70-117
         boot_cold(dev)
-    elif buff == r01_warm:
+    elif buff == trim(r01_warm):
         print 'Warm boot'
         # 70-76
         boot_warm(dev)
-    elif buff == r01_glitch_154:
+    elif buff == trim(r01_glitch_154):
         print 'Warm boot (glitch)'
         glitch_154 = True
         # 70-76
         boot_warm(dev, True)
-    elif buff == r01_glitch2:
+    elif buff == trim(r01_glitch2):
         print 'Warm boot (glitch2)'
         # 70-76
         boot_warm(dev, True)
