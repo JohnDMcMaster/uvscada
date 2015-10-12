@@ -10,7 +10,7 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_read
+from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_read, led_mask
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -370,8 +370,7 @@ def cleanup_adc(dev):
     validate_read("\x00\x00", buff, "packet 1232/1233")
     
     # Generated from packet 1234/1235
-    buff = bulk2(dev, "\x0C\x04\x30", target=2, truncate=True)
-    validate_read("\x04\x00", buff, "packet 1236/1237")
+    led_mask(dev, 0x04)
 
 if __name__ == "__main__":
     import argparse 

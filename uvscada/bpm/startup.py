@@ -586,7 +586,14 @@ def sm_info(dev):
     sm = SM3(*struct.unpack(SM3_FMT, buff))
     print sm
 
-# 1 => LED on
+'''
+1 => LED on
+
+LEDs:
+-1: fail
+-2: active
+-4: pass
+'''
 def led_mask(dev, mask):
     if mask < 0 or mask > 7:
         raise ValueError("Bad mask")
