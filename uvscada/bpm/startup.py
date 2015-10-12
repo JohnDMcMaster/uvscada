@@ -10,6 +10,7 @@ from uvscada.util import hexdump, str2hex
 
 import binascii
 import struct
+from collections import namedtuple
 
 def bulk86(dev, target=None, donef=None, truncate=False):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
@@ -522,6 +523,9 @@ def replay(dev):
     # Generated from packet 236/237
     gpio_read(dev)
 
+SM_FMT = '<H12s18s'
+SM = namedtuple('sm', ('unk0', 'name', 'unk12'))
+
 def sm_read(dev):
     buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
     validate_readv((
@@ -536,6 +540,12 @@ def sm_read(dev):
               "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C",
               ),
               buff, "packet 136/137")
+    # Don't throw exception on no SM for now?)
+    # since it will break other code
+    if buff == '\xFF' * 32:
+        return None
+    
+    return SM(*struct.unpack(SM_FMT, buff))
 
 def sm_info(dev):
     # Generated from packet 3/4
@@ -560,7 +570,8 @@ def sm_info(dev):
     validate_read("\x0F\x00", buff, "packet 25/26")
     
     # Generated from packet 27/28
-    sm_read(dev)
+    sm = sm_read(dev)
+    print 'Name: %s' % sm.name
     
     # Generated from packet 31/32
     buff = bulk2(dev, "\x22\x02\x10\x00\x1F\x00\x06", target=0x20, truncate=True)
