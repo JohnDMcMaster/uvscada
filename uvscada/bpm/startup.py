@@ -150,7 +150,7 @@ def boot_warm(dev):
     
     # Generated from packet 74/75
     buff = bulk2(dev, '\x01', target=(136 - 3))
-    validate_readv((r01_warm[1:-2], r01_glitch_154[1:-2], r01_glitches[1]), buff, "packet 76/77")
+    validate_readv((r01_warm[1:-2], r01_glitch_154[1:-2], r01_glitches[1], r01_ps), buff, "packet 76/77")
 
 r01_cold = ("\x08\x80\xA4\x06\x02\x00\x22\x00\x43\x00\xC0\x03\x00\x08\xF8\x19"
           "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
@@ -191,6 +191,18 @@ r01_glitches = [
     binascii.unhexlify("84a406020026004300c0030008102400003000820010010900c000000009000800ff00c41e0000cc1e0000b4460000d01e0000c01e0100b01e01000000305501000000000002008001d00102000100000056100000a025000084250000000001007c2500007e2500008025000074460000381100003c1100004011000044110000c01e0000"),
     binascii.unhexlify('84a406020026004300c0030008102400003000830030010900c000000009000800ff00c41e0000cc1e0000b4460000d01e0000c01e0100b01e01000000305501000000000002008001c00102000100000056100000a025000084250000000001007c2500007e2500008025000074460000381100003c1100004011000044110000c01e0000'),
     ]
+
+r01_ps = \
+     "\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24\x00" \
+    "\x00\x30\x00\x84\x00\x50\x01\x09\x00\xC0\x00\x00\x00\x09\x00\x08" \
+    "\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00\xD0" \
+    "\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55\x01" \
+    "\x00\x00\x00\x00\x00\x02\x00\x80\x01\xD0\x01\x02\x00\x01\x00\x00" \
+    "\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00\x01" \
+    "\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46\x00" \
+    "\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11\x00" \
+    "\x00\xC0\x1E\x00\x00"
+
 
 def replay(dev):
     bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
@@ -233,24 +245,20 @@ def replay(dev):
         return len(buff) == 129 or len(buff) == 133
     buff = bulk2(dev, '\x01', donef=donef)
     
-    validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154)] + r01_glitches, buff, "packet 68/69 (warm/cold)")
+    validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154), r01_ps] + r01_glitches, buff, "packet 68/69 (warm/cold)")
     # Seems to be okay if we always do this although its only sometimes needed
     glitch_154 = True
     if buff == trim(r01_cold):
         print 'Cold boot'
         # 70-117
         boot_cold(dev)
-    elif buff == trim(r01_warm):
+    elif buff in (trim(r01_warm), r01_ps) or buff in r01_glitches:
         print 'Warm boot'
         # 70-76
         boot_warm(dev)
     elif buff == trim(r01_glitch_154):
         print 'Warm boot (glitch)'
         glitch_154 = True
-        # 70-76
-        boot_warm(dev)
-    elif buff in r01_glitches:
-        print 'Warm boot (glitch2)'
         # 70-76
         boot_warm(dev)
     else:
@@ -332,6 +340,17 @@ def replay(dev):
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
               "\x00\x00\xC0\x1E\x00\x00",
               
+              # after ps
+            "\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24\x00" \
+            "\x00\x30\x00\x84\x00\x50\x01\x09\x00\xC0\x00\x00\x00\x09\x00\x08" \
+            "\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00\xD0" \
+            "\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55\x01" \
+            "\x00\x00\x00\x00\x00\x02\x00\x80\x01\xD0\x01\x02\x00\x01\x00\x00" \
+            "\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00\x01" \
+            "\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46\x00" \
+            "\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11\x00" \
+            "\x00\xC0\x1E\x00\x00",
+
               r01_glitches[1],
               ), buff, "packet 140/141")
     # Generated from packet 142/143
