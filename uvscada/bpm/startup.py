@@ -41,6 +41,7 @@ def bulk86(dev, target=None, donef=None, truncate=False):
     while not donef(buff):
         if buff:
             print 'NOTE: split packet'
+            hexdump(buff)
         buff += nxt()
     #print 'Done w/ buff len %d' % len(buff)
     if target and len(buff) > target:
