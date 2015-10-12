@@ -5,8 +5,7 @@
 import binascii
 
 from uvscada.usb import usb_wraps
-from uvscada.usb import validate_read_he as validate_read
-from uvscada.usb import validate_readv_he as validate_readv
+from uvscada.usb import validate_read, validate_readv
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
 from uvscada.util import str2hex

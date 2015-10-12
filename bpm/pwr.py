@@ -9,15 +9,7 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
-
-def validate_read(expected, actual, msg):
-    if expected != actual:
-        print 'Failed %s' % msg
-        print '  Expected; %s' % binascii.hexlify(expected,)
-        hexdump(expected, indent='    ')
-        print '  Actual:   %s' % binascii.hexlify(actual,)
-        hexdump(actual, indent='    ')
-        #raise Exception('failed validate: %s' % msg)
+from uvscada.usb import validate_read, validate_readv
 
 def dexit():
     print 'Debug break'
@@ -205,14 +197,15 @@ def replay_setup(dev):
     # Generated from packet 341/342
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 5
-    validate_read("\x08\x31\x00\x02\x00", buff, "packet 341/342")
+    # failing this messes up state
+    validate_readv(("\x08\x31\x00\x02\x00", binascii.unhexlify('0871000200')), buff, "packet 341/342")
     
     # Generated from packet 343/344
     bulkWrite(0x02, "\x03")
     # Generated from packet 345/346
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 5
-    validate_read("\x08\x31\x00\x02\x00", buff, "packet 345/346")
+    validate_readv(("\x08\x31\x00\x02\x00", binascii.unhexlify('0871000200')), buff, "packet 345/346")
     
     # Generated from packet 347/348
     bulkWrite(0x02, "\x0E\x02")

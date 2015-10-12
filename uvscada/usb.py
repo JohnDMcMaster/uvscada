@@ -31,42 +31,30 @@ def usb_wraps(dev):
     
     return bulkRead, bulkWrite, controlRead, controlWrite
 
+do_exception = True
+do_hexdump = True
+do_str2hex = True
+
 def validate_read(expected, actual, msg):
-    if expected != actual:
-        print 'Failed %s' % msg
-        print '  Expected; %s' % binascii.hexlify(expected,)
-        print '  Actual:   %s' % binascii.hexlify(actual,)
+    validate_readv([expected], actual, msg)
 
-def validate_read_e(expected, actual, msg):
-    if expected != actual:
-        print 'Failed %s' % msg
-        print '  Expected; %s' % binascii.hexlify(expected,)
-        print '  Actual:   %s' % binascii.hexlify(actual,)
-        raise Exception('failed validate: %s' % msg)
-
-def validate_read_h(expected, actual, msg):
-    if expected != actual:
-        print 'Failed %s' % msg
-        print '  Expected; %d' % len(expected)
-        hexdump(expected, indent='    ')
-        print '  Actual:   ' % len(actual)
-        hexdump(actual, indent='    ')
-
-def validate_read_he(expected, actual, msg):
-    if expected != actual:
-        print 'Failed %s' % msg
-        print '  Expected; %d %s' % (len(expected), binascii.hexlify(expected))
-        hexdump(expected, indent='    ')
-        print '  Actual:   %d %s' % (len(actual), binascii.hexlify(actual))
-        hexdump(actual, indent='    ')
-        raise Exception('failed validate: %s' % msg)
-
-def validate_readv_he(expecteds, actual, msg):
+def validate_readv(expecteds, actual, msg):
     if actual not in expecteds:
         print 'Failed %s' % msg
         for expected in expecteds:
-            print '  Expected; %d %s' % (len(expected), binascii.hexlify(expected))
-            hexdump(expected, indent='    ')
-        print '  Actual:   %d %s' % (len(actual), binascii.hexlify(actual))
-        hexdump(actual, indent='    ')
-        raise Exception('failed validate: %s' % msg)
+            if do_str2hex:
+                print '  Expected; %d' % (len(expected),)
+                print str2hex(expected, prefix='    ')
+            else:
+                print '  Expected:   %d %s' % (len(expected), binascii.hexlify(expected))
+            if do_hexdump:
+                hexdump(expected, indent='    ')
+        if do_str2hex:
+            print '  Actual; %d' % (len(actual),)
+            print str2hex(actual, prefix='    ')
+        else:
+            print '  Actual:   %d %s' % (len(actual), binascii.hexlify(actual))
+        if do_hexdump:
+            hexdump(actual, indent='    ')
+        if do_exception:
+            raise Exception('failed validate: %s' % msg)
