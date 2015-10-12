@@ -3,6 +3,8 @@ import time
 import usb1
 import libusb1
 import sys
+import struct
+
 from uvscada.wps7 import WPS7
 
 from uvscada.usb import usb_wraps
@@ -250,7 +252,7 @@ def replay_setup(dev):
     
     # Generated from packet 393/394
     buff = bulk2(dev, "\x03", target=2, truncate=True)
-    validate_read("\x71\x00", buff, "packet 395/396")
+    validate_readv(("\x31\x00", "\x71\x00"), buff, "packet 395/396")
     
     # Generated from packet 397/398
     buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
@@ -311,38 +313,14 @@ scalars = {
 }
 
 def read_adc(dev):
-    def bulkRead(endpoint, length, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        return dev.bulkRead(endpoint, length, timeout=timeout)
-
-    def bulkWrite(endpoint, data, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        dev.bulkWrite(endpoint, data, timeout=timeout)
-    
-    def controlRead(request_type, request, value, index, length,
-                    timeout=None):
-        if timeout is None:
-            timeout = 1000
-        return dev.controlRead(request_type, request, value, index, length,
-                    timeout=timeout)
-
-    def controlWrite(request_type, request, value, index, data,
-                     timeout=None):
-        if timeout is None:
-            timeout = 1000
-        dev.controlWrite(request_type, request, value, index, data,
-                     timeout=timeout)
+    bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
 
     print 'WARNING: best guess'
     for reg in (0x01, 0x10, 0x05, 0x15, 0x0C, 0x09, 0x14):
         print '0x%02X' % reg
         for i in xrange(3):
-            bulkWrite(0x02, "\x19" + chr(reg) + "\x00")
-            reply = bytearray(bulkRead(0x86, 0x0200))
-            # validate_read("\x08\xE0\x38\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-            b = (reply[2] << 8) | (reply[1] << 0)
+            buff = bulk2(dev, "\x19" + chr(reg) + "\x00", target=2, truncate=True)
+            b = struct.unpack('<H', buff)[0]
             print '  0x%04X (%0.3f V)' % (b, scalars[reg] * b)
 
 if __name__ == "__main__":
