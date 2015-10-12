@@ -199,7 +199,7 @@ def replay_setup(dev):
     Looks like an EEPROM read
     maybe just reading some random memory buffer though
     '''
-    
+
     # Generated from packet 347/348
     sm_read(dev)
     
@@ -311,7 +311,6 @@ def replay_setup(dev):
 
 scalars = {
     # -3.5V: leftover after below
-    # also gave a weird value when I tried to scale other ADCs
     0x01: -3.476 / 0x38F0,
     # 30V:  best guess based on scaling other readings
     0x10: 37.28 / 0xBA70,

@@ -63,6 +63,7 @@ if __name__ == "__main__":
 
     #dev.resetDevice()
     startup.replay(dev)
+    startup.sm_info(dev)
 
     # Done!
 

@@ -216,21 +216,6 @@ r01_sm = \
     "\x00"
 
 
-def sm_read(dev):
-    buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
-    validate_readv((
-              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF",
-              
-              # Socket module
-              # 00000000  11 00 53 4D 34 38 44 00  00 00 00 00 00 00 5D F4  |..SM48D.......].|
-              # 00000010  39 FF 00 00 00 00 00 00  00 00 00 00 00 00 62 6C  |9.............bl|
-              "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-              "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C",
-              ),
-              buff, "packet 136/137")
-
 # Not sure if this actually is GPIO
 # but seems like a good guess given that it detects socket module insertion
 def gpio_read(dev):
@@ -531,3 +516,53 @@ def replay(dev):
 
     # Generated from packet 236/237
     gpio_read(dev)
+
+def sm_read(dev):
+    buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
+    validate_readv((
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+              "\xFF",
+              
+              # Socket module
+              # 00000000  11 00 53 4D 34 38 44 00  00 00 00 00 00 00 5D F4  |..SM48D.......].|
+              # 00000010  39 FF 00 00 00 00 00 00  00 00 00 00 00 00 62 6C  |9.............bl|
+              "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
+              "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C",
+              ),
+              buff, "packet 136/137")
+
+def sm_info(dev):
+    # Generated from packet 3/4
+    gpio_read(dev)
+    
+    # Generated from packet 7/8
+    gpio_read(dev)
+
+    # Generated from packet 11/12
+    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=4, truncate=True)
+    validate_read("\xAA\x55\x33\xA2", buff, "packet 13/14")
+    
+    # Generated from packet 15/16
+    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=4, truncate=True)
+    validate_read("\x01\x00\x00\x00", buff, "packet 17/18")
+    
+    # Generated from packet 19/20
+    sm_read(dev)
+    
+    # Generated from packet 23/24
+    buff = bulk2(dev, "\x49", target=2, truncate=True)
+    validate_read("\x0F\x00", buff, "packet 25/26")
+    
+    # Generated from packet 27/28
+    sm_read(dev)
+    
+    # Generated from packet 31/32
+    buff = bulk2(dev, "\x22\x02\x10\x00\x1F\x00\x06", target=0x20, truncate=True)
+    validate_read("\x32\x01\x00\x00\x93\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+            "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+            "\xFF", buff, "packet 33/34")
+    
+    # Generated from packet 35/36
+    buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=8, truncate=True)
+    validate_read("\x32\x01\x00\x00\x93\x00\x00\x00", buff, "packet 37/38")
