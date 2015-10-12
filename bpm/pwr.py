@@ -39,6 +39,24 @@ def open_dev(usbcontext=None):
 def replay_setup(dev):
     bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
 
+
+    if 1:
+        while True:
+            print 'test'
+            # Generated from packet 281/282
+            # None (0xB0)
+            buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
+            # NOTE:: req max 4096 but got 3
+            validate_read("\x00\x00\x00", buff, "packet 281/282")
+            
+            # TODO: verify the control transfer triggers this
+            # Generated from packet 283/284
+            buff = bulkRead(0x86, 0x0200)
+            # NOTE:: req max 512 but got 4
+            validate_read("\x08\x16\x01\x00", buff, "packet 283/284")
+
+
+
     # Generated from packet 281/282
     # None (0xB0)
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
