@@ -10,16 +10,14 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
 from uvscada.util import str2hex
 
-def bulk2(dev, cmd, target=None, donef=None):
-    bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+def bulk86(dev, target=None, donef=None):
+    bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     if donef is None:
         if target is None:
             raise Exception("requires target")
         def donef(buff):
             return len(buff) >= target
-    
-    bulkWrite(0x02, cmd)
     
     def nxt():
         p = bulkRead(0x86, 0x0200)
@@ -42,6 +40,12 @@ def bulk2(dev, cmd, target=None, donef=None):
     if target and len(buff) > target:
         raise Exception('Buffer grew too big')
     return buff
+
+def bulk2(dev, cmd, target=None, donef=None):
+    bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    
+    bulkWrite(0x02, cmd)
+    return bulk86(dev, target=target, donef=donef)
 
 def trim(s):
     return s[1:-2]

@@ -1,13 +1,14 @@
 import binascii
 import time
 import usb1
+import libusb1
 import sys
 from uvscada.wps7 import WPS7
 
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2
+from uvscada.bpm.startup import bulk2, bulk86
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -40,34 +41,14 @@ def replay_setup(dev):
     bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
 
 
-    if 1:
-        while True:
-            print 'test'
-            # Generated from packet 281/282
-            # None (0xB0)
-            buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
-            # NOTE:: req max 4096 but got 3
-            validate_read("\x00\x00\x00", buff, "packet 281/282")
-            
-            # TODO: verify the control transfer triggers this
-            # Generated from packet 283/284
-            buff = bulkRead(0x86, 0x0200)
-            # NOTE:: req max 512 but got 4
-            validate_read("\x08\x16\x01\x00", buff, "packet 283/284")
-
-
-
+    # Verified that control request allows bulk to be read
     # Generated from packet 281/282
     # None (0xB0)
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
     validate_read("\x00\x00\x00", buff, "packet 281/282")
-    
-    # TODO: verify the control transfer triggers this
-    # Generated from packet 283/284
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 4
-    validate_read("\x08\x16\x01\x00", buff, "packet 283/284")
+    buff = bulk86(dev, target=1)
+    validate_read("\x16", buff, "packet 283/284")
     
     # Generated from packet 285/286
     buff = bulk2(dev, "\x01", target=0x85)
@@ -172,6 +153,41 @@ def replay_setup(dev):
     # Generated from packet 343/344
     buff = bulk2(dev, "\x03", target=2)
     validate_readv(("\x31\x00", '\x71\x00'), buff, "packet 345/346")
+
+    if 0:
+        '''
+        0-51 valid
+        0
+        00000000  3A 00 90 32 A7 02 2A 86  01 95 3C 36 90 00 1F 00  |:..2..*...<6....|
+        00000010  01 00 D6 05 01 00 72 24  22 39 00 00 00 00 27 1F  |......r$"9....'.|
+        1 (and 162)
+        00000000  14 00 54 41 38 34 56 4C  56 5F 46 58 34 00 00 00  |..TA84VLV_FX4...|
+        00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 3E 2C  |..............>,|
+        2
+        00000000  FF FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF  |................|
+        00000010  FF FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF  |................|
+        ...
+        51
+        00000000  FF FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF  |................|
+        00000010  FF FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF  |................|
+        52
+        libusb1.USBError: LIBUSB_ERROR_TIMEOUT [-7]
+        TA84VLV_FX4
+        Is this some sort of special FX4 socket configuration?
+        Looks like an EEPROM read
+        weird size though?
+        
+        How do 0x01 and 0xa2 line up?
+        other packets didn't line up around there...maybe just a memory artifact
+        '''
+        for i in xrange(0, 0x100):
+            try:
+                print i
+                buff = bulk2(dev, "\x0E" + chr(i), target=0x20)
+                hexdump(buff)
+            except libusb1.USBError:
+                pass
+        sys.exit(0)
     
     # Generated from packet 347/348
     buff = bulk2(dev, "\x0E\x02", target=0x20)
