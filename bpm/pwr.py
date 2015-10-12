@@ -7,6 +7,7 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
+from uvscada.bpm.startup import bulk2
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -36,47 +37,23 @@ def open_dev(usbcontext=None):
     raise Exception("Failed to find a device")
 
 def replay_setup(dev):
-    def bulkRead(endpoint, length, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        return dev.bulkRead(endpoint, length, timeout=timeout)
-
-    def bulkWrite(endpoint, data, timeout=None):
-        if timeout is None:
-            timeout = 1000
-        dev.bulkWrite(endpoint, data, timeout=timeout)
-    
-    def controlRead(request_type, request, value, index, length,
-                    timeout=None):
-        if timeout is None:
-            timeout = 1000
-        return dev.controlRead(request_type, request, value, index, length,
-                    timeout=timeout)
-
-    def controlWrite(request_type, request, value, index, data,
-                     timeout=None):
-        if timeout is None:
-            timeout = 1000
-        dev.controlWrite(request_type, request, value, index, data,
-                     timeout=timeout)
-
+    bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
 
     # Generated from packet 281/282
     # None (0xB0)
     buff = controlRead(0xC0, 0xB0, 0x0000, 0x0000, 4096)
     # NOTE:: req max 4096 but got 3
     validate_read("\x00\x00\x00", buff, "packet 281/282")
+    
+    # TODO: verify the control transfer triggers this
     # Generated from packet 283/284
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 283/284")
     
     # Generated from packet 285/286
-    bulkWrite(0x02, "\x01")
-    # Generated from packet 287/288
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 136
-    validate_read("\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
+    buff = bulk2(dev, "\x01", target=0x85)
+    validate_read("\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
               "\x00\x00\x30\x00\x83\x00\x30\x01\x09\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
               "\xD0\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55"
@@ -84,22 +61,16 @@ def replay_setup(dev):
               "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
-              "\x00\x00\xC0\x1E\x00\x00\x85\x00", buff, "packet 287/288")
-    
+              "\x00\x00\xC0\x1E\x00\x00", buff, "packet 287/288")
     
     # Generated from packet 289/290
-    bulkWrite(0x02, "\x43\x19\x00\x00\x00\x3B\x7E\x25\x00\x00\xFE\xFF\x3B\x7C\x25\x00"
-              "\x00\xFE\xFF\x00")
-    # Generated from packet 291/292
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
-    validate_read("\x08\xA4\x06\x02\x00", buff, "packet 291/292")
+    buff = bulk2(dev, "\x43\x19\x00\x00\x00\x3B\x7E\x25\x00\x00\xFE\xFF\x3B\x7C\x25\x00"
+              "\x00\xFE\xFF\x00", target=2)
+    validate_read("\xA4\x06", buff, "packet 291/292")
+    
     # Generated from packet 293/294
-    bulkWrite(0x02, "\x01")
-    # Generated from packet 295/296
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 136
-    validate_read("\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
+    buff = bulk2(dev, "\x01", target=0x85)
+    validate_read("\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
               "\x00\x00\x30\x00\x83\x00\x30\x01\x09\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
               "\xD0\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55"
@@ -107,50 +78,38 @@ def replay_setup(dev):
               "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
-              "\x00\x00\xC0\x1E\x00\x00\x85\x00", buff, "packet 295/296")
+              "\x00\x00\xC0\x1E\x00\x00", buff, "packet 295/296")
+    
     # Generated from packet 297/298
-    bulkWrite(0x02, "\x0E\x00")
-    # Generated from packet 299/300
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 35
-    validate_read("\x08\x3A\x00\x90\x32\xA7\x02\x2A\x86\x01\x95\x3C\x36\x90\x00\x1F"
+    buff = bulk2(dev, "\x0E\x00", target = 0x20)
+    validate_read("\x3A\x00\x90\x32\xA7\x02\x2A\x86\x01\x95\x3C\x36\x90\x00\x1F"
               "\x00\x01\x00\xD6\x05\x01\x00\x72\x24\x22\x39\x00\x00\x00\x00\x27"
-              "\x1F\x20\x00", buff, "packet 299/300")
+              "\x1F", buff, "packet 299/300")
+    
     # Generated from packet 301/302
-    bulkWrite(0x02, "\x14\x38\x25\x00\x00\x04\x00\x90\x32\x90\x00\xA7\x02\x1F\x00\x14"
-              "\x40\x25\x00\x00\x01\x00\x3C\x36\x0E\x01")
-    # Generated from packet 303/304
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 35
-    validate_read("\x08\x14\x00\x54\x41\x38\x34\x56\x4C\x56\x5F\x46\x58\x34\x00\x00"
+    buff = bulk2(dev, "\x14\x38\x25\x00\x00\x04\x00\x90\x32\x90\x00\xA7\x02\x1F\x00\x14"
+              "\x40\x25\x00\x00\x01\x00\x3C\x36\x0E\x01", target=0x20)
+    validate_read("\x14\x00\x54\x41\x38\x34\x56\x4C\x56\x5F\x46\x58\x34\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3E"
-              "\x2C\x20\x00", buff, "packet 303/304")
+              "\x2C", buff, "packet 303/304")
+    
     # Generated from packet 305/306
-    bulkWrite(0x02, "\x03")
-    # Generated from packet 307/308
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
-    validate_read("\x08\x31\x00\x02\x00", buff, "packet 307/308")
+    buff = bulk2(dev, "\x03", target=2)
+    validate_read("\x31\x00", buff, "packet 307/308")
+    
     # Generated from packet 309/310
-    bulkWrite(0x02, "\x03")
-    # Generated from packet 311/312
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
-    validate_read("\x08\x31\x00\x02\x00", buff, "packet 311/312")
+    buff = bulk2(dev, "\x03", target=2)
+    validate_read("\x31\x00", buff, "packet 311/312")
+    
     # Generated from packet 313/314
-    bulkWrite(0x02, "\x0E\x02")
-    # Generated from packet 315/316
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 35
-    validate_read("\x08\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+    buff = bulk2(dev, "\x0E\x02", target=0x20)
+    validate_read("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF\x20\x00", buff, "packet 315/316")
+              "\xFF", buff, "packet 315/316")
+    
     # Generated from packet 317/318
-    bulkWrite(0x02, "\x01")
-    # Generated from packet 319/320
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 136
-    validate_read("\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
+    buff = bulk2(dev, "\x01", target=0x85)
+    validate_read("\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
               "\x00\x00\x30\x00\x83\x00\x30\x01\x09\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
               "\xD0\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55"
@@ -158,74 +117,57 @@ def replay_setup(dev):
               "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
-              "\x00\x00\xC0\x1E\x00\x00\x85\x00", buff, "packet 319/320")
+              "\x00\x00\xC0\x1E\x00\x00", buff, "packet 319/320")
 
     # Generated from packet 321/322
     bulkWrite(0x02, "\x43\x19\x00\x00\x00")
+    
     # Generated from packet 323/324
     bulkWrite(0x02, "\x20\x01\x00\x0C\x04")
+    
     # Generated from packet 325/326
     bulkWrite(0x02, "\x41\x00\x00")
+    
     # Generated from packet 327/328
-    bulkWrite(0x02, "\x10\x80\x02")
-    # Generated from packet 329/330
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 9
-    validate_read("\x08\x80\x00\x00\x00\x09\x00\x06\x00", buff, "packet 329/330")
+    buff = bulk2(dev, "\x10\x80\x02", target=6)
+    validate_read("\x80\x00\x00\x00\x09\x00", buff, "packet 329/330")
+    
     # Generated from packet 331/332
-    bulkWrite(0x02, "\x45\x01\x00\x00\x31\x00\x06")
-    # Generated from packet 333/334
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 103
-    validate_read("\x08\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+    buff = bulk2(dev, "\x45\x01\x00\x00\x31\x00\x06", target=0x64)
+    validate_read("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF\xFF\xFF\xFF\xFF\x64\x00", buff, "packet 333/334")
+              "\xFF\xFF\xFF\xFF\xFF", buff, "packet 333/334")
     
     # Generated from packet 335/336
-    bulkWrite(0x02, "\x49")
-    # Generated from packet 337/338
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
-    validate_read("\x08\x0F\x00\x02\x00", buff, "packet 337/338")
+    buff = bulk2(dev, "\x49", target=2)
+    validate_read("\x0F\x00", buff, "packet 337/338")
     
     # Generated from packet 339/340
-    bulkWrite(0x02, "\x03")
-    # Generated from packet 341/342
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
+    buff = bulk2(dev, "\x03", target=2)
     # failing this messes up state
-    validate_readv(("\x08\x31\x00\x02\x00", binascii.unhexlify('0871000200')), buff, "packet 341/342")
+    validate_readv(("\x31\x00", '\x71\x00'), buff, "packet 341/342")
     
     # Generated from packet 343/344
-    bulkWrite(0x02, "\x03")
-    # Generated from packet 345/346
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
-    validate_readv(("\x08\x31\x00\x02\x00", binascii.unhexlify('0871000200')), buff, "packet 345/346")
+    buff = bulk2(dev, "\x03", target=2)
+    validate_readv(("\x31\x00", '\x71\x00'), buff, "packet 345/346")
     
     # Generated from packet 347/348
-    bulkWrite(0x02, "\x0E\x02")
-    # Generated from packet 349/350
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 35
-    validate_read("\x08\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+    buff = bulk2(dev, "\x0E\x02", target=0x20)
+    validate_read("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF\x20\x00", buff, "packet 349/350")
+              "\xFF", buff, "packet 349/350")
     
     # Generated from packet 351/352
     bulkWrite(0x02, "\x3B\x0C\x22\x00\xC0\x40\x00\x3B\x0E\x22\x00\xC0\x00\x00\x3B\x1A"
               "\x22\x00\xC0\x18\x00")
     
     # Generated from packet 353/354
-    bulkWrite(0x02, "\x4A\x03\x00\x00\x00")
-    # Generated from packet 355/356
-    buff = bulkRead(0x86, 0x0200)
-    # NOTE:: req max 512 but got 5
-    validate_read("\x08\x03\x00\x02\x00", buff, "packet 355/356")
+    buff = bulk2(dev, "\x4A\x03\x00\x00\x00", target=2)
+    validate_read("\x03\x00", buff, "packet 355/356")
     
     # Generated from packet 357/358
     bulkWrite(0x02, "\x4C\x00\x02")
@@ -365,6 +307,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00", buff, "packet 375/376")
+    
     # Generated from packet 377/378
     bulkWrite(0x02, "\x02")
     # Generated from packet 379/380
@@ -401,6 +344,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00", buff, "packet 379/380")
+    
     # Generated from packet 381/382
     bulkWrite(0x02, "\x04\x63\x05\x72\x06\x69\x07\x70\x08\x74\x09\x20\x0A\x74\x0B\x79"
               "\x57\x81\x00\x0C\x02\x30")
@@ -438,6 +382,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00", buff, "packet 383/384")
+    
     # Generated from packet 385/386
     bulkWrite(0x02, "\x20\x01\x00\x2B\x3B\x0C\x22\x00\xC0\x40\x00\x3B\x0E\x22\x00\xC0"
               "\x00\x00\x3B\x1A\x22\x00\xC0\x18\x00\x0E\x01")
@@ -475,6 +420,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x20\x00", buff, "packet 387/388")
+    
     # Generated from packet 389/390
     bulkWrite(0x02, "\x03")
     # Generated from packet 391/392
@@ -511,6 +457,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00", buff, "packet 391/392")
+    
     # Generated from packet 393/394
     bulkWrite(0x02, "\x03")
     # Generated from packet 395/396
@@ -547,6 +494,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00", buff, "packet 395/396")
+    
     # Generated from packet 397/398
     bulkWrite(0x02, "\x0E\x02")
     # Generated from packet 399/400
@@ -583,8 +531,10 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x20\x00", buff, "packet 399/400")
+    
     # Generated from packet 401/402
     bulkWrite(0x02, "\x48\x00\x20\x00\x00\x50\x12\x00\x00\x00")
+    
     # Generated from packet 403/404
     bulkWrite(0x02, "\x00\x00\x00\x00\x04\x00\x08\x00\x0C\x00\x10\x00\x14\x00\x18\x00"
               "\x1C\x00")
@@ -622,6 +572,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00", buff, "packet 405/406")
+    
     # Generated from packet 407/408
     bulkWrite(0x02, "\x02")
     # Generated from packet 409/410
@@ -658,6 +609,7 @@ def replay_setup(dev):
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00", buff, "packet 409/410")
+    
     # Generated from packet 411/412
     bulkWrite(0x02, "\x1D\x10\x01\x09\x00\x00\x00\x15\x60\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x1C\x00\x00\x48\x00\x12\xAA")
