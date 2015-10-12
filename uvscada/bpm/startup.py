@@ -218,23 +218,6 @@ r01_sm = \
     "\x00"
 
 
-GPIO_SM = 0x0001
-# Not sure if this actually is GPIO
-# but seems like a good guess given that it detects socket module insertion
-def gpio_read(dev):
-    buff = bulk2(dev, "\x03", target=2, truncate=True)
-    validate_readv((
-            "\x31\x00",
-            "\x71\x04",
-            "\x71\x00",
-            
-            # SM
-            "\x30\x00",
-            "\x30\x04",
-            ),
-            buff, "packet 128/129")
-    return struct.unpack('<H', buff)[0]
-
 def replay(dev):
     bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
 
@@ -523,8 +506,8 @@ def replay(dev):
     # Generated from packet 236/237
     gpio_read(dev)
 
-SM_FMT = '<H12s18s'
-SM = namedtuple('sm', ('unk0', 'name', 'unk12'))
+SM1_FMT = '<H12s18s'
+SM1 = namedtuple('sm', ('unk0', 'name', 'unk12'))
 
 def sm_read(dev):
     buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
@@ -545,7 +528,7 @@ def sm_read(dev):
     if buff == '\xFF' * 32:
         return None
     
-    return SM(*struct.unpack(SM_FMT, buff))
+    return SM1(*struct.unpack(SM1_FMT, buff))
 
 def sm_info(dev):
     # Generated from packet 3/4
@@ -580,10 +563,50 @@ def sm_info(dev):
             "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
             "\xFF", buff, "packet 33/34")
     '''
-    ins_all, _unk1, ins_last, _unk2, _res = struct.unpack('<HHHH24s', buff)
-    print 'Insertions (all): %d' % ins_all
-    print 'Insertions (since last): %d' % ins_last
+    SM2_FMT = '<HHHH24s'
+    SM2 = namedtuple('sm', ('ins_all', 'unk1', 'ins_last', 'unk2', 'res'))
+    sm = SM2(*struct.unpack(SM2_FMT, buff))
+    print 'Insertions (all): %d' % sm.ins_all
+    print 'Insertions (since last): %d' % sm.ins_last
     
     # Generated from packet 35/36
     buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=8, truncate=True)
-    validate_read("\x32\x01\x00\x00\x93\x00\x00\x00", buff, "packet 37/38")
+    '''
+    something caused fields to update
+      Expected; 8
+        "\x32\x01\x00\x00\x93\x00\x00\x00"
+        00000000  32 01 00 00 93 00 00 00                           |2.......        |
+      Actual; 8
+        "\x3A\x01\x00\x00\x9B\x00\x00\x00"
+        00000000  3A 01 00 00 9B 00 00 00                           |:.......        |
+    '''
+    #validate_read("\x32\x01\x00\x00\x93\x00\x00\x00", buff, "packet 37/38")
+    SM3_FMT = '<HHHH'
+    SM3 = namedtuple('sm', ('unk1', 'unk2', 'unk3', 'unk4'))
+    sm = SM3(*struct.unpack(SM3_FMT, buff))
+    print sm
+
+# 1 => LED on
+def led_mask(dev, mask):
+    if mask < 0 or mask > 7:
+        raise ValueError("Bad mask")
+    buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2, truncate=True)
+    validate_read(chr(mask) + "\x00", buff, "packet 9/10")    
+
+# clear => present
+GPIO_SM = 0x0001
+# Not sure if this actually is GPIO
+# but seems like a good guess given that it detects socket module insertion
+def gpio_read(dev):
+    buff = bulk2(dev, "\x03", target=2, truncate=True)
+    validate_readv((
+            "\x31\x00",
+            "\x71\x04",
+            "\x71\x00",
+            
+            # SM
+            "\x30\x00",
+            "\x30\x04",
+            ),
+            buff, "packet 128/129")
+    return struct.unpack('<H', buff)[0]

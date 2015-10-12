@@ -72,5 +72,12 @@ if __name__ == "__main__":
     else:
         print 'Socket module: no'
 
+    if 0:
+        for i in xrange(3):
+            startup.led_mask(dev, 7)
+            time.sleep(0.2)
+            startup.led_mask(dev, 0)
+            time.sleep(0.2)
+
     # Done!
 
