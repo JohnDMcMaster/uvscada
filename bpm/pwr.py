@@ -10,7 +10,7 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2, bulk86
+from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_read
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -120,22 +120,20 @@ def replay_setup(dev):
               "\x2C", buff, "packet 303/304")
     
     # Generated from packet 305/306
-    buff = bulk2(dev, "\x03", target=2)
-    validate_read("\x31\x00", buff, "packet 307/308")
+    gpio_read(dev)
+
     
     # Generated from packet 309/310
-    buff = bulk2(dev, "\x03", target=2)
-    validate_read("\x31\x00", buff, "packet 311/312")
+    gpio_read(dev)
+
     
     # Generated from packet 313/314
-    buff = bulk2(dev, "\x0E\x02", target=0x20)
-    validate_read("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF", buff, "packet 315/316")
+    sm_read(dev)
     
     # Generated from packet 317/318
     buff = bulk2(dev, "\x01", target=0x85)
-    validate_read("\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
+    validate_readv((
+              "\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
               "\x00\x00\x30\x00\x83\x00\x30\x01\x09\x00\xC0\x00\x00\x00\x09\x00"
               "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
               "\xD0\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55"
@@ -143,7 +141,19 @@ def replay_setup(dev):
               "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
               "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
               "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
-              "\x00\x00\xC0\x1E\x00\x00", buff, "packet 319/320")
+              "\x00\x00\xC0\x1E\x00\x00", 
+              
+              # SM
+            "\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24\x00" \
+            "\x00\x30\x00\x83\x00\x30\x01\x09\x00\xC0\x00\x00\x00\x09\x00\x08" \
+            "\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00\xD0" \
+            "\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55\x01" \
+            "\x00\x00\x00\x00\x00\x02\x00\x80\x01\xC0\x01\x02\x00\x01\x00\x00" \
+            "\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00\x01" \
+            "\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46\x00" \
+            "\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11\x00" \
+            "\x00\xC0\x1E\x00\x00"
+              ), buff, "packet 319/320")
 
     # Generated from packet 321/322
     bulkWrite(0x02, "\x43\x19\x00\x00\x00")
@@ -173,13 +183,12 @@ def replay_setup(dev):
     validate_read("\x0F\x00", buff, "packet 337/338")
     
     # Generated from packet 339/340
-    buff = bulk2(dev, "\x03", target=2)
-    # failing this messes up state
-    validate_readv(("\x31\x00", '\x71\x00'), buff, "packet 341/342")
+    gpio_read(dev)
+
     
     # Generated from packet 343/344
-    buff = bulk2(dev, "\x03", target=2)
-    validate_readv(("\x31\x00", '\x71\x00'), buff, "packet 345/346")
+    gpio_read(dev)
+
 
     '''
     For kicks tried:
@@ -192,10 +201,7 @@ def replay_setup(dev):
     '''
     
     # Generated from packet 347/348
-    buff = bulk2(dev, "\x0E\x02", target=0x20)
-    validate_read("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF", buff, "packet 349/350")
+    sm_read(dev)
     
     # Generated from packet 351/352
     bulkWrite(0x02, "\x3B\x0C\x22\x00\xC0\x40\x00\x3B\x0E\x22\x00\xC0\x00\x00\x3B\x1A"
@@ -272,20 +278,15 @@ def replay_setup(dev):
         
     # 30k iterations by itself and always passes
     # Generated from packet 389/390
-    buff = bulk2(dev, "\x03", target=2, truncate=True)
-    validate_readv(("\x31\x00", "\x71\x00"), buff, "packet 391/392")
+    gpio_read(dev)
+
     
     # Generated from packet 393/394
-    buff = bulk2(dev, "\x03", target=2, truncate=True)
-    validate_readv(("\x31\x00", "\x71\x00"), buff, "packet 395/396")
+    gpio_read(dev)
+
     
     # Generated from packet 397/398
-    buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
-    validate_read(
-              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-              "\xFF",
-              buff, "packet 399/400")
+    sm_read(dev)
     
     # Generated from packet 401/402
     bulkWrite(0x02, "\x48\x00\x20\x00\x00\x50\x12\x00\x00\x00")
