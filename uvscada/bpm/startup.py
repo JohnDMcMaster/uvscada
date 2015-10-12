@@ -8,9 +8,9 @@ from uvscada.usb import usb_wraps
 from uvscada.usb import validate_read, validate_readv
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
-from uvscada.util import str2hex
+from uvscada.util import hexdump, str2hex
 
-def bulk86(dev, target=None, donef=None):
+def bulk86(dev, target=None, donef=None, truncate=False):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     if donef is None:
@@ -26,9 +26,15 @@ def bulk86(dev, target=None, donef=None):
             raise Exception("Bad prefix")
         if ord(p[-1]) != 0x00:
             raise Exception("Bad suffix")
-        if ord(p[-2]) != len(p) - 3:
-            print ord(p[-2]), len(p) - 3, len(p)
-            raise Exception("Bad length")
+        size = ord(p[-2])
+        if size != len(p) - 3:
+            if truncate and size < len(p) - 3:
+                return p[1:1 + size]
+            else:
+                print 'Truncate: %s' % truncate
+                print size, len(p) - 3, len(p)
+                hexdump(p)
+                raise Exception("Bad length")
         return p[1:-2]
 
     buff = ''
@@ -41,11 +47,11 @@ def bulk86(dev, target=None, donef=None):
         raise Exception('Buffer grew too big')
     return buff
 
-def bulk2(dev, cmd, target=None, donef=None):
+def bulk2(dev, cmd, target=None, donef=None, truncate=False):
     bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     bulkWrite(0x02, cmd)
-    return bulk86(dev, target=target, donef=donef)
+    return bulk86(dev, target=target, donef=donef, truncate=truncate)
 
 def trim(s):
     return s[1:-2]
