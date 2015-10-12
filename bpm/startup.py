@@ -63,7 +63,14 @@ if __name__ == "__main__":
 
     #dev.resetDevice()
     startup.replay(dev)
-    startup.sm_info(dev)
+    
+    print
+    
+    if startup.gpio_read(dev) & startup.GPIO_SM == 0:
+        print 'Socket module: yes'
+        startup.sm_info(dev)
+    else:
+        print 'Socket module: no'
 
     # Done!
 

@@ -2,13 +2,14 @@
 # uvusbreplay copyright 2011 John McMaster <JohnDMcMaster@gmail.com>
 # cmd: /home/mcmaster/bin/usbrply bp1410_15_startup_cold.cap --comment --fx2 --device 24 -r 169:264 --sleep
         
-import binascii
-
 from uvscada.usb import usb_wraps
 from uvscada.usb import validate_read, validate_readv
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
 from uvscada.util import hexdump, str2hex
+
+import binascii
+import struct
 
 def bulk86(dev, target=None, donef=None, truncate=False):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
@@ -216,6 +217,7 @@ r01_sm = \
     "\x00"
 
 
+GPIO_SM = 0x0001
 # Not sure if this actually is GPIO
 # but seems like a good guess given that it detects socket module insertion
 def gpio_read(dev):
@@ -223,11 +225,14 @@ def gpio_read(dev):
     validate_readv((
             "\x31\x00",
             "\x71\x04",
+            "\x71\x00",
+            
             # SM
             "\x30\x00",
             "\x30\x04",
             ),
             buff, "packet 128/129")
+    return struct.unpack('<H', buff)[0]
 
 def replay(dev):
     bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
@@ -559,9 +564,14 @@ def sm_info(dev):
     
     # Generated from packet 31/32
     buff = bulk2(dev, "\x22\x02\x10\x00\x1F\x00\x06", target=0x20, truncate=True)
+    '''
     validate_read("\x32\x01\x00\x00\x93\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
             "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
             "\xFF", buff, "packet 33/34")
+    '''
+    ins_all, _unk1, ins_last, _unk2, _res = struct.unpack('<HHHH24s', buff)
+    print 'Insertions (all): %d' % ins_all
+    print 'Insertions (since last): %d' % ins_last
     
     # Generated from packet 35/36
     buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=8, truncate=True)
