@@ -10,7 +10,9 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_readi, led_mask, cmd_49, cmd_2, sm_info0, sm_info1, sm_insert
+from uvscada.bpm.startup import bulk2, bulk86
+from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2
+from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -117,14 +119,8 @@ def replay(dev, fw):
         "\x00\xC0\x1E\x00\x00",
         ), buff, "packet W: 23/24, R: 25/26")
 
-    # NOTE:: req max 512 but got 136
     # Generated from packet 27/28
-    buff = bulk2(dev, "\x0E\x00", target=0x20)
-    # Discarded 3 / 35 bytes => 32 bytes
-    validate_read(
-        "\x3A\x00\x90\x32\xA7\x02\x2A\x86\x01\x95\x3C\x36\x90\x00\x1F\x00" \
-        "\x01\x00\xD6\x05\x01\x00\x72\x24\x22\x39\x00\x00\x00\x00\x27\x1F"
-        , buff, "packet W: 27/28, R: 29/30")
+    sn_read(dev)
 
     # NOTE:: req max 512 but got 35
     # Generated from packet 31/32

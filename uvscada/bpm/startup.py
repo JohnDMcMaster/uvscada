@@ -295,15 +295,7 @@ def replay(dev):
     # Packets going forward are from cold boot since its more canonical / clean
     # warm -40 packet (ie 120 cold => 80 warm)
 
-    # Generated from packet 118/119
-    buff = bulk2(dev, "\x0E\x00", target=0x20)
-    validate_read(
-            "\x3A\x00\x90\x32\xA7\x02\x2A\x86\x01\x95\x3C\x36\x90\x00\x1F"
-            "\x00\x01\x00\xD6\x05\x01\x00\x72\x24\x22\x39\x00\x00\x00\x00\x27"
-            "\x1F",
-            buff, "packet 120/121")
-    sn = buff[6:8]
-    print 'S/N: %s' % binascii.hexlify(sn)
+    sn_read(dev)
     
     # Generated from packet 122/123
     buff = bulk2(dev, "\x14\x38\x25\x00\x00\x04\x00\x90\x32\x90\x00\xA7\x02\x1F\x00\x14"
@@ -514,6 +506,17 @@ def replay(dev):
 
     # Generated from packet 236/237
     gpio_readi(dev)
+
+def sn_read(dev):
+    # Generated from packet 118/119
+    buff = bulk2(dev, "\x0E\x00", target=0x20)
+    validate_read(
+            "\x3A\x00\x90\x32\xA7\x02\x2A\x86\x01\x95\x3C\x36\x90\x00\x1F"
+            "\x00\x01\x00\xD6\x05\x01\x00\x72\x24\x22\x39\x00\x00\x00\x00\x27"
+            "\x1F",
+            buff, "packet 120/121")
+    sn = buff[6:8]
+    print 'S/N: %s' % binascii.hexlify(sn)
 
 SM1_FMT = '<H12s18s'
 SM1 = namedtuple('sm', ('unk0', 'name', 'unk12'))
