@@ -435,8 +435,7 @@ def replay(dev):
     validate_read("\x80\x00", buff, "packet 186/187")
 
     # Generated from packet 188/189
-    buff = bulk2(dev, "\x02", target=6, truncate=True)
-    validate_read("\x81\x00\x50\x00\x09\x00", buff, "packet 190/191")
+    cmd_2(dev, "\x81\x00\x50\x00\x09\x00", "packet 190/191")
 
     # Generated from packet 192/193
     bulkWrite(0x02, "\x50\xC0\x00\x00\x00")
@@ -459,8 +458,7 @@ def replay(dev):
     validate_read("\x81\x00", buff, "packet 196/197")
 
     # Generated from packet 198/199
-    buff = bulk2(dev, "\x02", target=6, truncate=True)
-    validate_read("\x82\x00\x10\x01\x09\x00", buff, "packet 200/201")
+    cmd_2(dev, "\x82\x00\x10\x01\x09\x00", "packet 200/201")
 
     if glitch_154:
         buff = bulk2(dev, "\x08\x20\x09\x20\x0A\x20\x0B\x20\x57\x81\x00\x0C\x04\x30",
@@ -505,8 +503,7 @@ def replay(dev):
     validate_read("\x82\x00", buff, "packet 226/227")
 
     # Generated from packet 228/229
-    buff = bulk2(dev, "\x02", target=6, truncate=True)
-    validate_read("\x83\x00\x30\x01\x09\x00", buff, "packet 230/231")
+    cmd_2(dev, "\x83\x00\x30\x01\x09\x00", "packet 230/231")
 
     # Generated from packet 232/233
     buff = bulk2(dev,
@@ -640,3 +637,8 @@ def cmd_49(dev):
     # Generated from packet 156/157
     buff = bulk2(dev, "\x49", target=2, truncate=True)
     validate_read("\x0F\x00", buff, "packet 158/159")
+
+def cmd_2(dev, exp, msg):
+    # Generated from packet 188/189
+    buff = bulk2(dev, "\x02", target=6, truncate=True)
+    validate_read(exp, buff, msg)
