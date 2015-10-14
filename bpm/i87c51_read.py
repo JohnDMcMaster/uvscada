@@ -10,7 +10,7 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_readi, led_mask, cmd_49, cmd_2
+from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_readi, led_mask, cmd_49, cmd_2, sm_info0, sm_info1
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -138,31 +138,10 @@ def replay(dev, fw):
         "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3E\x2C"
         , buff, "packet W: 31/32, R: 33/34")
 
-    # Generated from packet 35/36
-    validate_read(0x30, gpio_readi(dev), "packet W: 35/36, R: 37/38")
 
-    # Generated from packet 39/40
-    validate_read(0x30, gpio_readi(dev), "packet W: 39/40, R: 41/42")
-
-    # NOTE:: req max 512 but got 5
-    # Generated from packet 43/44
-    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04)
-    # Discarded 3 / 7 bytes => 4 bytes
-    validate_read("\xAA\x55\x33\xA2", buff, "packet W: 43/44, R: 45/46")
-
-    # NOTE:: req max 512 but got 7
-    # Generated from packet 47/48
-    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=0x04)
-    # Discarded 3 / 7 bytes => 4 bytes
-    validate_read("\x01\x00\x00\x00", buff, "packet W: 47/48, R: 49/50")
+    sm_info1(dev)
     
-    sm_read(dev)
-    '''
-    validate_read(
-        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
-        , buff, "packet W: 51/52, R: 53/54")
-    '''
+    
     
     # NOTE:: req max 512 but got 35
     # Generated from packet 55/56
@@ -189,6 +168,7 @@ def replay(dev, fw):
         "\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11\x00" \
         "\x00\xC0\x1E\x00\x00"
         ), buff, "packet W: 55/56, R: 57/58")
+
     # NOTE:: req max 512 but got 136
     # Generated from packet 59/60
     bulkWrite(0x02, "\x43\x19\x10\x00\x00")
@@ -196,6 +176,7 @@ def replay(dev, fw):
     bulkWrite(0x02, "\x20\x01\x00\x0C\x04")
     # Generated from packet 63/64
     bulkWrite(0x02, "\x41\x00\x00")
+
     # Generated from packet 65/66
     buff = bulk2(dev, "\x10\x80\x02", target=0x06)
     # Discarded 3 / 9 bytes => 6 bytes
@@ -245,42 +226,7 @@ def replay(dev, fw):
     # Generated from packet 81/82
     cmd_49(dev)
 
-    # Generated from packet 85/86
-    validate_read(0x30, gpio_readi(dev), "packet W: 85/86, R: 87/88")
-
-    # Generated from packet 89/90
-    validate_read(0x30, gpio_readi(dev), "packet W: 89/90, R: 91/92")
-    
-    # NOTE:: req max 512 but got 5
-    # Generated from packet 93/94
-    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04)
-    # Discarded 3 / 7 bytes => 4 bytes
-    validate_read("\xAA\x55\x33\xA2", buff, "packet W: 93/94, R: 95/96")
-    # NOTE:: req max 512 but got 7
-    # Generated from packet 97/98
-    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=0x04)
-    # Discarded 3 / 7 bytes => 4 bytes
-    validate_read("\x01\x00\x00\x00", buff, "packet W: 97/98, R: 99/100")
-
-    sm_read(dev)
-    '''
-    validate_read(
-        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
-        , buff, "packet W: 101/102, R: 103/104")
-    '''
-
-    # Generated from packet 105/106
-    cmd_49(dev)
-
-    # Generated from packet 109/110
-    sm_read(dev)
-    '''
-    validate_read(
-        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
-        , buff, "packet W: 109/110, R: 111/112")
-    '''
+    sm_info1(dev)
 
     # NOTE:: req max 512 but got 35
     # Generated from packet 113/114
@@ -402,29 +348,10 @@ def replay(dev, fw):
         "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3E\x2C"
         , buff, "packet W: 171/172, R: 173/174")
 
-    # Generated from packet 175/176
-    validate_read(0x30, gpio_readi(dev), "packet W: 175/176, R: 177/178")
 
-    # Generated from packet 179/180
-    validate_read(0x30, gpio_readi(dev), "packet W: 179/180, R: 181/182")
+    sm_info0(dev)
 
-    # Generated from packet 183/184
-    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04, truncate=True)
-    # Discarded 508 / 512 bytes => 4 bytes
-    validate_read("\xAA\x55\x33\xA2", buff, "packet W: 183/184, R: 185/186")
-    # Generated from packet 187/188
-    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=0x04, truncate=True)
-    # Discarded 508 / 512 bytes => 4 bytes
-    validate_read("\x01\x00\x00\x00", buff, "packet W: 187/188, R: 189/190")
 
-    # Generated from packet 191/192
-    sm_read(dev)
-    '''
-    validate_read(
-        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
-        , buff, "packet W: 191/192, R: 193/194")
-    '''
 
     # Generated from packet 195/196
     buff = bulk2(dev, "\x48\x00\x10\x82\x02", target=0x06, truncate=True)
@@ -2255,42 +2182,7 @@ def replay(dev, fw):
     print 'Pass'
     led_mask(dev, 'pass')
     
-    # Generated from packet 433/434
-    validate_read(0x30, gpio_readi(dev), "packet W: 433/434, R: 435/436")
-
-    # Generated from packet 437/438
-    validate_read(0x30, gpio_readi(dev), "packet W: 437/438, R: 439/440")
-
-    # Generated from packet 441/442
-    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04, truncate=True)
-    # Discarded 508 / 512 bytes => 4 bytes
-    validate_read("\xAA\x55\x33\xA2", buff, "packet W: 441/442, R: 443/444")
-    
-    # Generated from packet 445/446
-    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=0x04, truncate=True)
-    # Discarded 508 / 512 bytes => 4 bytes
-    validate_read("\x01\x00\x00\x00", buff, "packet W: 445/446, R: 447/448")
-
-    # Generated from packet 449/450
-    sm_read(dev)
-    '''
-    validate_read(
-        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
-        , buff, "packet W: 449/450, R: 451/452")
-    '''
-
-    # Generated from packet 453/454
-    cmd_49(dev)
-
-    # Generated from packet 457/458
-    sm_read(dev)
-    '''
-    validate_read(
-        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
-        , buff, "packet W: 457/458, R: 459/460")
-    '''
+    sm_info1(dev)
 
     # Generated from packet 461/462
     buff = bulk2(dev, "\x22\x02\x10\x00\x1F\x00\x06", target=0x20, truncate=True)

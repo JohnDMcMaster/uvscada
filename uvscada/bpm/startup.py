@@ -539,7 +539,7 @@ def sm_read(dev):
     
     return SM1(*struct.unpack(SM1_FMT, buff))
 
-def sm_info(dev):
+def sm_info0(dev):
     # Generated from packet 3/4
     gpio_readi(dev)
     
@@ -556,6 +556,9 @@ def sm_info(dev):
     
     # Generated from packet 19/20
     sm_read(dev)
+
+def sm_info1(dev):
+    sm_info0(dev)
     
     # Generated from packet 23/24
     cmd_49(dev)
@@ -563,6 +566,9 @@ def sm_info(dev):
     # Generated from packet 27/28
     sm = sm_read(dev)
     print 'Name: %s' % sm.name
+
+def sm_info(dev):
+    sm_info1(dev)
     
     # Generated from packet 31/32
     buff = bulk2(dev, "\x22\x02\x10\x00\x1F\x00\x06", target=0x20, truncate=True)
@@ -594,6 +600,36 @@ def sm_info(dev):
     sm = SM3(*struct.unpack(SM3_FMT, buff))
     print sm
 
+# cmd_01: some sort of big status read
+# happens once during startup and a few times during programming write/read cycles
+
+def cmd_2(dev, exp, msg):
+    # Generated from packet 188/189
+    buff = bulk2(dev, "\x02", target=6, truncate=True)
+    validate_read(exp, buff, msg)
+
+# clear => present
+GPIO_SM = 0x0001
+# Not sure if this actually is GPIO
+# but seems like a good guess given that it detects socket module insertion
+def gpio_readi(dev):
+    buff = bulk2(dev, "\x03", target=2, truncate=True)
+    validate_readv((
+            "\x31\x00",
+            "\x71\x04",
+            "\x71\x00",
+            
+            # SM
+            "\x30\x00",
+            "\x30\x04",
+            ),
+            buff, "packet 128/129")
+    return struct.unpack('<H', buff)[0]
+
+# cmd_04
+
+# cmd_08
+
 '''
 1 => LED on
 
@@ -614,31 +650,45 @@ def led_mask(dev, mask):
     buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2, truncate=True)
     validate_read(chr(mask) + "\x00", buff, "packet 9/10")    
 
-# clear => present
-GPIO_SM = 0x0001
-# Not sure if this actually is GPIO
-# but seems like a good guess given that it detects socket module insertion
-def gpio_readi(dev):
-    buff = bulk2(dev, "\x03", target=2, truncate=True)
-    validate_readv((
-            "\x31\x00",
-            "\x71\x04",
-            "\x71\x00",
-            
-            # SM
-            "\x30\x00",
-            "\x30\x04",
-            ),
-            buff, "packet 128/129")
-    return struct.unpack('<H', buff)[0]
+# cmd_00
 
+# cmd_0E repeat with a few different arguments
+# one of them reads SM EEPROM
+
+# cmd_10
+
+# cmd_14 repeat
+
+# cmd_1D
+
+# cmd_22 SM
+
+# cmd_3B
+
+# cmd_43... repeat
+
+# cmd_45
+
+# Common (GPIO/status?)
 # Oddly sometimes this requires truncation and sometimes doesn't
 def cmd_49(dev):
     # Generated from packet 156/157
     buff = bulk2(dev, "\x49", target=2, truncate=True)
     validate_read("\x0F\x00", buff, "packet 158/159")
 
-def cmd_2(dev, exp, msg):
-    # Generated from packet 188/189
-    buff = bulk2(dev, "\x02", target=6, truncate=True)
-    validate_read(exp, buff, msg)
+# cmd_4A
+
+# cmd_5A: encountered once
+
+# cmd_66
+
+# cmd_80
+
+# cmd_82
+
+# cmd_A6
+
+# cmd_DB
+
+# cmd_E9
+
