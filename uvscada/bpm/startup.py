@@ -614,9 +614,9 @@ led_s2i = {
             'pass': 4,
             }
 def led_mask(dev, mask):
+    mask = led_s2i.get(mask, mask)
     if mask < 0 or mask > 7:
         raise ValueError("Bad mask")
-    mask = led_s2i.get(mask, mask)
     buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2, truncate=True)
     validate_read(chr(mask) + "\x00", buff, "packet 9/10")    
 
