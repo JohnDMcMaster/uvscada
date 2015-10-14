@@ -313,10 +313,10 @@ def replay(dev):
               "\x2C", buff, "packet 124/125")
     
     # Generated from packet 126/127
-    gpio_read(dev)
+    gpio_readi(dev)
     
     # Generated from packet 130/131
-    gpio_read(dev)
+    gpio_readi(dev)
     
     # Generated from packet 134/135
     sm_read(dev)
@@ -398,11 +398,11 @@ def replay(dev):
     validate_read("\x0F\x00", buff, "packet 158/159")
 
     # Generated from packet 160/161
-    gpio_read(dev)
+    gpio_readi(dev)
 
 
     # Generated from packet 164/165
-    gpio_read(dev)
+    gpio_readi(dev)
 
 
     # Generated from packet 168/169
@@ -488,11 +488,11 @@ def replay(dev):
               "\x2C", buff, "packet 208/209")
 
     # Generated from packet 210/211
-    gpio_read(dev)
+    gpio_readi(dev)
 
 
     # Generated from packet 214/215
-    gpio_read(dev)
+    gpio_readi(dev)
 
 
     # Generated from packet 218/219
@@ -518,7 +518,7 @@ def replay(dev):
     validate_read("\xAB", buff, "packet 234/235")
 
     # Generated from packet 236/237
-    gpio_read(dev)
+    gpio_readi(dev)
 
 SM1_FMT = '<H12s18s'
 SM1 = namedtuple('sm', ('unk0', 'name', 'unk12'))
@@ -546,10 +546,10 @@ def sm_read(dev):
 
 def sm_info(dev):
     # Generated from packet 3/4
-    gpio_read(dev)
+    gpio_readi(dev)
     
     # Generated from packet 7/8
-    gpio_read(dev)
+    gpio_readi(dev)
 
     # Generated from packet 11/12
     buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=4, truncate=True)
@@ -624,7 +624,7 @@ def led_mask(dev, mask):
 GPIO_SM = 0x0001
 # Not sure if this actually is GPIO
 # but seems like a good guess given that it detects socket module insertion
-def gpio_read(dev):
+def gpio_readi(dev):
     buff = bulk2(dev, "\x03", target=2, truncate=True)
     validate_readv((
             "\x31\x00",
@@ -637,3 +637,4 @@ def gpio_read(dev):
             ),
             buff, "packet 128/129")
     return struct.unpack('<H', buff)[0]
+

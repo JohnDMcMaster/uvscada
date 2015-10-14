@@ -10,12 +10,10 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_read, led_mask
+from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_readi, led_mask
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
-
-import startup_sm
 
 def dexit():
     print 'Debug break'
@@ -57,6 +55,7 @@ def replay(dev, fw):
     # Discarded 3 / 4 bytes => 1 bytes
     buff = bulk86(dev, target=0x01)
     validate_read("\x16", buff, "packet 13/14")
+
     # NOTE:: req max 512 but got 4
     # Generated from packet 15/16
     buff = bulk2(dev, "\x01", target=0x85)
@@ -82,6 +81,7 @@ def replay(dev, fw):
         "\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11\x00" \
         "\x00\xC0\x1E\x00\x00",
         ), buff, "packet W: 15/16, R: 17/18")
+
     # NOTE:: req max 512 but got 136
     # Generated from packet 19/20
     buff = bulk2(dev, 
@@ -90,6 +90,7 @@ def replay(dev, fw):
         , target=0x02)
     # Discarded 3 / 5 bytes => 2 bytes
     validate_read("\xA4\x06", buff, "packet W: 19/20, R: 21/22")
+
     # NOTE:: req max 512 but got 5
     # Generated from packet 23/24
     buff = bulk2(dev, "\x01", target=0x85)
@@ -115,6 +116,7 @@ def replay(dev, fw):
         "\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11\x00" \
         "\x00\xC0\x1E\x00\x00",
         ), buff, "packet W: 23/24, R: 25/26")
+
     # NOTE:: req max 512 but got 136
     # Generated from packet 27/28
     buff = bulk2(dev, "\x0E\x00", target=0x20)
@@ -123,6 +125,7 @@ def replay(dev, fw):
         "\x3A\x00\x90\x32\xA7\x02\x2A\x86\x01\x95\x3C\x36\x90\x00\x1F\x00" \
         "\x01\x00\xD6\x05\x01\x00\x72\x24\x22\x39\x00\x00\x00\x00\x27\x1F"
         , buff, "packet W: 27/28, R: 29/30")
+
     # NOTE:: req max 512 but got 35
     # Generated from packet 31/32
     buff = bulk2(dev, 
@@ -134,21 +137,19 @@ def replay(dev, fw):
         "\x14\x00\x54\x41\x38\x34\x56\x4C\x56\x5F\x46\x58\x34\x00\x00\x00" \
         "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3E\x2C"
         , buff, "packet W: 31/32, R: 33/34")
-    # NOTE:: req max 512 but got 35
+
     # Generated from packet 35/36
-    buff = bulk2(dev, "\x03", target=0x02)
-    # Discarded 3 / 5 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 35/36, R: 37/38")
-    # NOTE:: req max 512 but got 5
+    validate_read(0x30, gpio_readi(dev), "packet W: 35/36, R: 37/38")
+
     # Generated from packet 39/40
-    buff = bulk2(dev, "\x03", target=0x02)
-    # Discarded 3 / 5 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 39/40, R: 41/42")
+    validate_read(0x30, gpio_readi(dev), "packet W: 39/40, R: 41/42")
+
     # NOTE:: req max 512 but got 5
     # Generated from packet 43/44
     buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04)
     # Discarded 3 / 7 bytes => 4 bytes
     validate_read("\xAA\x55\x33\xA2", buff, "packet W: 43/44, R: 45/46")
+
     # NOTE:: req max 512 but got 7
     # Generated from packet 47/48
     buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=0x04)
@@ -245,16 +246,13 @@ def replay(dev, fw):
     buff = bulk2(dev, "\x49", target=0x02)
     # Discarded 3 / 5 bytes => 2 bytes
     validate_read("\x0F\x00", buff, "packet W: 81/82, R: 83/84")
-    # NOTE:: req max 512 but got 5
+
     # Generated from packet 85/86
-    buff = bulk2(dev, "\x03", target=0x02)
-    # Discarded 3 / 5 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 85/86, R: 87/88")
-    # NOTE:: req max 512 but got 5
+    validate_read(0x30, gpio_readi(dev), "packet W: 85/86, R: 87/88")
+
     # Generated from packet 89/90
-    buff = bulk2(dev, "\x03", target=0x02)
-    # Discarded 3 / 5 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 89/90, R: 91/92")
+    validate_read(0x30, gpio_readi(dev), "packet W: 89/90, R: 91/92")
+    
     # NOTE:: req max 512 but got 5
     # Generated from packet 93/94
     buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04)
@@ -383,6 +381,7 @@ def replay(dev, fw):
     # Discarded 506 / 512 bytes => 6 bytes
     validate_read("\x82\x00\x20\x01\x09\x00", buff, "packet W: 153/154, R: 155/156")
     
+    print 'Going active'
     led_mask(dev, 'active')
     
     # Generated from packet 161/162
@@ -408,14 +407,13 @@ def replay(dev, fw):
         "\x14\x00\x54\x41\x38\x34\x56\x4C\x56\x5F\x46\x58\x34\x00\x00\x00" \
         "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3E\x2C"
         , buff, "packet W: 171/172, R: 173/174")
+
     # Generated from packet 175/176
-    buff = bulk2(dev, "\x03", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 175/176, R: 177/178")
+    validate_read(0x30, gpio_readi(dev), "packet W: 175/176, R: 177/178")
+
     # Generated from packet 179/180
-    buff = bulk2(dev, "\x03", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 179/180, R: 181/182")
+    validate_read(0x30, gpio_readi(dev), "packet W: 179/180, R: 181/182")
+
     # Generated from packet 183/184
     buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04, truncate=True)
     # Discarded 508 / 512 bytes => 4 bytes
@@ -2216,13 +2214,16 @@ def replay(dev, fw):
     buff = bulk2(dev, "\x02", target=0x06, truncate=True)
     # Discarded 506 / 512 bytes => 6 bytes
     validate_read("\x90\x00\x70\x63\x09\x00", buff, "packet W: 377/378, R: 379/380")
+
+    print 'Verifying firmware readback'
     # Generated from packet 381/382
     # WARNING: unexpected suffix: 0x01
     buff = bulk2(dev, "\x08\x00\x57\x8F\x00", target=2048, truncate=True)
     # Discarded 259 / 512 bytes => 253 bytes
     # Generated from packet 385/386
     validate_read(fw, buff, "packet W: 381/382, R 383/384, 399/400")
-        
+    print 'Readback ok'
+    
     # Generated from packet 401/402
     buff = bulk2(dev, "\x57\x8C\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
@@ -2255,16 +2256,15 @@ def replay(dev, fw):
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x00\x00", buff, "packet W: 425/426, R: 427/428")
     
+    print 'Pass'
     led_mask(dev, 'pass')
     
     # Generated from packet 433/434
-    buff = bulk2(dev, "\x03", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 433/434, R: 435/436")
+    validate_read(0x30, gpio_readi(dev), "packet W: 433/434, R: 435/436")
+
     # Generated from packet 437/438
-    buff = bulk2(dev, "\x03", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 437/438, R: 439/440")
+    validate_read(0x30, gpio_readi(dev), "packet W: 437/438, R: 439/440")
+
     # Generated from packet 441/442
     buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04, truncate=True)
     # Discarded 508 / 512 bytes => 4 bytes
@@ -2347,8 +2347,6 @@ if __name__ == "__main__":
     dev.claimInterface(0)
     #dev.resetDevice()
     startup.replay(dev)
-    # Start with more conservative startup sequence then move back to the original one
-    #startup_sm.replay(dev)
 
     #time.sleep(3)
 

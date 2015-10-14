@@ -39,6 +39,9 @@ def validate_read(expected, actual, msg):
     validate_readv([expected], actual, msg)
 
 def validate_readv(expecteds, actual, msg):
+    if type(actual) is int:
+        return validate_readiv(expecteds, actual, msg)
+    
     if actual not in expecteds:
         print 'Failed %s' % msg
         for expected in expecteds:
@@ -56,5 +59,14 @@ def validate_readv(expecteds, actual, msg):
             print '  Actual:   %d %s' % (len(actual), binascii.hexlify(actual))
         if do_hexdump:
             hexdump(actual, indent='    ')
+        if do_exception:
+            raise Exception('failed validate: %s' % msg)
+
+def validate_readiv(expecteds, actual, msg):
+    if actual not in expecteds:
+        print 'Failed %s' % msg
+        for expected in expecteds:
+            print '  Expected; %d 0x%04X' % (expected, expected)
+        print '  Actual; %d 0x%04X' % (actual, actual)
         if do_exception:
             raise Exception('failed validate: %s' % msg)
