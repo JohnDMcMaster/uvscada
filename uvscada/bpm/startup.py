@@ -12,7 +12,7 @@ import binascii
 import struct
 from collections import namedtuple
 
-def bulk86(dev, target=None, donef=None, truncate=False, suffix=0x00):
+def bulk86(dev, target=None, donef=None, truncate=False):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     if donef is None:
@@ -21,31 +21,43 @@ def bulk86(dev, target=None, donef=None, truncate=False, suffix=0x00):
         def donef(buff):
             return len(buff) >= target
     
-    def nxt():
+    '''
+    A suffix of 1 indicates that another buffer is coming
+    However, a buffer can be split into multiple packets
+    Is this an FX2-parallel distinction?
+    Don't think we care at this level
+
+    Ex: need to read 4096 bytes
+    Max buffer packet size is 512 bytes
+    but for some reason only uses up to 256 bytes of real data
+    + 3 framing bytes and 0 fills the rest to form 512 byte transfer
+    So to transfer the data 
+    '''
+    def nxt_buff():
         p = bulkRead(0x86, 0x0200)
         #print str2hex(p)
         if ord(p[0]) != 0x08:
             raise Exception("Bad prefix")
         suffix_this = ord(p[-1])
-        if suffix_this != suffix:
-            raise Exception("suffix: wanted 0x%02X, got 0x%02X " % (suffix, suffix_this))
         size = ord(p[-2])
         if size != len(p) - 3:
             if truncate and size < len(p) - 3:
-                return p[1:1 + size]
+                return p[1:1 + size], suffix_this
             else:
                 print 'Truncate: %s' % truncate
                 print size, len(p) - 3, len(p)
                 hexdump(p)
                 raise Exception("Bad length")
-        return p[1:-2]
+        return p[1:-2], suffix_this
 
     buff = ''
     while not donef(buff):
-        if buff:
-            print 'NOTE: split packet'
+        if 0 and buff:
+            print 'NOTE: split packet.  Have %d / %d bytes' % (len(buff), target)
             hexdump(buff)
-        buff += nxt()
+        # Ignore suffix continue until we have a reason to care
+        buff_this, _suffix_this = nxt_buff()
+        buff += buff_this
     #print 'Done w/ buff len %d' % len(buff)
     if target and len(buff) > target:
         raise Exception('Buffer grew too big')
@@ -53,11 +65,11 @@ def bulk86(dev, target=None, donef=None, truncate=False, suffix=0x00):
 
 # FIXME: with target set small but not truncate will happily truncate
 # FIXME: suffix 1 means continue read.  Make higher level func
-def bulk2(dev, cmd, target=None, donef=None, truncate=False, suffix=0x00):
+def bulk2(dev, cmd, target=None, donef=None, truncate=False):
     bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     bulkWrite(0x02, cmd)
-    return bulk86(dev, target=target, donef=donef, truncate=truncate, suffix=suffix)
+    return bulk86(dev, target=target, donef=donef, truncate=truncate)
 
 def trim(s):
     return s[1:-2]
@@ -596,9 +608,15 @@ LEDs:
 -2: active
 -4: pass
 '''
+led_s2i = {
+            'fail': 1,
+            'active': 2,
+            'pass': 4,
+            }
 def led_mask(dev, mask):
     if mask < 0 or mask > 7:
         raise ValueError("Bad mask")
+    mask = led_s2i.get(mask, mask)
     buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2, truncate=True)
     validate_read(chr(mask) + "\x00", buff, "packet 9/10")    
 
