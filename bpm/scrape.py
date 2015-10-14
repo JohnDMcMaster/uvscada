@@ -70,7 +70,7 @@ def dump(fin):
     
     print 'def replay(dev):'
     line("bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)")
-    line()
+    line('')
     
     if 0:
         line("# Generated from packet 61/62")

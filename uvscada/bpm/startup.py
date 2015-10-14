@@ -52,11 +52,12 @@ def bulk86(dev, target=None, donef=None, truncate=False, suffix=0x00):
     return buff
 
 # FIXME: with target set small but not truncate will happily truncate
-def bulk2(dev, cmd, target=None, donef=None, truncate=False):
+# FIXME: suffix 1 means continue read.  Make higher level func
+def bulk2(dev, cmd, target=None, donef=None, truncate=False, suffix=0x00):
     bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     bulkWrite(0x02, cmd)
-    return bulk86(dev, target=target, donef=donef, truncate=truncate)
+    return bulk86(dev, target=target, donef=donef, truncate=truncate, suffix=suffix)
 
 def trim(s):
     return s[1:-2]
