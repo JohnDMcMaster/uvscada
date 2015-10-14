@@ -47,7 +47,7 @@ def bulk86(dev, target=None, donef=None, truncate=False):
                 print 'Truncate: %s' % truncate
                 print size, len(p) - 3, len(p)
                 hexdump(p)
-                raise Exception("Bad length")
+                raise Exception("Bad length (enable truncation?)")
         return p[1:-2], suffix_this
 
     buff = ''
@@ -392,10 +392,8 @@ def replay(dev):
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF", buff, "packet 154/155")
-
     # Generated from packet 156/157
-    buff = bulk2(dev, "\x49", target=2)
-    validate_read("\x0F\x00", buff, "packet 158/159")
+    cmd_49(dev)
 
     # Generated from packet 160/161
     gpio_readi(dev)
@@ -563,8 +561,7 @@ def sm_info(dev):
     sm_read(dev)
     
     # Generated from packet 23/24
-    buff = bulk2(dev, "\x49", target=2, truncate=True)
-    validate_read("\x0F\x00", buff, "packet 25/26")
+    cmd_49(dev)
     
     # Generated from packet 27/28
     sm = sm_read(dev)
@@ -638,3 +635,8 @@ def gpio_readi(dev):
             buff, "packet 128/129")
     return struct.unpack('<H', buff)[0]
 
+# Oddly sometimes this requires truncation and sometimes doesn't
+def cmd_49(dev):
+    # Generated from packet 156/157
+    buff = bulk2(dev, "\x49", target=2, truncate=True)
+    validate_read("\x0F\x00", buff, "packet 158/159")

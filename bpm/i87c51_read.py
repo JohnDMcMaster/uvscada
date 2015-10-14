@@ -10,7 +10,7 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_readi, led_mask
+from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_readi, led_mask, cmd_49
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -241,11 +241,9 @@ def replay(dev, fw):
         "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
         "\xFF\xFF\xFF\xFF"
         , buff, "packet W: 77/78, R: 79/80")
-    # NOTE:: req max 512 but got 103
+
     # Generated from packet 81/82
-    buff = bulk2(dev, "\x49", target=0x02)
-    # Discarded 3 / 5 bytes => 2 bytes
-    validate_read("\x0F\x00", buff, "packet W: 81/82, R: 83/84")
+    cmd_49(dev)
 
     # Generated from packet 85/86
     validate_read(0x30, gpio_readi(dev), "packet W: 85/86, R: 87/88")
@@ -272,11 +270,8 @@ def replay(dev, fw):
         , buff, "packet W: 101/102, R: 103/104")
     '''
 
-    # NOTE:: req max 512 but got 35
     # Generated from packet 105/106
-    buff = bulk2(dev, "\x49", target=0x02)
-    # Discarded 3 / 5 bytes => 2 bytes
-    validate_read("\x0F\x00", buff, "packet W: 105/106, R: 107/108")
+    cmd_49(dev)
 
     # Generated from packet 109/110
     sm_read(dev)
@@ -2210,6 +2205,7 @@ def replay(dev, fw):
         , target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x8F\x00", buff, "packet W: 373/374, R: 375/376")
+
     # Generated from packet 377/378
     buff = bulk2(dev, "\x02", target=0x06, truncate=True)
     # Discarded 506 / 512 bytes => 6 bytes
@@ -2228,18 +2224,22 @@ def replay(dev, fw):
     buff = bulk2(dev, "\x57\x8C\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x00\x00", buff, "packet W: 401/402, R: 403/404")
+
     # Generated from packet 405/406
     bulkWrite(0x02, "\x50\x0D\x00\x00\x00")
     # Generated from packet 407/408
     buff = bulk2(dev, "\x66\xB9\x00\x00\xB2\x00\xFB\xFF\x25\x44\x11\x00\x00", target=0x02, truncate=True)
+
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x90\x00", buff, "packet W: 407/408, R: 409/410")
     # Generated from packet 411/412
     buff = bulk2(dev, "\x02", target=0x06, truncate=True)
+
     # Discarded 506 / 512 bytes => 6 bytes
     validate_read("\x91\x00\x80\x63\x09\x00", buff, "packet W: 411/412, R: 413/414")
     # Generated from packet 415/416
     bulkWrite(0x02, "\x57\x90\x00\x50\x1A\x00\x00\x00")
+
     # Generated from packet 417/418
     buff = bulk2(dev, 
         "\x66\xB9\x00\x00\xB2\x02\xFB\xFF\x25\x44\x11\x00\x00\x66\xB9\x00" \
@@ -2247,10 +2247,12 @@ def replay(dev, fw):
         , target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x91\x00", buff, "packet W: 417/418, R: 419/420")
+
     # Generated from packet 421/422
     buff = bulk2(dev, "\x02", target=0x06, truncate=True)
     # Discarded 506 / 512 bytes => 6 bytes
     validate_read("\x92\x00\xA0\x63\x09\x00", buff, "packet W: 421/422, R: 423/424")
+
     # Generated from packet 425/426
     buff = bulk2(dev, "\x57\x91\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
@@ -2269,6 +2271,7 @@ def replay(dev, fw):
     buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=0x04, truncate=True)
     # Discarded 508 / 512 bytes => 4 bytes
     validate_read("\xAA\x55\x33\xA2", buff, "packet W: 441/442, R: 443/444")
+    
     # Generated from packet 445/446
     buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=0x04, truncate=True)
     # Discarded 508 / 512 bytes => 4 bytes
@@ -2284,9 +2287,7 @@ def replay(dev, fw):
     '''
 
     # Generated from packet 453/454
-    buff = bulk2(dev, "\x49", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x0F\x00", buff, "packet W: 453/454, R: 455/456")
+    cmd_49(dev)
 
     # Generated from packet 457/458
     sm_read(dev)
