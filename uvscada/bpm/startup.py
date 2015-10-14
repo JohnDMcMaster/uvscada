@@ -12,7 +12,7 @@ import binascii
 import struct
 from collections import namedtuple
 
-def bulk86(dev, target=None, donef=None, truncate=False):
+def bulk86(dev, target=None, donef=None, truncate=False, suffix=0x00):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     if donef is None:
@@ -26,8 +26,9 @@ def bulk86(dev, target=None, donef=None, truncate=False):
         #print str2hex(p)
         if ord(p[0]) != 0x08:
             raise Exception("Bad prefix")
-        if ord(p[-1]) != 0x00:
-            raise Exception("Bad suffix")
+        suffix_this = ord(p[-1])
+        if suffix_this != suffix:
+            raise Exception("suffix: wanted 0x%02X, got 0x%02X " % (suffix, suffix_this))
         size = ord(p[-2])
         if size != len(p) - 3:
             if truncate and size < len(p) - 3:

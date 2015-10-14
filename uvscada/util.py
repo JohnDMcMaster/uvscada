@@ -52,6 +52,8 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
     "\x00\x00\xC0\x1E\x00\x00\x85\x00")
 '''
 def str2hex(buff, prefix='', terse=True):
+    if len(buff) == 0:
+        return '""'
     buff = bytearray(buff)
     ret = ''
     if terse and len(buff) > 16:
@@ -60,7 +62,10 @@ def str2hex(buff, prefix='', terse=True):
         if i % 16 == 0:
             if i != 0:
                 ret += '" \\\n'
+            if len(buff) <= 16:
+                ret += '"'
             if not terse or len(buff) > 16:
                 ret += '%s"' % prefix
+            
         ret += "\\x%02X" % (buff[i],)
     return ret + '"'
