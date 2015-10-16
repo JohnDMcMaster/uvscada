@@ -1583,3 +1583,15 @@ p373 = \
     "\x66\x8B\x05\x4E\x00\x09\x00\x66\x3D\x00\x00\x0F\x84\x06\x00\x00" \
     "\x00\x88\x05\x30\x00\x00\x52\x66\xC7\x05\x30\x24\x00\x00\x19\x00" \
     "\x66\xB9\x00\x00\xB2\x00\xFB\xFF\x25\x44\x11\x00\x00"
+
+p_p2n = {}
+for k, v in dict(globals()).iteritems():
+    if k[0] != 'p' or k == 'p_p2n':
+        continue
+    p_p2n[v] = k
+
+if __name__ == '__main__':
+    for k, v in dict(globals()).iteritems():
+        if k[0] != 'p':
+            continue
+        open('i87c51_read_fw/%s.bin' % k, 'w').write(v)

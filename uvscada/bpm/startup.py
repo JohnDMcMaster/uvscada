@@ -704,6 +704,7 @@ led_s2i = {
             'active': 2,
             'pass': 4,
             }
+led_i2s = dict((v, k) for k, v in led_s2i.iteritems())
 def led_mask(dev, mask):
     mask = led_s2i.get(mask, mask)
     if mask < 0 or mask > 7:

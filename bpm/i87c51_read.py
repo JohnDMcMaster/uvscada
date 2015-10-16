@@ -355,11 +355,12 @@ def replay(dev, fw):
     cmd_2(dev, "\x84\x00\xC0\x03\x09\x00", "packet W: 215/216, R: 217/218")
 
     '''
-    These writes can't be interrupted
+    Seems these must be done together
     Increments socket insertion count
     '''
     # Generated from packet 219/220
     bulkWrite(0x02, "\x57\x83\x00\x50\x18\x3A\x00\x00")
+    # p221.bin: DOS executable (COM)
     # Generated from packet 221/222
     buff = bulk2(dev, fwm.p221, target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes

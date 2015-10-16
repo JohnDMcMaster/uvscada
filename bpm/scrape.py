@@ -5,10 +5,26 @@ import sys
 import ast
 import json
 import binascii
+import subprocess
+
+from uvscada.bpm.startup import led_i2s
+from i87c51_read_fw import p_p2n
 
 prefix = ' ' * 8
+indent = ''
+def line(s):
+    print '%s%s' % (indent, s)
+def indentP():
+    global indent
+    indent += '    '
+def indentN():
+    global indent
+    indent = indent[4:]
 
 def fmt_terse(data):
+    if data in p_p2n:
+        return 'i87c51_read_fw.%s' % p_p2n[data]
+    
     ret = str2hex(data, prefix=prefix)
     if len(data) > 16:
         ret += '\n%s' % prefix
@@ -43,13 +59,14 @@ def pkt_strip(p):
         print size
         raise Exception("Bad size")
 
-def line(s):
-    print '    %s' % s
-
 def dump(fin):
     j = json.load(open(fin))
     pi = 0
     ps = j['data']
+
+    line('from uvscada.bpm.startup import bulk2, bulk86')
+    line('import i87c51_read_fw')
+    line('')
     
     # remove all comments to make processing easier
     # we'll add our own anyway
@@ -68,7 +85,8 @@ def dump(fin):
                 return ppi, p
             ppi = ppi + 1
     
-    print 'def replay(dev):'
+    line('def replay(dev):')
+    indentP()
     line("bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)")
     line('')
     
@@ -145,22 +163,67 @@ def dump(fin):
                     line(fmt_terse(reply_full))
                     line("'''")
                 reply, truncate, suffix = pkt_strip(reply_full)
-                truncate_str = ''
-                if truncate:
-                    truncate_str = ', truncate=True'
-                #if suffix != 0:
-                #    raise Exception("Unexpected")
-                suffix_str = ''
-                if suffix != 0x00:
-                    suffix_str = ', suffix=0x%02X' % suffix
-                pack_str = 'packet W: %d/%d, R: %d/%d' % (
-                        p_w['packn'][0], p_w['packn'][1], p_r['packn'][0], p_r['packn'][1])
-                line('buff = bulk2(dev, %s, target=0x%02X%s%s)' % (fmt_terse(cmd), len(reply), truncate_str, suffix_str))
-                line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
-                line('validate_read(%s, buff, "%s")' % (fmt_terse(reply), pack_str))
+                if cmd == "\x03":
+                    line('gpio_readi(dev)')
+                if len(cmd) == 3 and cmd[0] == "\x0C" and cmd[2] == "\x30":
+                    #line('led_mask(dev, 0x%02X)' % ord(cmd[1]))
+                    line('led_mask(dev, "%s")' % led_i2s[ord(cmd[1])])
+                elif cmd == "\x22\x02\x10\x00\x1F\x00\x06":
+                    line('sm_insert(dev)')
+                elif cmd == "\x49":
+                    line('cmd_49(dev)')
+                else:
+                    truncate_str = ''
+                    if truncate:
+                        truncate_str = ', truncate=True'
+                    #if suffix != 0:
+                    #    raise Exception("Unexpected")
+                    suffix_str = ''
+                    if suffix != 0x00:
+                        suffix_str = ', suffix=0x%02X' % suffix
+                    pack_str = 'packet W: %d/%d, R: %d/%d' % (
+                            p_w['packn'][0], p_w['packn'][1], p_r['packn'][0], p_r['packn'][1])
+                    line('buff = bulk2(dev, %s, target=0x%02X%s%s)' % (fmt_terse(cmd), len(reply), truncate_str, suffix_str))
+                    line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
+                    line('validate_read(%s, buff, "%s")' % (fmt_terse(reply), pack_str))
         else:
             raise Exception("Unknown type: %s" % p['type'])
         pi += 1
+
+    indentN()
+    print '''
+def open_dev(usbcontext=None):
+    if usbcontext is None:
+        usbcontext = usb1.USBContext()
+    
+    print 'Scanning for devices...'
+    for udev in usbcontext.getDeviceList(skip_on_error=True):
+        vid = udev.getVendorID()
+        pid = udev.getProductID()
+        if (vid, pid) == (0x14b9, 0x0001):
+            print
+            print
+            print 'Found device'
+            print 'Bus %03i Device %03i: ID %04x:%04x' % (
+                udev.getBusNumber(),
+                udev.getDeviceAddress(),
+                vid,
+                pid)
+            return udev.open()
+    raise Exception("Failed to find a device")
+
+if __name__ == "__main__":
+    import argparse 
+    
+    parser = argparse.ArgumentParser(description='Replay captured USB packets')
+    args = parser.parse_args()
+
+    usbcontext = usb1.USBContext()
+    dev = open_dev(usbcontext)
+    dev.claimInterface(0)
+    dev.resetDevice()
+    replay(dev)
+'''
 
 if __name__ == "__main__":
     import argparse 
@@ -169,6 +232,11 @@ if __name__ == "__main__":
     parser.add_argument('fin')
     args = parser.parse_args()
 
-    print 'from uvscada.bpm.startup import bulk2, bulk86'
-    print
-    dump(args.fin)
+    if args.fin.find('.cap') >= 0:
+        fin = '/tmp/scrape.json'
+        print 'Generating json'
+        subprocess.check_call('usbrply --packet-numbers --no-setup --comment --fx2 -j %s >%s' % (args.fin, fin), shell=True)
+    else:
+        fin = args.fin
+    
+    dump(fin)
