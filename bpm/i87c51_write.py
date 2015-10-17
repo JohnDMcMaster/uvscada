@@ -12,7 +12,7 @@ from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
-from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_0E, cmd_57s, cmd_57_94
+from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_0E, cmd_50, cmd_57s, cmd_57_94
 from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info22, sm_info24, sm_info10
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
@@ -103,7 +103,8 @@ def replay(dev, fw, cont=True):
     cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 367/368
-    bulkWrite(0x02, "\x50\x18\x00\x00\x00")
+    cmd_50(dev, "\x18\x00")
+    
     # Generated from packet 369/370
     buff = bulk2(dev, 
         "\x66\xB8\x01\x2D\x66\x89\x05\x06\x00\x09\x00\x66\xB9\x00\x00\xB2" \
@@ -119,8 +120,10 @@ def replay(dev, fw, cont=True):
     buff = bulk2(dev, "\x57\x8F\x00\x57\x89\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x00\x00", buff, "packet W: 377/378, R: 379/380")
+
     # Generated from packet 381/382
-    bulkWrite(0x02, "\x50\x0A\x06\x00\x00")
+    cmd_50(dev, "\x0A\x06")
+
     # Generated from packet 383/384
     buff = bulk2(dev, i87c51_write_fw.p383, target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
@@ -135,8 +138,10 @@ def replay(dev, fw, cont=True):
     validate_read("\x00\x00", buff, "packet W: 391/392, R: 393/394")
     # Generated from packet 395/396
     cmd_57s(dev, '\x8C', "\x00\x00")
+    
     # Generated from packet 399/400
-    bulkWrite(0x02, "\x50\x18\x00\x00\x00")
+    cmd_50(dev, "\x18\x00")
+    
     # Generated from packet 401/402
     buff = bulk2(dev, 
         "\x66\xB8\x01\x32\x66\x89\x05\x06\x00\x09\x00\x66\xB9\x00\x00\xB2" \
@@ -152,8 +157,10 @@ def replay(dev, fw, cont=True):
     buff = bulk2(dev, "\x57\x91\x00\x57\x89\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x00\x00", buff, "packet W: 409/410, R: 411/412")
+
     # Generated from packet 413/414
-    bulkWrite(0x02, "\x50\x9F\x09\x00\x00")
+    cmd_50(dev, "\x9F\x09")
+
     # Generated from packet 415/416
     buff = bulk2(dev, i87c51_write_fw.p415, target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
@@ -178,7 +185,8 @@ def replay(dev, fw, cont=True):
     cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 517/518
-    bulkWrite(0x02, "\x50\x18\x00\x00\x00")
+    cmd_50(dev, "\x18\x00")
+
     # Generated from packet 519/520
     buff = bulk2(dev, 
         "\x66\xB8\x01\x2D\x66\x89\x05\x06\x00\x09\x00\x66\xB9\x00\x00\xB2" \
@@ -194,8 +202,10 @@ def replay(dev, fw, cont=True):
     buff = bulk2(dev, "\x57\x93\x00\x57\x89\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x00\x00", buff, "packet W: 527/528, R: 529/530")
+
     # Generated from packet 531/532
-    bulkWrite(0x02, "\x50\xE0\x08\x00\x00")
+    cmd_50(dev, "\xE0\x08")
+
     # Generated from packet 533/534
     buff = bulk2(dev, i87c51_write_fw.p533, target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
@@ -215,7 +225,8 @@ def replay(dev, fw, cont=True):
     cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 635/636
-    bulkWrite(0x02, "\x50\x18\x00\x00\x00")
+    cmd_50(dev, "\x18\x00")
+
     # Generated from packet 637/638
     buff = bulk2(dev, 
         "\x66\xB8\x01\x37\x66\x89\x05\x06\x00\x09\x00\x66\xB9\x00\x00\xB2" \
@@ -242,7 +253,8 @@ def replay(dev, fw, cont=True):
     cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 743/744
-    bulkWrite(0x02, "\x50\x0D\x00\x00\x00")
+    cmd_50(dev, "\x0D\x00")
+    
     # Generated from packet 745/746
     buff = bulk2(dev, "\x66\xB9\x00\x00\xB2\x00\xFB\xFF\x25\x44\x11\x00\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes

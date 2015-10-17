@@ -428,7 +428,7 @@ def replay(dev):
     controlWrite(0x40, 0xB2, 0x0000, 0x0000, "")
 
     # Generated from packet 182/183
-    bulkWrite(0x02, "\x50\x45\x00\x00\x00")
+    cmd_50(dev, "\x45\x00")
 
     # Generated from packet 184/185
     # FIXME: size field unexpected
@@ -444,7 +444,7 @@ def replay(dev):
     cmd_2(dev, "\x81\x00\x50\x00\x09\x00", "packet 190/191")
 
     # Generated from packet 192/193
-    bulkWrite(0x02, "\x50\xC0\x00\x00\x00")
+    cmd_50(dev, "\xC0\x00")
     
     # Generated from packet 194/195
     # FIXME: size field unexpected
@@ -757,15 +757,68 @@ Payload size varies
 Often returns 0000 but not always
 Return size can vary
 
+think these are literlaly a 57 command followed by a 50 command
+this hints that I can string (some?) commands together
+but it may not be obvious to know where the boundary is
 
-bulkWrite(0x02, "\x57\x82\x00\x50\x1D\x00\x00\x00")
-bulkWrite(0x02, "\x57\x83\x00\x50\x18\x3A\x00\x00")
-bulkWrite(0x02, "\x57\x83\x00\x50\x62\x00\x00\x00")
-bulkWrite(0x02, "\x57\x85\x00\x50\x32\x07\x00\x00")
-bulkWrite(0x02, "\x57\x88\x00\x50\x32\x07\x00\x00")
-bulkWrite(0x02, "\x57\x8D\x00\x50\x1A\x00\x00\x00")
-bulkWrite(0x02, "\x57\x90\x00\x50\x1A\x00\x00\x00")
+bulkWrite(0x02, "\x50\x0A\x06\x00\x00")
+bulkWrite(0x02, "\x50\x0D\x00\x00\x00")
+bulkWrite(0x02, "\x50\x17\x00\x00\x00")
+bulkWrite(0x02, "\x50\x18\x00\x00\x00")
+bulkWrite(0x02, "\x50\x1A\x00\x00\x00")
+bulkWrite(0x02, "\x50\x1D\x00\x00\x00")
+bulkWrite(0x02, "\x50\x3D\x03\x00\x00")
+bulkWrite(0x02, "\x50\x45\x00\x00\x00")
+bulkWrite(0x02, "\x50\x5D\x00\x00\x00")
+bulkWrite(0x02, "\x50\x62\x00\x00\x00")
+bulkWrite(0x02, "\x50\x9F\x09\x00\x00")
+bulkWrite(0x02, "\x50\xC0\x00\x00\x00")
+bulkWrite(0x02, "\x50\xDD\x05\x00\x00")
+bulkWrite(0x02, "\x50\xDE\x03\x00\x00")
+bulkWrite(0x02, "\x50\xE0\x08\x00\x00")
+bulkWrite(0x02, "\x50\xF8\x04\x00\x00")
+bulkWrite(0x02, "\x50\xFA\x01\x00\x00")
+
+bulkWrite(0x02, "\x57\x82\x00 \x50\x1D\x00\x00\x00")
+bulkWrite(0x02, "\x57\x83\x00 \x50\x18\x3A\x00\x00")
+bulkWrite(0x02, "\x57\x83\x00 \x50\x62\x00\x00\x00")
+bulkWrite(0x02, "\x57\x85\x00 \x50\x32\x07\x00\x00")
+bulkWrite(0x02, "\x57\x88\x00 \x50\x32\x07\x00\x00")
+bulkWrite(0x02, "\x57\x8D\x00 \x50\x1A\x00\x00\x00")
+bulkWrite(0x02, "\x57\x90\x00 \x50\x1A\x00\x00\x00")
+
+cmd_57s(dev, "\x85", "\x01")
+cmd_57s(dev, "\x86", "\x00\x00")
+cmd_57s(dev, "\x87", "\x00\x00")
+cmd_57s(dev, "\x87", "\x89\x00")
+cmd_57s(dev, '\x89', "\x00\x00")
+cmd_57s(dev, "\x8A\x86", "\x00\x00")
+cmd_57s(dev, "\x8A", "\x89\x00")
+cmd_57s(dev, "\x8B", "\x58\x00")
+cmd_57s(dev, '\x8C', "\x00\x00")
+cmd_57s(dev, "\x8D\x89", "\x00\x00")
+cmd_57s(dev, "\x8E", "\x00\x00")
+cmd_57s(dev, "\x91", "\x00\x00")
+
 '''
+
+def cmd_50_mk(cmd):
+    '''
+    Example:
+    "\x50\x9F\x09\x00\x00"
+    As part of a larger command:
+    "\x57\x82\x00 \x50\x1D\x00\x00\x00"
+    '''
+    ret = "\x50" + cmd + "\x00\x00"
+    if len(ret) != 5:
+        raise Exception("Malfored command")
+    return ret
+
+def cmd_50(dev, cmd):
+    _bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
+    # No reply
+    bulkWrite(0x02, cmd_50_mk(cmd))
+
 def cmd_57s(dev, cmds, exp, msg="cmd_57"):
     out = ''.join(["\x57" + c + "\x00" for c in cmds])
     buff = bulk2(dev, out, target=len(exp), truncate=True)
