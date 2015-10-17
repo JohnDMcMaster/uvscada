@@ -64,6 +64,7 @@ def dump(fin):
     pi = 0
     ps = j['data']
 
+    line('# Generated from scrape.py')
     line('from uvscada.bpm.startup import bulk2, bulk86')
     line('import i87c51_read_fw')
     line('')
@@ -114,7 +115,7 @@ def dump(fin):
                     p['reqt'], p['req'], p['val'], p['ind'], p['len']))
             data = binascii.unhexlify(p['data'])
             line('# Req: %d, got: %d' % (p['len'], len(data)))
-            line('validate_read(%s, buff, "packet %d/%d")' % (
+            line('validate_read(%s, buff, "packet %s/%s")' % (
                     fmt_terse(data), p['packn'][0], p['packn'][1]))
         elif p['type'] == 'controlWrite':
             '''
@@ -130,7 +131,7 @@ def dump(fin):
                 line('buff = bulkRead(0x%02X, 0x%04X)' % (p['endp'], p['len']))
                 data = binascii.unhexlify(p['data'])
                 line('# Req: %d, got: %d' % (p['len'], len(data)))
-                line('validate_read(%s, buff, "packet %d/%d")' % (
+                line('validate_read(%s, buff, "packet %s/%s")' % (
                         fmt_terse(data), p['packn'][0], p['packn'][1]))
             reply_full = binascii.unhexlify(p['data'])
             reply, truncate, suffix = pkt_strip(reply_full)
@@ -141,7 +142,7 @@ def dump(fin):
             if suffix != 0x00:
                 suffix_str = ', suffix=0x%02X' % suffix
             line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
-            pack_str = 'packet %d/%d' % (
+            pack_str = 'packet %s/%s' % (
                      p['packn'][0], p['packn'][1])
             line('buff = bulk86(dev, target=0x%02X%s%s)' % (len(reply), truncate_str, suffix_str))
             line('validate_read(%s, buff, "%s")' % (fmt_terse(reply), pack_str))
@@ -170,6 +171,16 @@ def dump(fin):
                     line('led_mask(dev, "%s")' % led_i2s[ord(cmd[1])])
                 elif cmd == "\x22\x02\x10\x00\x1F\x00\x06":
                     line('sm_insert(dev)')
+                elif cmd == "\x22\x02\x22\x00\x23\x00\x06":
+                    if reply != "\xAA\x55\x33\xA2":
+                        raise Exception("Unexpected response")
+                    line('sm_info4(dev)')
+                elif cmd == "\x22\x02\x24\x00\x25\x00\x06":
+                    if reply != "\x01\x00\x00\x00":
+                        raise Exception("Unexpected response")
+                    line('sm_info5(dev)')
+                # elif cmd == "":
+                #    line('(dev)')
                 elif cmd == "\x49":
                     line('cmd_49(dev)')
                 else:
@@ -181,7 +192,7 @@ def dump(fin):
                     suffix_str = ''
                     if suffix != 0x00:
                         suffix_str = ', suffix=0x%02X' % suffix
-                    pack_str = 'packet W: %d/%d, R: %d/%d' % (
+                    pack_str = 'packet W: %s/%s, R: %s/%s' % (
                             p_w['packn'][0], p_w['packn'][1], p_r['packn'][0], p_r['packn'][1])
                     line('buff = bulk2(dev, %s, target=0x%02X%s%s)' % (fmt_terse(cmd), len(reply), truncate_str, suffix_str))
                     line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
@@ -229,13 +240,16 @@ if __name__ == "__main__":
     import argparse 
     
     parser = argparse.ArgumentParser(description='')
+    parser.add_argument('--usbrply', default='')
     parser.add_argument('fin')
     args = parser.parse_args()
 
     if args.fin.find('.cap') >= 0:
         fin = '/tmp/scrape.json'
-        print 'Generating json'
-        subprocess.check_call('usbrply --packet-numbers --no-setup --comment --fx2 -j %s >%s' % (args.fin, fin), shell=True)
+        #print 'Generating json'
+        cmd = 'usbrply --packet-numbers --no-setup --comment --fx2 %s -j %s >%s' % (args.usbrply, args.fin, fin)
+        #print cmd
+        subprocess.check_call(cmd, shell=True)
     else:
         fin = args.fin
     
