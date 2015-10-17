@@ -745,18 +745,35 @@ def cmd_49(dev):
 
 # cmd_4A
 
-def cmd_57_8C(dev):
-    buff = bulk2(dev, "\x57\x8C\x00", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x00\x00", buff, "packet W: 363/364, R: 365/366")
+'''
+Always
+-begin with 0x57
+-end with 0x00
+
+Payload size varies
+-1
+-4
+
+Often returns 0000 but not always
+Return size can vary
+
+
+bulkWrite(0x02, "\x57\x82\x00\x50\x1D\x00\x00\x00")
+bulkWrite(0x02, "\x57\x83\x00\x50\x18\x3A\x00\x00")
+bulkWrite(0x02, "\x57\x83\x00\x50\x62\x00\x00\x00")
+bulkWrite(0x02, "\x57\x85\x00\x50\x32\x07\x00\x00")
+bulkWrite(0x02, "\x57\x88\x00\x50\x32\x07\x00\x00")
+bulkWrite(0x02, "\x57\x8D\x00\x50\x1A\x00\x00\x00")
+bulkWrite(0x02, "\x57\x90\x00\x50\x1A\x00\x00\x00")
+'''
+def cmd_57s(dev, cmds, exp, msg="cmd_57"):
+    out = ''.join(["\x57" + c + "\x00" for c in cmds])
+    buff = bulk2(dev, out, target=len(exp), truncate=True)
+    validate_read(exp, buff, msg)
 
 def cmd_57_94(dev):
-    buff = bulk2(dev, "\x57\x94\x00", target=0x01, truncate=True)
-    # Discarded 511 / 512 bytes => 1 bytes
-    validate_read("\x62", buff, "packet W: 541/542, R: 543/544")
-
-    # Generated from packet 545/546
-    # Discarded 511 / 512 bytes => 1 bytes
+    cmd_57s(dev, '\x94', "\x62",  "cmd_57_94")
+    # Seems to get paired with this
     buff = bulk86(dev, target=0x01, truncate=True, prefix=0x18)
     validate_read("\x0B", buff, "packet 545/546")
 

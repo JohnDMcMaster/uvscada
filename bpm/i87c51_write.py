@@ -12,7 +12,7 @@ from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
-from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_0E, cmd_57_8C, cmd_57_94
+from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_0E, cmd_57s, cmd_57_94
 from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info22, sm_info24, sm_info10
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
@@ -100,7 +100,7 @@ def replay(dev, fw, cont=True):
     i87c51_read.replay1(dev, fw[0:len(fw)/2], cont)
     
     # Generated from packet 363/364
-    cmd_57_8C(dev)
+    cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 367/368
     bulkWrite(0x02, "\x50\x18\x00\x00\x00")
@@ -134,7 +134,7 @@ def replay(dev, fw, cont=True):
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x00\x00", buff, "packet W: 391/392, R: 393/394")
     # Generated from packet 395/396
-    cmd_57_8C(dev)
+    cmd_57s(dev, '\x8C', "\x00\x00")
     # Generated from packet 399/400
     bulkWrite(0x02, "\x50\x18\x00\x00\x00")
     # Generated from packet 401/402
@@ -175,7 +175,7 @@ def replay(dev, fw, cont=True):
     fw_w(dev, fw)
     
     # Generated from packet 513/514
-    cmd_57_8C(dev)
+    cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 517/518
     bulkWrite(0x02, "\x50\x18\x00\x00\x00")
@@ -212,7 +212,7 @@ def replay(dev, fw, cont=True):
     fw_w(dev, fw)
 
     # Generated from packet 631/632
-    cmd_57_8C(dev)
+    cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 635/636
     bulkWrite(0x02, "\x50\x18\x00\x00\x00")
@@ -239,7 +239,7 @@ def replay(dev, fw, cont=True):
     fw_w(dev, fw)
 
     # Generated from packet 739/740
-    cmd_57_8C(dev)
+    cmd_57s(dev, '\x8C', "\x00\x00")
     
     # Generated from packet 743/744
     bulkWrite(0x02, "\x50\x0D\x00\x00\x00")

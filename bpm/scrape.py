@@ -156,7 +156,7 @@ def dump(fin):
             suffix_str = ''
             if suffix != 0x00:
                 suffix_str = ', suffix=0x%02X' % suffix
-            line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
+            #line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
             pack_str = 'packet %s/%s' % (
                      p['packn'][0], p['packn'][1])
             line('buff = bulk86(dev, target=0x%02X%s%s%s)' % (len(reply), truncate_str, pprefix_str, suffix_str))
@@ -214,7 +214,7 @@ def dump(fin):
                     pack_str = 'packet W: %s/%s, R: %s/%s' % (
                             p_w['packn'][0], p_w['packn'][1], p_r['packn'][0], p_r['packn'][1])
                     line('buff = bulk2(dev, %s, target=0x%02X%s%s%s)' % (fmt_terse(cmd, p_w['packn'][0]), len(reply), truncate_str, pprefix_str, suffix_str))
-                    line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
+                    #line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
                     line('validate_read(%s, buff, "%s")' % (fmt_terse(reply, p_r['packn'][0]), pack_str))
         else:
             raise Exception("Unknown type: %s" % p['type'])
