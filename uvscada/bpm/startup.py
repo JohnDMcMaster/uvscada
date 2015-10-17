@@ -583,25 +583,6 @@ def sm_info1(dev):
     sm = sm_read(dev)
     print 'Name: %s' % sm.name
 
-def sm_info6(dev):
-    buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=0x08, truncate=True)
-    # Discarded 504 / 512 bytes => 8 bytes
-    '''
-    validate_readv((
-                "\x60\x01\x00\x00\xC1\x00\x00\x00",
-                "\xDB\x01\x00\x00\x3C\x01\x00\x00",
-                "\xDC\x01\x00\x00\x3D\x01\x00\x00",
-                "\xDD\x01\x00\x00\x3E\x01\x00\x00",
-                ), buff, "packet W: 803/804, R: 805/806")
-    '''
-    hexdump(buff, label="sm_info6", indent='  ')
-    SM6_FMT = '<HHHH'
-    SM6 = namedtuple('sm6', ('ins_all', 'unk1', 'ins_last', 'unk2'))
-    sm = SM6(*struct.unpack(SM6_FMT, buff))
-    # Auto increments during some operation
-    print '  Insertions (all): %d' % sm.ins_all
-    print '  Insertions (since last): %d' % sm.ins_last
-
 # Generated from packet 113/114
 '''
 validate_readv((
@@ -653,19 +634,27 @@ validate_readv((
     ), buff, "packet W: 461/462, R: 463/464")
 '''
 
+'''
+"\x22\x02\x10\x00\\xXX\x00\x06"
+0x1F => 0x20 bytes
+0x13 => 0x08 bytes
+odd
+TODO: scan
+'''
+
 def sm_insert(dev):
     # Generated from packet 31/32
     buff = bulk2(dev, "\x22\x02\x10\x00\x1F\x00\x06", target=0x20, truncate=True)
     '''
     validate_read("\x32\x01\x00\x00\x93\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-            "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-            "\xFF", buff, "packet 33/34")
+                  "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+                   "\xFF", buff, "packet 33/34")
     '''
+    hexdump(buff, label="sm_insert", indent='  ')
     SM2_FMT = '<HHHH24s'
     SM2 = namedtuple('sm', ('ins_all', 'unk1', 'ins_last', 'unk2', 'res'))
     sm = SM2(*struct.unpack(SM2_FMT, buff))
     # Auto increments during some operation
-    hexdump(buff, label="sm_insert", indent='  ')
     print '  Insertions (all): %d' % sm.ins_all
     print '  Insertions (since last): %d' % sm.ins_last
     
@@ -683,11 +672,12 @@ def sm_info3(dev):
         "\x3A\x01\x00\x00\x9B\x00\x00\x00"
         00000000  3A 01 00 00 9B 00 00 00                           |:.......        |
     '''
-    #validate_read("\x32\x01\x00\x00\x93\x00\x00\x00", buff, "packet 37/38")
+    hexdump(buff, label="sm_info3", indent='  ')
     SM3_FMT = '<HHHH'
-    SM3 = namedtuple('sm', ('unk1', 'unk2', 'unk3', 'unk4'))
+    SM3 = namedtuple('sm3', ('ins_all', 'unk1', 'ins_last', 'unk2'))
     sm = SM3(*struct.unpack(SM3_FMT, buff))
-    print sm
+    print '  Insertions (all): %d' % sm.ins_all
+    print '  Insertions (since last): %d' % sm.ins_last
 
 '''sm_info(
 def sm_info(dev):

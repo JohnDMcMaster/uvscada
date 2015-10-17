@@ -13,7 +13,7 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
 from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2
-from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info4, sm_info5, sm_info6
+from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info4, sm_info5, sm_info3
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -318,7 +318,7 @@ def replay(dev, fw, cont=True):
     sm_insert(dev)
     
     # Generated from packet 803/804
-    sm_info6(dev)
+    sm_info3(dev)
     
 if __name__ == "__main__":
     import argparse 

@@ -13,7 +13,7 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
 from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2
-from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info6
+from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info3
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -259,18 +259,9 @@ def replay1(dev, fw, cont=True):
     sm_info1(dev)
 
     sm_insert(dev)
-    # NOTE:: req max 512 but got 35
     # Generated from packet 117/118
-    buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=0x08)
-    # Discarded 3 / 11 bytes => 8 bytes
-    '''
-    validate_readv((
-            "\x3B\x01\x00\x00\x9C\x00\x00\x00",
-            "\x65\x01\x00\x00\xC6\x00\x00\x00",
-            "\x66\x01\x00\x00\xC7\x00\x00\x00",
-            "\x67\x01\x00\x00\xC8\x00\x00\x00",
-            ), buff, "packet W: 117/118, R: 119/120")
-    '''
+    sm_info3(dev)
+    
     # NOTE:: req max 512 but got 11
     # Generated from packet 121/122
     bulkWrite(0x02, 
@@ -754,17 +745,7 @@ def replay2(dev, cont):
 
     sm_insert(dev)
     
-    # Generated from packet 465/466
-    buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=0x08, truncate=True)
-    # Discarded 504 / 512 bytes => 8 bytes
-    '''
-    validate_readv((
-            "\x3C\x01\x00\x00\x9D\x00\x00\x00",
-            "\x6B\x01\x00\x00\xCC\x00\x00\x00",
-            "\x6C\x01\x00\x00\xCD\x00\x00\x00",
-            "\x6D\x01\x00\x00\xCE\x00\x00\x00",
-            ), buff, "packet W: 465/466, R: 467/468")
-    '''
+    sm_info3(dev)
 
 if __name__ == "__main__":
     import argparse 
