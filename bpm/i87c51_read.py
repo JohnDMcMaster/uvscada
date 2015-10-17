@@ -13,7 +13,7 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
 from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2
-from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read
+from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info6
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv

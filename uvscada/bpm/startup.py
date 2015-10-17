@@ -583,6 +583,24 @@ def sm_info1(dev):
     sm = sm_read(dev)
     print 'Name: %s' % sm.name
 
+def sm_info6(dev):
+    buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=0x08, truncate=True)
+    # Discarded 504 / 512 bytes => 8 bytes
+    '''
+    validate_readv((
+                "\x60\x01\x00\x00\xC1\x00\x00\x00",
+                "\xDB\x01\x00\x00\x3C\x01\x00\x00",
+                "\xDC\x01\x00\x00\x3D\x01\x00\x00",
+                "\xDD\x01\x00\x00\x3E\x01\x00\x00",
+                ), buff, "packet W: 803/804, R: 805/806")
+    '''
+    hexdump(buff, label="sm_info6", indent='  ')
+    SM6_FMT = '<HHHH'
+    SM6 = namedtuple('sm6', ('ins_all', 'unk1', 'ins_last', 'unk2'))
+    sm = SM6(*struct.unpack(SM6_FMT, buff))
+    # Auto increments during some operation
+    print '  Insertions (all): %d' % sm.ins_all
+    print '  Insertions (since last): %d' % sm.ins_last
 
 # Generated from packet 113/114
 '''
@@ -647,8 +665,9 @@ def sm_insert(dev):
     SM2 = namedtuple('sm', ('ins_all', 'unk1', 'ins_last', 'unk2', 'res'))
     sm = SM2(*struct.unpack(SM2_FMT, buff))
     # Auto increments during some operation
-    print 'Insertions (all): %d' % sm.ins_all
-    print 'Insertions (since last): %d' % sm.ins_last
+    hexdump(buff, label="sm_insert", indent='  ')
+    print '  Insertions (all): %d' % sm.ins_all
+    print '  Insertions (since last): %d' % sm.ins_last
     
     return sm
 

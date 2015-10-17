@@ -14,6 +14,9 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
     def isprint(c):
         return c >= ' ' and c <= '~'
 
+    if label:
+        print label
+    
     bytes_per_half_row = 8
     bytes_per_row = 16
     data = bytearray(data)

@@ -13,7 +13,7 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
 from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2
-from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info4, sm_info5
+from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info4, sm_info5, sm_info6
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -316,18 +316,10 @@ def replay(dev, fw, cont=True):
         , buff, "packet W: 795/796, R: 797/798")
     # Generated from packet 799/800
     sm_insert(dev)
+    
     # Generated from packet 803/804
-    buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=0x08, truncate=True)
-    # Discarded 504 / 512 bytes => 8 bytes
-    '''
-    validate_readv((
-                "\x60\x01\x00\x00\xC1\x00\x00\x00",
-                "\xDB\x01\x00\x00\x3C\x01\x00\x00",
-                "\xDC\x01\x00\x00\x3D\x01\x00\x00",
-                "\xDD\x01\x00\x00\x3E\x01\x00\x00",
-                ), buff, "packet W: 803/804, R: 805/806")
-    '''
-
+    sm_info6(dev)
+    
 if __name__ == "__main__":
     import argparse 
     
