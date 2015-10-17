@@ -11,15 +11,18 @@ from uvscada.util import hexdump, str2hex
 import binascii
 import struct
 from collections import namedtuple
+import libusb1
 
 # prefix: some have 0x18...why?
 def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     if donef is None:
-        #if target is None:
-        #    raise Exception("requires target")
-        if target is None:
+        # FIXME: to debug an unknown prefix protocol mode
+        if prefix is None:
+            def donef(buff):
+                return False
+        elif target is None:
             def donef(buff):
                 return len(buff) > 0
         else:
@@ -41,7 +44,7 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
     def nxt_buff():
         p = bulkRead(0x86, 0x0200)
         #print str2hex(p)
-        if ord(p[0]) != prefix:
+        if prefix is not None and ord(p[0]) != prefix:
             raise Exception("prefix: wanted 0x%02X, got 0x%02X" % (prefix, ord(p[0])))
         suffix_this = ord(p[-1])
         size = ord(p[-2])
@@ -60,9 +63,15 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
         if 0 and buff:
             print 'NOTE: split packet.  Have %d / %d bytes' % (len(buff), target)
             hexdump(buff)
-        # Ignore suffix continue until we have a reason to care
-        buff_this, _suffix_this = nxt_buff()
-        buff += buff_this
+        try:
+            # Ignore suffix continue until we have a reason to care
+            buff_this, _suffix_this = nxt_buff()
+            buff += buff_this
+        # FIXME: temp
+        except libusb1.USBError:
+            if prefix is None:
+                return buff
+            raise
     #print 'Done w/ buff len %d' % len(buff)
     if target and len(buff) > target:
         raise Exception('Buffer grew too big')
@@ -583,64 +592,19 @@ def sm_info1(dev):
     sm = sm_read(dev)
     print 'Name: %s' % sm.name
 
-# Generated from packet 113/114
-'''
-validate_readv((
-    "\x3B\x01\x00\x00\x9C\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x65\x01\x00\x00\xC6\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x66\x01\x00\x00\xC7\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x67\x01\x00\x00\xC8\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-    ), buff, "packet W: 113/114, R: 115/116")
-'''
-
-# Generated from packet 73/74
-'''
-validate_readv((
-    "\x3B\x01\x00\x00\x9C\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x65\x01\x00\x00\xC6\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x66\x01\x00\x00\xC7\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x67\x01\x00\x00\xC8\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    ), buff, "packet W: 73/74, R: 75/76")
-'''
-
-# Generated from packet 461/462
-'''
-validate_readv((
-    "\x3C\x01\x00\x00\x9D\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x67\x01\x00\x00\xC8\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x69\x01\x00\x00\xCA\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
-    
-    "\x6A\x01\x00\x00\xCB\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
-    "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-    ), buff, "packet W: 461/462, R: 463/464")
-'''
-
-'''
-"\x22\x02\x10\x00\\xXX\x00\x06"
-0x1F => 0x20 bytes
-0x13 => 0x08 bytes
-odd
-TODO: scan
-'''
+# theres probably an offset in here
+# think we're missing the first 0x20 bytes
+# (based on where FFs end, repitition)
+# but theres no 0x20 in there
+def sm_r(dev, which, words=1):
+    if not (0 <= which <= 2):
+        raise Exception("Bad which")
+    if not (0 <= words <= 0x40):
+        raise Exception("Bad words")
+    return bulk2(dev, "\x22" + chr(which) + "\x10\x00" + chr(0x10 + words - 1) + "\x00\x06",
+                #target=(words*2),
+                target=None,
+                truncate=True)
 
 def sm_insert(dev):
     # Generated from packet 31/32

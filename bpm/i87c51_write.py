@@ -54,6 +54,8 @@ def open_dev(usbcontext=None):
             return udev.open()
     raise Exception("Failed to find a device")
 
+# sm scan for large values
+# Exception: prefix: wanted 0x08, got 0x2C
 def fw_load(dev, fw, verbose=False):
     pos = 0
     print 'FW load: begin'
