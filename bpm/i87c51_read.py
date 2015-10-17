@@ -57,9 +57,9 @@ def fw_verify(dev, fw, cont):
     # Generated from packet 381/382
     # WARNING: unexpected suffix: 0x01
     if cont:
-        buff = bulk2(dev, "\x08\x00\x57\x8F\x00", target=2048, truncate=True)
+        buff = bulk2(dev, "\x08\x00\x57\x8F\x00", target=len(fw), truncate=True)
     else:
-        buff = bulk2(dev, "\x08\x00\x57\x8C\x00", target=2048, truncate=True)
+        buff = bulk2(dev, "\x08\x00\x57\x8C\x00", target=len(fw), truncate=True)
     # Discarded 259 / 512 bytes => 253 bytes
     # Generated from packet 385/386
     validate_read(fw, buff, "packet W: 381/382, R 383/384, 399/400")
@@ -790,6 +790,7 @@ if __name__ == "__main__":
 
     #time.sleep(3)
 
+    # FIXME: why is this only half sized?
     fw = 2048 * '\xFF'
     replay(dev, fw, cont=args.cont)
 
