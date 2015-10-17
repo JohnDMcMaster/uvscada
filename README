@@ -2,8 +2,5 @@ UVNet SCADA (uvscada)
 Copyright (C) 2011 John McMaster
 Misc data acquisition and processing utilities
 See COPYING for license.
-Currently only runs on linux
-
-
-
+See wiki for more info: https://github.com/JohnDMcMaster/uvscada/wiki
 
