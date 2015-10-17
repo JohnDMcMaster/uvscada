@@ -596,8 +596,11 @@ def sm_info1(dev):
 # think we're missing the first 0x20 bytes
 # (based on where FFs end, repitition)
 # but theres no 0x20 in there
-def sm_r(dev, which, words=1):
-    if not (0 <= which <= 2):
+def sm_r_ex(dev, words=1, which=2):
+    # 0 looks odd but might be something
+    # 1 has real data but its unclear if it was intended to be accessible
+    # maybe these are I2C commands?
+    if not (1 <= which <= 2):
         raise Exception("Bad which")
     if not (0 <= words <= 0x40):
         raise Exception("Bad words")
@@ -606,14 +609,20 @@ def sm_r(dev, which, words=1):
                 target=None,
                 truncate=True)
 
+def sm_r(dev, start, end):
+    if not (0 <= start <= 0x40):
+        raise Exception("Bad start")
+    if not (0 <= start <= 0x40):
+        raise Exception("Bad end")
+    words = end - start + 1
+    if words < 0:
+        raise Exception("Bad start-end")
+    return bulk2(dev, "\x22\x02" + chr(start) + "\x00" + chr(end) + "\x00\x06",
+                target=(words*2),
+                truncate=True)
+
 def sm_insert(dev):
-    # Generated from packet 31/32
-    buff = bulk2(dev, "\x22\x02\x10\x00\x1F\x00\x06", target=0x20, truncate=True)
-    '''
-    validate_read("\x32\x01\x00\x00\x93\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-                  "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
-                   "\xFF", buff, "packet 33/34")
-    '''
+    buff = sm_r(dev, 0x10, 0x1F)
     hexdump(buff, label="sm_insert", indent='  ')
     SM2_FMT = '<HHHH24s'
     SM2 = namedtuple('sm', ('ins_all', 'unk1', 'ins_last', 'unk2', 'res'))
@@ -626,7 +635,7 @@ def sm_insert(dev):
 
 def sm_info3(dev):
     # Generated from packet 35/36
-    buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=8, truncate=True)
+    buff = sm_r(dev, 0x10, 0x13)
     '''
     something caused fields to update
       Expected; 8
