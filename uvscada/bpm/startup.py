@@ -550,15 +550,23 @@ def sm_info0(dev):
     gpio_readi(dev)
 
     # Generated from packet 11/12
-    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=4, truncate=True)
-    validate_read("\xAA\x55\x33\xA2", buff, "packet 13/14")
+    sm_info4(dev)
     
     # Generated from packet 15/16
-    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=4, truncate=True)
-    validate_read("\x01\x00\x00\x00", buff, "packet 17/18")
+    sm_info5(dev)
     
     # Generated from packet 19/20
     sm_read(dev)
+
+def sm_info4(dev):
+    # Generated from packet 11/12
+    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=4, truncate=True)
+    validate_read("\xAA\x55\x33\xA2", buff, "packet 13/14")
+
+def sm_info5(dev):
+    # Generated from packet 15/16
+    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=4, truncate=True)
+    validate_read("\x01\x00\x00\x00", buff, "packet 17/18")
 
 def sm_info1(dev):
     sm_info0(dev)
@@ -639,11 +647,7 @@ def sm_insert(dev):
     
     return sm
 
-def sm_info(dev):
-    sm_info1(dev)
-    
-    sm_insert(dev)
-        
+def sm_info3(dev):
     # Generated from packet 35/36
     buff = bulk2(dev, "\x22\x02\x10\x00\x13\x00\x06", target=8, truncate=True)
     '''
@@ -660,6 +664,13 @@ def sm_info(dev):
     SM3 = namedtuple('sm', ('unk1', 'unk2', 'unk3', 'unk4'))
     sm = SM3(*struct.unpack(SM3_FMT, buff))
     print sm
+
+'''sm_info(
+def sm_info(dev):
+    sm_info1(dev)
+    sm_insert(dev)
+    sm_info3(dev)
+'''
 
 # cmd_01: some sort of big status read
 # happens once during startup and a few times during programming write/read cycles
