@@ -592,24 +592,9 @@ def sm_info1(dev):
     sm = sm_read(dev)
     print 'Name: %s' % sm.name
 
-# theres probably an offset in here
-# think we're missing the first 0x20 bytes
-# (based on where FFs end, repitition)
-# but theres no 0x20 in there
-def sm_r_ex(dev, words=1, which=2):
-    # 0 looks odd but might be something
-    # 1 has real data but its unclear if it was intended to be accessible
-    # maybe these are I2C commands?
-    if not (1 <= which <= 2):
-        raise Exception("Bad which")
-    if not (0 <= words <= 0x40):
-        raise Exception("Bad words")
-    return bulk2(dev, "\x22" + chr(which) + "\x10\x00" + chr(0x10 + words - 1) + "\x00\x06",
-                #target=(words*2),
-                target=None,
-                truncate=True)
-
-def sm_r(dev, start, end):
+# Possibly I2C traffic
+# Addresses are inclusive
+def periph_r(dev, periph, start, end):
     if not (0 <= start <= 0x40):
         raise Exception("Bad start")
     if not (0 <= start <= 0x40):
@@ -617,9 +602,25 @@ def sm_r(dev, start, end):
     words = end - start + 1
     if words < 0:
         raise Exception("Bad start-end")
-    return bulk2(dev, "\x22\x02" + chr(start) + "\x00" + chr(end) + "\x00\x06",
+    '''
+    Example commands
+    bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06
+        read SM 22:23
+    
+    I fuzzed to find periph 1, no real example commands but this seems to work
+        bulk2(dev, "\x22\x01\x00\x00\x7F\x00\x06
+    '''
+    return bulk2(dev, "\x22" + chr(periph) + chr(start) + "\x00" + chr(end) + "\x00\x06",
                 target=(words*2),
                 truncate=True)
+
+# Teach adapter (ex: TA84VLV_FX4) EEPROM
+def ta_r(dev, start, end):
+    return periph_r(dev, 0x01, start, end)
+
+# Read socket module (ex: SM84) EEPROM
+def sm_r(dev, start, end):
+    return periph_r(dev, 0x02, start, end)
 
 def sm_insert(dev):
     buff = sm_r(dev, 0x10, 0x1F)
