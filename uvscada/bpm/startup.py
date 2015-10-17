@@ -572,16 +572,6 @@ def sm_info0(dev):
     # Generated from packet 19/20
     sm_read(dev)
 
-def sm_info4(dev):
-    # Generated from packet 11/12
-    buff = bulk2(dev, "\x22\x02\x22\x00\x23\x00\x06", target=4, truncate=True)
-    validate_read("\xAA\x55\x33\xA2", buff, "packet 13/14")
-
-def sm_info5(dev):
-    # Generated from packet 15/16
-    buff = bulk2(dev, "\x22\x02\x24\x00\x25\x00\x06", target=4, truncate=True)
-    validate_read("\x01\x00\x00\x00", buff, "packet 17/18")
-
 def sm_info1(dev):
     sm_info0(dev)
     
@@ -622,6 +612,12 @@ def ta_r(dev, start, end):
 def sm_r(dev, start, end):
     return periph_r(dev, 0x02, start, end)
 
+def periph_dump(dev):
+    print 'Peripheral memory'
+    hexdump(ta_r(dev, 0x00, 0x3F), label="TA", indent='  ')
+    hexdump(sm_r(dev, 0x00, 0x3F), label="SM", indent='  ')
+    import sys; sys.exit(1)
+
 def sm_insert(dev):
     buff = sm_r(dev, 0x10, 0x1F)
     hexdump(buff, label="sm_insert", indent='  ')
@@ -653,12 +649,15 @@ def sm_info3(dev):
     print '  Insertions (all): %d' % sm.ins_all
     print '  Insertions (since last): %d' % sm.ins_last
 
-'''sm_info(
-def sm_info(dev):
-    sm_info1(dev)
-    sm_insert(dev)
-    sm_info3(dev)
-'''
+def sm_info4(dev):
+    # Generated from packet 11/12
+    buff = sm_r(dev, 0x22, 0x23)
+    validate_read("\xAA\x55\x33\xA2", buff, "packet 13/14")
+
+def sm_info5(dev):
+    # Generated from packet 15/16
+    buff = sm_r(dev, 0x24, 0x25)
+    validate_read("\x01\x00\x00\x00", buff, "packet 17/18")
 
 # cmd_01: some sort of big status read
 # happens once during startup and a few times during programming write/read cycles
