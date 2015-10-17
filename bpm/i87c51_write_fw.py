@@ -396,3 +396,16 @@ p533 = \
         "\x00\x52\x66\xC7\x05\x30\x24\x00\x00\x19\x00\x66\x50\xB0\x00\xFB" \
         "\x66\x53\x66\x51\x8A\xC8\xFF\x15\x3C\x11\x00\x00\x66\x59\x66\x5B" \
         "\xFA\x66\x58\x66\xB9\x00\x00\xB2\x00\xFB\xFF\x25\x44\x11\x00\x00"
+
+
+p_p2n = {}
+for k, v in dict(globals()).iteritems():
+    if k[0] != 'p' or k == 'p_p2n':
+        continue
+    p_p2n[v] = k
+
+if __name__ == '__main__':
+    for k, v in dict(globals()).iteritems():
+        if k[0] != 'p' or type(v) is not str:
+            continue
+        open('i87c51_write_fw/%s.bin' % k, 'w').write(v)
