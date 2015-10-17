@@ -13,7 +13,7 @@ from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
 from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2
-from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info3
+from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info10
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -260,7 +260,7 @@ def replay1(dev, fw, cont=True):
 
     sm_insert(dev)
     # Generated from packet 117/118
-    sm_info3(dev)
+    sm_info10(dev)
     
     # NOTE:: req max 512 but got 11
     # Generated from packet 121/122
@@ -745,7 +745,7 @@ def replay2(dev, cont):
 
     sm_insert(dev)
     
-    sm_info3(dev)
+    sm_info10(dev)
 
 if __name__ == "__main__":
     import argparse 

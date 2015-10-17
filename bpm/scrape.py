@@ -179,6 +179,7 @@ def dump(fin):
                     line(fmt_terse(reply_full, p['packn'][0]))
                     line("'''")
                 reply, truncate, pprefix, suffix = pkt_strip(reply_full)
+                raise Exception("FIXME: cleanup SM parsing")
                 if cmd == "\x03":
                     line('gpio_readi(dev)')
                 if len(cmd) == 3 and cmd[0] == "\x0C" and cmd[2] == "\x30":
@@ -189,11 +190,11 @@ def dump(fin):
                 elif cmd == "\x22\x02\x22\x00\x23\x00\x06":
                     if reply != "\xAA\x55\x33\xA2":
                         raise Exception("Unexpected response")
-                    line('sm_info4(dev)')
+                    line('sm_info22(dev)')
                 elif cmd == "\x22\x02\x24\x00\x25\x00\x06":
                     if reply != "\x01\x00\x00\x00":
                         raise Exception("Unexpected response")
-                    line('sm_info5(dev)')
+                    line('sm_info24(dev)')
                 # elif cmd == "":
                 #    line('(dev)')
                 elif cmd == "\x49":

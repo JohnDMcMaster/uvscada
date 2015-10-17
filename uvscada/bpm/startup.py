@@ -564,10 +564,10 @@ def sm_info0(dev):
     gpio_readi(dev)
 
     # Generated from packet 11/12
-    sm_info4(dev)
+    sm_info22(dev)
     
     # Generated from packet 15/16
-    sm_info5(dev)
+    sm_info24(dev)
     
     # Generated from packet 19/20
     sm_read(dev)
@@ -630,7 +630,7 @@ def sm_insert(dev):
     
     return sm
 
-def sm_info3(dev):
+def sm_info10(dev):
     # Generated from packet 35/36
     buff = sm_r(dev, 0x10, 0x13)
     '''
@@ -642,19 +642,19 @@ def sm_info3(dev):
         "\x3A\x01\x00\x00\x9B\x00\x00\x00"
         00000000  3A 01 00 00 9B 00 00 00                           |:.......        |
     '''
-    hexdump(buff, label="sm_info3", indent='  ')
+    hexdump(buff, label="sm_info10", indent='  ')
     SM3_FMT = '<HHHH'
     SM3 = namedtuple('sm3', ('ins_all', 'unk1', 'ins_last', 'unk2'))
     sm = SM3(*struct.unpack(SM3_FMT, buff))
     print '  Insertions (all): %d' % sm.ins_all
     print '  Insertions (since last): %d' % sm.ins_last
 
-def sm_info4(dev):
+def sm_info22(dev):
     # Generated from packet 11/12
     buff = sm_r(dev, 0x22, 0x23)
     validate_read("\xAA\x55\x33\xA2", buff, "packet 13/14")
 
-def sm_info5(dev):
+def sm_info24(dev):
     # Generated from packet 15/16
     buff = sm_r(dev, 0x24, 0x25)
     validate_read("\x01\x00\x00\x00", buff, "packet 17/18")
@@ -714,6 +714,13 @@ def led_mask(dev, mask):
 
 # cmd_0E repeat with a few different arguments
 # one of them reads SM EEPROM
+def cmd_0E(dev):
+    buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
+    # Discarded 480 / 512 bytes => 32 bytes
+    validate_read(
+        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
+        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
+        , buff, "packet W: 787/788, R: 789/790")
 
 # cmd_10
 
@@ -721,7 +728,7 @@ def led_mask(dev, mask):
 
 # cmd_1D
 
-# cmd_22 SM
+# cmd_22 peripheral (I2C?) read
 
 # cmd_3B
 
@@ -737,6 +744,21 @@ def cmd_49(dev):
     validate_read("\x0F\x00", buff, "packet 158/159")
 
 # cmd_4A
+
+def cmd_57_8C(dev):
+    buff = bulk2(dev, "\x57\x8C\x00", target=0x02, truncate=True)
+    # Discarded 510 / 512 bytes => 2 bytes
+    validate_read("\x00\x00", buff, "packet W: 363/364, R: 365/366")
+
+def cmd_57_94(dev):
+    buff = bulk2(dev, "\x57\x94\x00", target=0x01, truncate=True)
+    # Discarded 511 / 512 bytes => 1 bytes
+    validate_read("\x62", buff, "packet W: 541/542, R: 543/544")
+
+    # Generated from packet 545/546
+    # Discarded 511 / 512 bytes => 1 bytes
+    buff = bulk86(dev, target=0x01, truncate=True, prefix=0x18)
+    validate_read("\x0B", buff, "packet 545/546")
 
 # cmd_5A: encountered once
 
