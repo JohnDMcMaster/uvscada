@@ -12,14 +12,19 @@ import binascii
 import struct
 from collections import namedtuple
 
-def bulk86(dev, target=None, donef=None, truncate=False):
+# prefix: some have 0x18...why?
+def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     if donef is None:
+        #if target is None:
+        #    raise Exception("requires target")
         if target is None:
-            raise Exception("requires target")
-        def donef(buff):
-            return len(buff) >= target
+            def donef(buff):
+                return len(buff) > 0
+        else:
+            def donef(buff):
+                return len(buff) >= target
     
     '''
     A suffix of 1 indicates that another buffer is coming
@@ -36,8 +41,8 @@ def bulk86(dev, target=None, donef=None, truncate=False):
     def nxt_buff():
         p = bulkRead(0x86, 0x0200)
         #print str2hex(p)
-        if ord(p[0]) != 0x08:
-            raise Exception("Bad prefix")
+        if ord(p[0]) != prefix:
+            raise Exception("prefix: wanted 0x%02X, got 0x%02X" % (prefix, ord(p[0])))
         suffix_this = ord(p[-1])
         size = ord(p[-2])
         if size != len(p) - 3:
@@ -65,11 +70,11 @@ def bulk86(dev, target=None, donef=None, truncate=False):
 
 # FIXME: with target set small but not truncate will happily truncate
 # FIXME: suffix 1 means continue read.  Make higher level func
-def bulk2(dev, cmd, target=None, donef=None, truncate=False):
+def bulk2(dev, cmd, target=None, donef=None, truncate=False, prefix=0x08):
     bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     bulkWrite(0x02, cmd)
-    return bulk86(dev, target=target, donef=donef, truncate=truncate)
+    return bulk86(dev, target=target, donef=donef, truncate=truncate, prefix=prefix)
 
 def trim(s):
     return s[1:-2]
