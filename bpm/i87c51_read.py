@@ -12,7 +12,7 @@ from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
-from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_50, cmd_57s
+from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_50, cmd_57s, cmd_57_50
 from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info10
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
@@ -377,7 +377,8 @@ def replay1(dev, fw, cont=True):
     cmd_2(dev, "\x83\x00\xA0\x03\x09\x00", "packet W: 205/206, R: 207/208")
 
     # Generated from packet 209/210
-    bulkWrite(0x02, "\x57\x82\x00\x50\x1D\x00\x00\x00")
+    cmd_57_50(dev, "\x82", "\x1D\x00")
+    
     # Generated from packet 211/212
     buff = bulk2(dev, 
         "\xC7\x05\x74\x46\x00\x00\x0B\x00\x00\x00\xFF\x15\x38\x11\x00\x00" \
@@ -396,7 +397,8 @@ def replay1(dev, fw, cont=True):
         Increments socket insertion count
         '''
         # Generated from packet 219/220
-        bulkWrite(0x02, "\x57\x83\x00\x50\x18\x3A\x00\x00")
+        cmd_57_50(dev, "\x83", "\x18\x3A")
+        
         # p221.bin: DOS executable (COM)
         # Generated from packet 221/222
         buff = bulk2(dev, fwm.p221, target=0x02, truncate=True)
@@ -432,7 +434,7 @@ def replay1(dev, fw, cont=True):
         cmd_50(dev, "\x62\x00")
     
     else:
-        bulkWrite(0x02, "\x57\x83\x00\x50\x62\x00\x00\x00")
+        cmd_57_50(dev, "\x83", "\x62\x00")
     
     # Generated from packet 247/248
     buff = bulk2(dev, 
@@ -502,9 +504,9 @@ def replay1(dev, fw, cont=True):
 
     if cont:
         # Generated from packet 279/280
-        bulkWrite(0x02, "\x57\x88\x00\x50\x32\x07\x00\x00")
+        cmd_57_50(dev, "\x88", "\x32\x07")
     else:
-        bulkWrite(0x02, "\x57\x85\x00\x50\x32\x07\x00\x00")
+        cmd_57_50(dev, "\x85", "\x32\x07")
     # Generated from packet 281/282
     buff = bulk2(dev, fwm.p281, target=0x02, truncate=True)
     if cont:
@@ -694,9 +696,9 @@ def replay2(dev, cont):
     
     if cont:
         # Generated from packet 415/416
-        bulkWrite(0x02, "\x57\x90\x00\x50\x1A\x00\x00\x00")
+        cmd_57_50(dev, "\x90", "\x1A\x00")
     else:
-        bulkWrite(0x02, "\x57\x8D\x00\x50\x1A\x00\x00\x00")
+        cmd_57_50(dev, "\x8D", "\x1A\x00")
 
     # Generated from packet 417/418
     buff = bulk2(dev, 

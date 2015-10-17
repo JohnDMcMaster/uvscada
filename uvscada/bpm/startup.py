@@ -819,8 +819,11 @@ def cmd_50(dev, cmd):
     # No reply
     bulkWrite(0x02, cmd_50_mk(cmd))
 
+def cmd_57_mk(cmd):
+    return "\x57" + cmd + "\x00"
+
 def cmd_57s(dev, cmds, exp, msg="cmd_57"):
-    out = ''.join(["\x57" + c + "\x00" for c in cmds])
+    out = ''.join([cmd_57_mk(c) for c in cmds])
     buff = bulk2(dev, out, target=len(exp), truncate=True)
     validate_read(exp, buff, msg)
 
@@ -829,6 +832,11 @@ def cmd_57_94(dev):
     # Seems to get paired with this
     buff = bulk86(dev, target=0x01, truncate=True, prefix=0x18)
     validate_read("\x0B", buff, "packet 545/546")
+
+def cmd_57_50(dev, c57, c50):
+    # ex: bulkWrite(0x02, "\x57\x82\x00 \x50\x1D\x00\x00\x00")
+    _bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
+    bulkWrite(0x02, cmd_57_mk(c57) + cmd_50_mk(c50))
 
 # cmd_5A: encountered once
 

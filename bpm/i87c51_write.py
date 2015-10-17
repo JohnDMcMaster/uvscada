@@ -12,7 +12,7 @@ from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
-from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_0E, cmd_50, cmd_57s, cmd_57_94
+from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_0E, cmd_50, cmd_57s, cmd_57_94, cmd_57_50
 from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info22, sm_info24, sm_info10
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
@@ -263,8 +263,10 @@ def replay(dev, fw, cont=True):
     buff = bulk2(dev, "\x02", target=0x06, truncate=True)
     # Discarded 506 / 512 bytes => 6 bytes
     validate_read("\x97\x00\xB0\x76\x09\x00", buff, "packet W: 749/750, R: 751/752")
+
     # Generated from packet 753/754
-    bulkWrite(0x02, "\x57\x96\x00\x50\x1A\x00\x00\x00")
+    cmd_57_50(dev, "\x96", "\x1A\x00")
+    
     # Generated from packet 755/756
     buff = bulk2(dev, 
         "\x66\xB9\x00\x00\xB2\x02\xFB\xFF\x25\x44\x11\x00\x00\x66\xB9\x00" \
