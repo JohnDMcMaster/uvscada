@@ -10,7 +10,7 @@ from uvscada.wps7 import WPS7
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
-from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_read, led_mask
+from uvscada.bpm.startup import bulk2, bulk86, sm_read, gpio_readi, led_mask
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
 from uvscada.usb import validate_read, validate_readv
@@ -120,11 +120,11 @@ def replay_setup(dev):
               "\x2C", buff, "packet 303/304")
     
     # Generated from packet 305/306
-    gpio_read(dev)
+    gpio_readi(dev)
 
     
     # Generated from packet 309/310
-    gpio_read(dev)
+    gpio_readi(dev)
 
     
     # Generated from packet 313/314
@@ -183,11 +183,11 @@ def replay_setup(dev):
     validate_read("\x0F\x00", buff, "packet 337/338")
     
     # Generated from packet 339/340
-    gpio_read(dev)
+    gpio_readi(dev)
 
     
     # Generated from packet 343/344
-    gpio_read(dev)
+    gpio_readi(dev)
 
 
     '''
@@ -278,11 +278,11 @@ def replay_setup(dev):
         
     # 30k iterations by itself and always passes
     # Generated from packet 389/390
-    gpio_read(dev)
+    gpio_readi(dev)
 
     
     # Generated from packet 393/394
-    gpio_read(dev)
+    gpio_readi(dev)
 
     
     # Generated from packet 397/398
