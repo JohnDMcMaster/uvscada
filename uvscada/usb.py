@@ -36,9 +36,13 @@ do_hexdump = True
 do_str2hex = True
 
 def validate_read(expected, actual, msg):
+    if expected is None:
+        return
     validate_readv([expected], actual, msg)
 
 def validate_readv(expecteds, actual, msg):
+    if expecteds is None:
+        return
     if type(actual) is int:
         return validate_readiv(expecteds, actual, msg)
     

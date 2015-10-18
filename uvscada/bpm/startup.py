@@ -40,7 +40,7 @@ def boot_cold(dev):
     # Atomic
     # cmd_01 state: 0x80 => 0x81
     # Generated from packet 78/79
-    bulkWrite(0x02, "\x43\x19\x00\x00\x00\x11\xF0\xFF")
+    bulkWrite(0x02, cmd_43_mk("\x00") + cmd_11_mk())
     # Generated from packet 80/85
     bulkWrite(0x02, bp1410_fw_sn.p223)
     # Generated from packet 81/86
@@ -265,7 +265,7 @@ def replay(dev):
 
     # cmd_01[0x15]: 0x00 => 0x50
     # Generated from packet 188/189
-    cmd_2(dev, "\x81\x00\x50\x00\x09\x00", "packet 190/191")
+    cmd_02(dev, "\x81\x00\x50\x00\x09\x00", "packet 190/191")
 
     # Atomic
     # cmd_01 state: 0x81 => 0x82
@@ -289,7 +289,7 @@ def replay(dev):
 
     # cmd_01: 0x15: 0x50 => 0x01.  0x16: 0x00 => 0x01
     # Generated from packet 198/199
-    cmd_2(dev, "\x82\x00\x10\x01\x09\x00", "packet 200/201")
+    cmd_02(dev, "\x82\x00\x10\x01\x09\x00", "packet 200/201")
 
     if glitch_154:
         buff = bulk2(dev, "\x08\x20\x09\x20\x0A\x20\x0B\x20\x57\x81\x00\x0C\x04\x30",
@@ -333,7 +333,7 @@ def replay(dev):
     validate_read("\x82\x00", buff, "packet 226/227")
 
     # Generated from packet 228/229
-    cmd_2(dev, "\x83\x00\x30\x01\x09\x00", "packet 230/231")
+    cmd_02(dev, "\x83\x00\x30\x01\x09\x00", "packet 230/231")
 
     # cmd_01: 0x15: 0x10 => 0x30
     # Generated from packet 232/233

@@ -14,8 +14,17 @@ import libusb1
 import time
 
 # prefix: some have 0x18...why?
+# prefix: 0x28 observed
 def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    
+    dbg = 1
+    
+    if dbg:
+        print
+        print 'bulk86'
+        where(2)
+        where(3)
     
     if donef is None:
         # FIXME: to debug an unknown prefix protocol mode
@@ -43,30 +52,48 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
     '''
     def nxt_buff():
         p = bulkRead(0x86, 0x0200)
+        if dbg:
+            hexdump(p, label='nxt_buff', indent='  ')
         #print str2hex(p)
-        if prefix is not None and ord(p[0]) != prefix:
-            raise Exception("prefix: wanted 0x%02X, got 0x%02X" % (prefix, ord(p[0])))
+        prefix_this = ord(p[0])
+        if prefix is not None and prefix_this != prefix:
+            raise Exception("prefix: wanted 0x%02X, got 0x%02X" % (prefix, prefix_this))
         suffix_this = ord(p[-1])
         size = ord(p[-2])
         if size != len(p) - 3:
             if truncate and size < len(p) - 3:
-                return p[1:1 + size], suffix_this
+                return prefix_this, p[1:1 + size], suffix_this
             else:
                 print 'Truncate: %s' % truncate
                 print size, len(p) - 3, len(p)
                 hexdump(p)
                 raise Exception("Bad length (enable truncation?)")
-        return p[1:-2], suffix_this
+        return prefix_this, p[1:-2], suffix_this
 
     buff = ''
     while not donef(buff):
+    #while True:
         if 0 and buff:
             print 'NOTE: split packet.  Have %d / %d bytes' % (len(buff), target)
             hexdump(buff)
         try:
             # Ignore suffix continue until we have a reason to care
-            buff_this, _suffix_this = nxt_buff()
+            prefix_this, buff_this, suffix_this = nxt_buff()
             buff += buff_this
+            
+            if prefix_this != 0x08:
+                raise Exception('test')
+            if suffix_this != 0x00:
+                raise Exception('test')
+            
+            '''
+            if suffix_this == 0x00:
+                break
+            elif suffix_this == 0x01:
+                continue
+            else:
+                raise Exception("Unexpected suffix 0x%02X" % suffix_this)
+            '''
         # FIXME: temp
         except libusb1.USBError:
             if prefix is None:
@@ -74,7 +101,11 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
             raise
     #print 'Done w/ buff len %d' % len(buff)
     if target and len(buff) > target:
-        raise Exception('Buffer grew too big')
+        hexdump(buff, label='Too big', indent='  ')
+        raise Exception('Buffer grew too big: buff %d > target %d' % (len(buff), target))
+    if dbg:
+        hexdump(buff, label='ret', indent='  ')
+        print
     return buff
 
 # FIXME: with target set small but not truncate will happily truncate
@@ -173,10 +204,12 @@ def periph_r(dev, periph, start, end):
 
 # Teach adapter (ex: TA84VLV_FX4) EEPROM
 def ta_r(dev, start, end):
+    # bulk2(dev, "\x22\x01" + chr(start) + "\x00" + chr(end) + "\x00\x06"
     return periph_r(dev, 0x01, start, end)
 
 # Read socket module (ex: SM84) EEPROM
 def sm_r(dev, start, end):
+    # bulk2(dev, "\x22\x02" + chr(start) + "\x00" + chr(end) + "\x00\x06"
     return periph_r(dev, 0x02, start, end)
 
 def periph_dump(dev):
@@ -272,18 +305,10 @@ def cmd_01r(dev, validate=True):
 # cmd_01: some sort of big status read
 # happens once during startup and a few times during programming write/read cycles
 
-def cmd_2(dev, exp, msg='cmd_2'):
+def cmd_02(dev, exp, msg='cmd_2'):
     # Generated from packet 188/189
     buff = bulk2(dev, "\x02", target=6, truncate=True)
     validate_read(exp, buff, msg)
-
-def cmd_08(dev, cmd):
-    cmdf = "\x08\x01\x57" + cmd + "\x00"
-    if len(cmdf) != 5:
-        raise Exception("Malfored command")
-
-    buff = bulk2(dev, cmdf, target=0x02, truncate=True)
-    validate_read("\x00\x00", buff, "packet W: 359/360, R: 361/362")
 
 # clear => present
 GPIO_SM = 0x0001
@@ -302,6 +327,14 @@ def gpio_readi(dev):
             ),
             buff, "packet 128/129")
     return struct.unpack('<H', buff)[0]
+
+def cmd_08(dev, cmd):
+    cmdf = "\x08\x01\x57" + cmd + "\x00"
+    if len(cmdf) != 5:
+        raise Exception("Malfored command")
+
+    buff = bulk2(dev, cmdf, target=0x02, truncate=True)
+    validate_read("\x00\x00", buff, "packet W: 359/360, R: 361/362")
 
 def cmd_09(dev):
     _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
@@ -323,11 +356,11 @@ led_s2i = {
             'fail': 1,
             'active': 2,
             'pass': 4,
-            'green': 1,
-            'orange': 2,
-            'red': 4,
+            #'green': 1,
+            #'orange': 2,
+            #'red': 4,
             }
-#led_i2s = dict((v, k) for k, v in led_s2i.iteritems())
+led_i2s = dict((v, k) for k, v in led_s2i.iteritems())
 
 def cmd_0C_mk():
     return "\x0C\x04"
@@ -347,21 +380,14 @@ def led_mask_30(dev, mask):
     buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2, truncate=True)
     validate_read(chr(mask) + "\x00", buff, "packet 9/10")    
 
-# cmd_0E repeat with a few different arguments
-# one of them reads SM EEPROM
-def cmd_0E(dev):
-    buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
-    # Discarded 480 / 512 bytes => 32 bytes
-    validate_read(
-        "\x11\x00\x53\x4D\x34\x38\x44\x00\x00\x00\x00\x00\x00\x00\x5D\xF4" \
-        "\x39\xFF\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x62\x6C"
-        , buff, "packet W: 787/788, R: 789/790")
-
 # cmd_10
 def cmd_10(dev):
     buff = bulk2(dev, "\x10\x80\x02", target=0x06)
     # Discarded 3 / 9 bytes => 6 bytes
     validate_read("\x80\x00\x00\x00\x09\x00", buff, "packet W: 65/66, R: 67/68")
+
+def cmd_11_mk():
+    return "\x11\xF0\xFF"
 
 # cmd_14 repeat
 
@@ -383,6 +409,13 @@ def cmd_20(dev):
 
 # cmd_22 peripheral (I2C?) read
 
+# Reset socket module insertion counter
+def sm_rst(dev):
+    buff = bulk2(dev,
+            "\x23\x02\x12\x00\x13\x00\x06\x00\x00\x00\x00\x00\x00\x12\xAA",
+            target=0x01, truncate=True)
+    validate_read("\xAB", buff, "packet W: 5/6, R: 7/8")
+
 # cmd_30: see LED functions
 
 # cmd_3B
@@ -398,11 +431,18 @@ def cmd_41(dev):
     _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     bulkWrite(0x02, "\x41\x00\x00")
 
-# cmd_43... repeat
-def cmd_43(dev):
+def cmd_43_mk(dev, cmd):
+    ret = "\x43\x19" + cmd + "\x00\x00"
+    if len(ret) != 5:
+        raise Exception("Bad length")
+    return ret
+
+def cmd_43(dev, cmd):
     _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
-    bulkWrite(0x02, "\x43\x19\x10\x00\x00")
+    # "\x43\x19\x00\x00\x00"
+    # "\x43\x19\x10\x00\x00"
+    bulkWrite(0x02, cmd_43_mk(cmd))
 
 # cmd_45
 def cmd_45(dev):
@@ -466,7 +506,7 @@ def cmd_50_mk(cmd):
     return ret
 
 def cmd_50(dev, cmd):
-    _bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     # No reply
     bulkWrite(0x02, cmd_50_mk(cmd))
 
@@ -477,6 +517,7 @@ def cmd_57s(dev, cmds, exp, msg="cmd_57"):
     out = ''.join([cmd_57_mk(c) for c in cmds])
     buff = bulk2(dev, out, target=len(exp), truncate=True)
     validate_read(exp, buff, msg)
+    return buff
 
 def cmd_57_94(dev):
     cmd_57s(dev, '\x94', "\x62",  "cmd_57_94")
@@ -486,7 +527,7 @@ def cmd_57_94(dev):
 
 def cmd_57_50(dev, c57, c50):
     # ex: bulkWrite(0x02, "\x57\x82\x00 \x50\x1D\x00\x00\x00")
-    _bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     bulkWrite(0x02, cmd_57_mk(c57) + cmd_50_mk(c50))
 
 # cmd_5A: encountered once

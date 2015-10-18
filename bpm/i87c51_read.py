@@ -6,7 +6,7 @@ from uvscada.usb import usb_wraps
 from uvscada.bpm import startup
 from uvscada.bpm.startup import bulk2, bulk86
 from uvscada.bpm.startup import sm_read, led_mask_30
-from uvscada.bpm.startup import cmd_20_mk, cmd_49, cmd_2, cmd_50, cmd_50_mk, cmd_0C_mk, cmd_57s, cmd_57_50, cmd_41, cmd_43, cmd_10, cmd_45
+from uvscada.bpm.startup import cmd_20_mk, cmd_49, cmd_02, cmd_50, cmd_50_mk, cmd_0C_mk, cmd_57s, cmd_57_50, cmd_41, cmd_43, cmd_10, cmd_45
 from uvscada.bpm.startup import cmd_4C, cmd_09, cmd_08, cmd_3B, cmd_4A
 from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info10
 from uvscada.util import hexdump, add_bool_arg
@@ -136,7 +136,7 @@ def replay1(dev, fw, cont=True):
 
     # NOTE:: req max 512 but got 136
     # Generated from packet 59/60
-    cmd_43(dev)
+    cmd_43(dev, "\x10")
     # Generated from packet 61/62
     bulkWrite(0x02, cmd_20_mk() + cmd_0C_mk())
     
@@ -196,7 +196,7 @@ def replay1(dev, fw, cont=True):
     validate_read("\x80\x00", buff, "packet W: 133/134, R: 135/136")
 
     # Generated from packet 137/138
-    cmd_2(dev, "\x81\x00\x60\x00\x09\x00", "packet W: 137/138, R: 139/140")
+    cmd_02(dev, "\x81\x00\x60\x00\x09\x00", "packet W: 137/138, R: 139/140")
 
     # Generated from packet 141/142
     cmd_50(dev, "\xC0\x00")
@@ -220,13 +220,13 @@ def replay1(dev, fw, cont=True):
     validate_read("\x81\x00", buff, "packet W: 143/144, R: 145/146")
 
     # Generated from packet 147/148
-    cmd_2(dev, "\x82\x00\x20\x01\x09\x00", "packet W: 147/148, R: 149/150")
+    cmd_02(dev, "\x82\x00\x20\x01\x09\x00", "packet W: 147/148, R: 149/150")
 
     # Generated from packet 151/152
     cmd_09(dev)
 
     # Generated from packet 153/154
-    cmd_2(dev, "\x82\x00\x20\x01\x09\x00", "packet W: 153/154, R: 155/156")
+    cmd_02(dev, "\x82\x00\x20\x01\x09\x00", "packet W: 153/154, R: 155/156")
 
     # added
     sm_insert(dev)
@@ -246,7 +246,7 @@ def replay1(dev, fw, cont=True):
     validate_read("\x82\x00", buff, "packet W: 163/164, R: 165/166")
 
     # Generated from packet 167/168
-    cmd_2(dev, "\x83\x00\x40\x01\x09\x00", "packet W: 167/168, R: 169/170")
+    cmd_02(dev, "\x83\x00\x40\x01\x09\x00", "packet W: 167/168, R: 169/170")
 
     # Generated from packet 171/172
     buff = bulk2(dev, 
@@ -277,7 +277,7 @@ def replay1(dev, fw, cont=True):
     validate_read("\x82\x00", buff, "packet W: 201/202, R: 203/204")
 
     # Generated from packet 205/206
-    cmd_2(dev, "\x83\x00\xA0\x03\x09\x00", "packet W: 205/206, R: 207/208")
+    cmd_02(dev, "\x83\x00\xA0\x03\x09\x00", "packet W: 205/206, R: 207/208")
 
     # Generated from packet 209/210
     cmd_57_50(dev, "\x82", "\x1D\x00")
@@ -291,7 +291,7 @@ def replay1(dev, fw, cont=True):
     validate_read("\x83\x00", buff, "packet W: 211/212, R: 213/214")
     
     # Generated from packet 215/216
-    cmd_2(dev, "\x84\x00\xC0\x03\x09\x00", "packet W: 215/216, R: 217/218")
+    cmd_02(dev, "\x84\x00\xC0\x03\x09\x00", "packet W: 215/216, R: 217/218")
 
 
     if cont:
@@ -309,7 +309,7 @@ def replay1(dev, fw, cont=True):
         validate_read("\x84\x00", buff, "packet W: 221/222, R: 223/224")
     
         # Generated from packet 225/226
-        cmd_2(dev, "\x85\x00\xE0\x3D\x09\x00", "packet W: 225/226, R: 227/228")
+        cmd_02(dev, "\x85\x00\xE0\x3D\x09\x00", "packet W: 225/226, R: 227/228")
     
         # Generated from packet 229/230
         bulkWrite(0x02, 
@@ -328,7 +328,7 @@ def replay1(dev, fw, cont=True):
         validate_read("\x85\x00", buff, "packet W: 233/234, R: 235/236")
     
         # Generated from packet 237/238
-        cmd_2(dev, "\x86\x00\xC0\x41\x09\x00", "packet W: 237/238, R: 239/240")
+        cmd_02(dev, "\x86\x00\xC0\x41\x09\x00", "packet W: 237/238, R: 239/240")
 
         # Generated from packet 241/242
         cmd_57s(dev, "\x85", "\x01",  "cmd_57")
@@ -357,9 +357,9 @@ def replay1(dev, fw, cont=True):
 
     if cont:
         # Generated from packet 251/252
-        cmd_2(dev, "\x87\x00\x30\x42\x09\x00", "packet W: 251/252, R: 253/254")
+        cmd_02(dev, "\x87\x00\x30\x42\x09\x00", "packet W: 251/252, R: 253/254")
     else:
-        cmd_2(dev, "\x85\x00\x30\x04\x09\x00", "packet W: 251/252, R: 253/254")
+        cmd_02(dev, "\x85\x00\x30\x04\x09\x00", "packet W: 251/252, R: 253/254")
 
     if cont:
         # Generated from packet 255/256
@@ -380,7 +380,7 @@ def replay1(dev, fw, cont=True):
         validate_read("\x87\x00", buff, "packet W: 257/258, R: 259/260")
     
         # Generated from packet 261/262
-        cmd_2(dev, "\x88\x00\xB0\x4B\x09\x00", "packet W: 261/262, R: 263/264")
+        cmd_02(dev, "\x88\x00\xB0\x4B\x09\x00", "packet W: 261/262, R: 263/264")
     
         # Generated from packet 265/266
         cmd_57s(dev, "\x87", "\x00\x00",  "cmd_57")
@@ -401,9 +401,9 @@ def replay1(dev, fw, cont=True):
 
     if cont:
         # Generated from packet 275/276
-        cmd_2(dev, "\x89\x00\xD0\x4B\x09\x00", "packet W: 275/276, R: 277/278")
+        cmd_02(dev, "\x89\x00\xD0\x4B\x09\x00", "packet W: 275/276, R: 277/278")
     else:
-        cmd_2(dev, "\x86\x00\x50\x04\x09\x00", "packet W: 275/276, R: 277/278")
+        cmd_02(dev, "\x86\x00\x50\x04\x09\x00", "packet W: 275/276, R: 277/278")
 
     if cont:
         # Generated from packet 279/280
@@ -420,9 +420,9 @@ def replay1(dev, fw, cont=True):
 
     if cont:
         # Generated from packet 285/286
-        cmd_2(dev, "\x8A\x00\x10\x53\x09\x00", "packet W: 285/286, R: 287/288")
+        cmd_02(dev, "\x8A\x00\x10\x53\x09\x00", "packet W: 285/286, R: 287/288")
     else:
-        cmd_2(dev, "\x87\x00\x90\x0B\x09\x00", "packet W: 285/286, R: 287/288")
+        cmd_02(dev, "\x87\x00\x90\x0B\x09\x00", "packet W: 285/286, R: 287/288")
     
     if cont:
         # Generated from packet 289/290
@@ -443,9 +443,9 @@ def replay1(dev, fw, cont=True):
 
     if cont:
         # Generated from packet 299/300
-        cmd_2(dev, "\x8B\x00\x50\x56\x09\x00", "packet W: 299/300, R: 301/302")
+        cmd_02(dev, "\x8B\x00\x50\x56\x09\x00", "packet W: 299/300, R: 301/302")
     else:
-        cmd_2(dev, "\x88\x00\xD0\x0E\x09\x00", "packet W: 299/300, R: 301/302")
+        cmd_02(dev, "\x88\x00\xD0\x0E\x09\x00", "packet W: 299/300, R: 301/302")
 
     if cont:
         # Generated from packet 303/304
@@ -465,10 +465,10 @@ def replay1(dev, fw, cont=True):
     if cont:
         validate_read("\x8B\x00", buff, "packet W: 309/310, R: 311/312")
         # Generated from packet 313/314
-        cmd_2(dev, "\x8C\x00\x70\x56\x09\x00", "packet W: 313/314, R: 315/316")
+        cmd_02(dev, "\x8C\x00\x70\x56\x09\x00", "packet W: 313/314, R: 315/316")
     else:
         validate_read("\x88\x00", buff, "packet W: None/None, R: None/None")
-        cmd_2(dev, "\x89\x00\xF0\x0E\x09\x00", "packet W: 313/314, R: 315/316")
+        cmd_02(dev, "\x89\x00\xF0\x0E\x09\x00", "packet W: 313/314, R: 315/316")
 
     # Generated from packet 317/318
     cmd_57s(dev, "\x8B", "\x58\x00")
@@ -482,12 +482,12 @@ def replay1(dev, fw, cont=True):
         # Discarded 510 / 512 bytes => 2 bytes
         validate_read("\x8C\x00", buff, "packet W: 323/324, R: 325/326")
         # Generated from packet 327/328
-        cmd_2(dev, "\x8D\x00\x70\x5B\x09\x00", "packet W: 327/328, R: 329/330")
+        cmd_02(dev, "\x8D\x00\x70\x5B\x09\x00", "packet W: 327/328, R: 329/330")
         # Generated from packet 331/332
         cmd_57s(dev, '\x8C', "\x00\x00")
     else:
         validate_read("\x89\x00", buff, "packet W: None/None, R: None/None")
-        cmd_2(dev, "\x8A\x00\xF0\x13\x09\x00", "packet W: 327/328, R: 329/330")
+        cmd_02(dev, "\x8A\x00\xF0\x13\x09\x00", "packet W: 327/328, R: 329/330")
         cmd_57s(dev, '\x89', "\x00\x00")
 
     # Generated from packet 335/336
@@ -502,12 +502,12 @@ def replay1(dev, fw, cont=True):
         # Discarded 510 / 512 bytes => 2 bytes
         validate_read("\x8D\x00", buff, "packet W: 337/338, R: 339/340")
         # Generated from packet 341/342
-        cmd_2(dev, "\x8E\x00\x90\x5B\x09\x00", "packet W: 341/342, R: 343/344")
+        cmd_02(dev, "\x8E\x00\x90\x5B\x09\x00", "packet W: 341/342, R: 343/344")
         # Generated from packet 345/346
         cmd_57s(dev, "\x8D\x89", "\x00\x00")
     else:
         validate_read("\x8A\x00", buff, "packet W: None/None, R: None/None")
-        cmd_2(dev, "\x8B\x00\x10\x14\x09\x00", "packet W: 341/342, R: 343/344")
+        cmd_02(dev, "\x8B\x00\x10\x14\x09\x00", "packet W: 341/342, R: 343/344")
         cmd_57s(dev, "\x8A\x86", "\x00\x00")
 
     # Generated from packet 349/350
@@ -522,9 +522,9 @@ def replay1(dev, fw, cont=True):
 
     # Generated from packet 355/356
     if cont:
-        cmd_2(dev, "\x8F\x00\x90\x5D\x09\x00", "packet W: 355/356, R: 357/358")
+        cmd_02(dev, "\x8F\x00\x90\x5D\x09\x00", "packet W: 355/356, R: 357/358")
     else:
-        cmd_2(dev, "\x8C\x00\x10\x16\x09\x00")
+        cmd_02(dev, "\x8C\x00\x10\x16\x09\x00")
 
     if cont:
         # Generated from packet 323/324
@@ -563,9 +563,9 @@ def replay2(dev, cont):
 
     if cont:
         # Generated from packet 377/378
-        cmd_2(dev, "\x90\x00\x70\x63\x09\x00", "packet W: 377/378, R: 379/380")
+        cmd_02(dev, "\x90\x00\x70\x63\x09\x00", "packet W: 377/378, R: 379/380")
     else:
-        cmd_2(dev, "\x8D\x00\xF0\x1B\x09\x00", "packet W: 377/378, R: 379/380")
+        cmd_02(dev, "\x8D\x00\xF0\x1B\x09\x00", "packet W: 377/378, R: 379/380")
 
     # original
     #fw_verify(dev, fw, cont)
@@ -588,9 +588,9 @@ def replay2(dev, cont):
 
     if cont:
         # Generated from packet 411/412
-        cmd_2(dev, "\x91\x00\x80\x63\x09\x00", "packet W: 411/412, R: 413/414")
+        cmd_02(dev, "\x91\x00\x80\x63\x09\x00", "packet W: 411/412, R: 413/414")
     else:
-        cmd_2(dev, "\x8E\x00\x00\x1C\x09\x00", "packet W: 411/412, R: 413/414")
+        cmd_02(dev, "\x8E\x00\x00\x1C\x09\x00", "packet W: 411/412, R: 413/414")
     
     if cont:
         # Generated from packet 415/416
@@ -610,9 +610,9 @@ def replay2(dev, cont):
         validate_read("\x8E\x00", buff, "packet W: None/None, R: None/None")
 
     if cont:
-        cmd_2(dev, "\x92\x00\xA0\x63\x09\x00", "packet W: 421/422, R: 423/424")
+        cmd_02(dev, "\x92\x00\xA0\x63\x09\x00", "packet W: 421/422, R: 423/424")
     else:
-        cmd_2(dev, "\x8F\x00\x20\x1C\x09\x00", "packet W: 421/422, R: 423/424")
+        cmd_02(dev, "\x8F\x00\x20\x1C\x09\x00", "packet W: 421/422, R: 423/424")
 
     if cont:
         cmd_57s(dev, "\x91", "\x00\x00", "packet W: 425/426, R: 427/428")
@@ -647,7 +647,8 @@ if __name__ == "__main__":
     #time.sleep(3)
 
     # FIXME: why is this only half sized?
-    fw = 2048 * '\xFF'
+    #fw = 2048 * '\xFF'
+    fw = 4096 * '\xFF'
     replay(dev, fw, cont=args.cont)
 
     print 'Complete'
