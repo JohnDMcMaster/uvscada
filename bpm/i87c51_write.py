@@ -6,13 +6,11 @@ import sys
 import struct
 import inspect
 
-from uvscada.wps7 import WPS7
-
 from uvscada.usb import usb_wraps
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn, startup
 from uvscada.bpm.startup import bulk2, bulk86
-from uvscada.bpm.startup import sm_read, gpio_readi, led_mask, cmd_49, cmd_2, cmd_0E, cmd_50, cmd_57s, cmd_57_94, cmd_57_50
+from uvscada.bpm.startup import sm_read, gpio_readi, led_mask_30, cmd_49, cmd_2, cmd_0E, cmd_50, cmd_57s, cmd_57_94, cmd_57_50
 from uvscada.bpm.startup import sm_info0, sm_info1, sm_insert, sn_read, sm_info22, sm_info24, sm_info10
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.util import str2hex
@@ -274,26 +272,26 @@ def replay(dev, fw, cont=True):
         , target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x97\x00", buff, "packet W: 755/756, R: 757/758")
+
     # Generated from packet 759/760
     buff = bulk2(dev, "\x02", target=0x06, truncate=True)
     # Discarded 506 / 512 bytes => 6 bytes
     validate_read("\x98\x00\xD0\x76\x09\x00", buff, "packet W: 759/760, R: 761/762")
+
     # Generated from packet 763/764
     buff = bulk2(dev, "\x57\x97\x00", target=0x02, truncate=True)
     # Discarded 510 / 512 bytes => 2 bytes
     validate_read("\x00\x00", buff, "packet W: 763/764, R: 765/766")
+
     # Generated from packet 767/768
-    led_mask(dev, "pass")
+    led_mask_30(dev, "pass")
+
     # Generated from packet 771/772
     gpio_readi(dev)
-    buff = bulk2(dev, "\x03", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 771/772, R: 773/774")
+    
     # Generated from packet 775/776
     gpio_readi(dev)
-    buff = bulk2(dev, "\x03", target=0x02, truncate=True)
-    # Discarded 510 / 512 bytes => 2 bytes
-    validate_read("\x30\x00", buff, "packet W: 775/776, R: 777/778")
+    
     # Generated from packet 779/780
     sm_info22(dev)
     # Generated from packet 783/784
@@ -319,12 +317,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.cycle:
-        print 'Cycling'
-        wps = WPS7(host='raijin')
-        wps.cycle([1, 2], t=2.0)
-        # 1 second too short
-        time.sleep(3)
-        print 'Cycled'
+        startup.cycle()
 
     usbcontext = usb1.USBContext()
     dev = open_dev(usbcontext)

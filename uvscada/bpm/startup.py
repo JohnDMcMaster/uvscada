@@ -7,11 +7,21 @@ from uvscada.usb import validate_read, validate_readv
 from uvscada.bpm.bp1410_fw import load_fx2
 from uvscada.bpm import bp1410_fw_sn
 from uvscada.util import hexdump, str2hex
+from uvscada.wps7 import WPS7
 
 import binascii
 import struct
 from collections import namedtuple
 import libusb1
+import time
+
+def cycle():
+    print 'Cycling'
+    wps = WPS7(host='raijin')
+    wps.cycle([1, 2], t=2.0)
+    # 1 second too short
+    time.sleep(3)
+    print 'Cycled'
 
 # prefix: some have 0x18...why?
 def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
@@ -80,7 +90,7 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
 # FIXME: with target set small but not truncate will happily truncate
 # FIXME: suffix 1 means continue read.  Make higher level func
 def bulk2(dev, cmd, target=None, donef=None, truncate=False, prefix=0x08):
-    bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     bulkWrite(0x02, cmd)
     return bulk86(dev, target=target, donef=donef, truncate=truncate, prefix=prefix)
@@ -158,18 +168,29 @@ def boot_cold(dev):
     validate_read("\x16", buff, "packet 112/113")
     
     # Generated from packet 114/115
-    exp =    ("\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
-              "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
-              "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
-              "\xD0\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55"
-              "\x01\x00\x00\x00\x00\x00\x02\x00\x80\x01\xD0\x01\x02\x00\x01\x00"
-              "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
-              "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
-              "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
-              "\x00\x00\xC0\x1E\x00\x00")
     # 133
-    buff = bulk2(dev, '\x01', target=len(exp))
-    validate_read(exp, buff, "packet 116/117")
+    buff = bulk2(dev, '\x01', target=133)
+    validate_readv((
+            "\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
+            "\x00\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00"
+            "\x08\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00"
+            "\xD0\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55"
+            "\x01\x00\x00\x00\x00\x00\x02\x00\x80\x01\xD0\x01\x02\x00\x01\x00"
+            "\x00\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00"
+            "\x01\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46"
+            "\x00\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11"
+            "\x00\x00\xC0\x1E\x00\x00",
+    
+            "\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24\x00" \
+            "\x00\x30\x00\x80\x00\x00\x00\x00\x00\xC0\x00\x00\x00\x09\x00\x08" \
+            "\x00\xFF\x00\xC4\x1E\x00\x00\xCC\x1E\x00\x00\xB4\x46\x00\x00\xD0" \
+            "\x1E\x00\x00\xC0\x1E\x01\x00\xB0\x1E\x01\x00\x00\x00\x30\x55\x01" \
+            "\x00\x00\x00\x00\x00\x02\x00\x80\x01\xC0\x01\x02\x00\x01\x00\x00" \
+            "\x00\x56\x10\x00\x00\xA0\x25\x00\x00\x84\x25\x00\x00\x00\x00\x01" \
+            "\x00\x7C\x25\x00\x00\x7E\x25\x00\x00\x80\x25\x00\x00\x74\x46\x00" \
+            "\x00\x38\x11\x00\x00\x3C\x11\x00\x00\x40\x11\x00\x00\x44\x11\x00" \
+            "\x00\xC0\x1E\x00\x00",
+            ), buff, "packet 116/117")
 
 def boot_warm(dev):
     # Generated from packet 70/71
@@ -286,8 +307,8 @@ def replay(dev):
     def donef(buff):
         return len(buff) == 129 or len(buff) == 133
     buff = bulk2(dev, '\x01', donef=donef)
-    
     validate_readv([trim(r01_cold), trim(r01_warm), trim(r01_glitch_154), r01_ps, r01_sm] + r01_glitches, buff, "packet 68/69 (warm/cold)")
+    
     # Seems to be okay if we always do this although its only sometimes needed
     glitch_154 = True
     if buff == trim(r01_cold):
@@ -662,10 +683,18 @@ def sm_info24(dev):
 # cmd_01: some sort of big status read
 # happens once during startup and a few times during programming write/read cycles
 
-def cmd_2(dev, exp, msg):
+def cmd_2(dev, exp, msg='cmd_2'):
     # Generated from packet 188/189
     buff = bulk2(dev, "\x02", target=6, truncate=True)
     validate_read(exp, buff, msg)
+
+def cmd_08(dev, cmd):
+    cmdf = "\x08\x01\x57" + cmd + "\x00"
+    if len(cmdf) != 5:
+        raise Exception("Malfored command")
+
+    buff = bulk2(dev, cmdf, target=0x02, truncate=True)
+    validate_read("\x00\x00", buff, "packet W: 359/360, R: 361/362")
 
 # clear => present
 GPIO_SM = 0x0001
@@ -685,6 +714,10 @@ def gpio_readi(dev):
             buff, "packet 128/129")
     return struct.unpack('<H', buff)[0]
 
+def cmd_09(dev):
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    bulkWrite(0x02, "\x09\x10\x57\x81\x00")
+
 # cmd_04
 
 # cmd_08
@@ -701,23 +734,29 @@ led_s2i = {
             'fail': 1,
             'active': 2,
             'pass': 4,
+            'green': 1,
+            'orange': 2,
+            'red': 4,
             }
-led_i2s = dict((v, k) for k, v in led_s2i.iteritems())
+#led_i2s = dict((v, k) for k, v in led_s2i.iteritems())
+
+def cmd_0C_mk():
+    return "\x0C\x04"
+
 def led_mask(dev, mask):
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    
+    mask = led_s2i.get(mask, mask)
+    if mask < 0 or mask > 7:
+        raise ValueError("Bad mask")
+    bulkWrite("0x02, \x0C" + chr(mask), truncate=True)
+
+def led_mask_30(dev, mask):
     mask = led_s2i.get(mask, mask)
     if mask < 0 or mask > 7:
         raise ValueError("Bad mask")
     buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2, truncate=True)
     validate_read(chr(mask) + "\x00", buff, "packet 9/10")    
-
-def cmd_09(dev):
-    _bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
-    bulkWrite(0x02, "\x09\x10\x57\x81\x00")
-
-# cmd_00
-
-def cmd_0C_mk():
-    return "\x0C\x04"
 
 # cmd_0E repeat with a few different arguments
 # one of them reads SM EEPROM
@@ -730,6 +769,10 @@ def cmd_0E(dev):
         , buff, "packet W: 787/788, R: 789/790")
 
 # cmd_10
+def cmd_10(dev):
+    buff = bulk2(dev, "\x10\x80\x02", target=0x06)
+    # Discarded 3 / 9 bytes => 6 bytes
+    validate_read("\x80\x00\x00\x00\x09\x00", buff, "packet W: 65/66, R: 67/68")
 
 # cmd_14 repeat
 
@@ -751,20 +794,40 @@ def cmd_20(dev):
 
 # cmd_22 peripheral (I2C?) read
 
+# cmd_30: see LED functions
+
 # cmd_3B
+def cmd_3B(dev):
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    
+    bulkWrite(0x02, 
+        "\x3B\x0C\x22\x00\xC0\x40\x00\x3B\x0E\x22\x00\xC0\x00\x00\x3B\x1A" \
+        "\x22\x00\xC0\x18\x00"
+        )
 
-def cmd_4C(dev):
-    _bulkRead, bulkWrite, controlRead, controlWrite = usb_wraps(dev)
-    bulkWrite(0x02, "\x4C\x00\x02")
-
-def cmd_41_mk():
-    return "\x41\x00\x00"
+def cmd_41(dev):
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    bulkWrite(0x02, "\x41\x00\x00")
 
 # cmd_43... repeat
-def cmd_43_mk():
-    return "\x43\x19\x10\x00\x00"
+def cmd_43(dev):
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    
+    bulkWrite(0x02, "\x43\x19\x10\x00\x00")
 
 # cmd_45
+def cmd_45(dev):
+    buff = bulk2(dev, "\x45\x01\x00\x00\x31\x00\x06", target=0x64)
+    # Discarded 3 / 103 bytes => 100 bytes
+    validate_read(
+        "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
+        "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
+        "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
+        "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
+        "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
+        "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF" \
+        "\xFF\xFF\xFF\xFF"
+        , buff, "packet W: 77/78, R: 79/80")
 
 # Common (GPIO/status?)
 # Oddly sometimes this requires truncation and sometimes doesn't
@@ -774,8 +837,17 @@ def cmd_49(dev):
     validate_read("\x0F\x00", buff, "packet 158/159")
 
 # cmd_4A
+def cmd_4A(dev):
+    # Generated from packet 123/124
+    buff = bulk2(dev, "\x4A\x03\x00\x00\x00", target=0x02)
+    # Discarded 3 / 5 bytes => 2 bytes
+    validate_read("\x03\x00", buff, "packet W: 123/124, R: 125/126")
 
+def cmd_4C(dev):
+    _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    bulkWrite(0x02, "\x4C\x00\x02")
 '''
+
 Always
 -begin with 0x57
 -end with 0x00
@@ -841,4 +913,3 @@ def cmd_57_50(dev, c57, c50):
 # cmd_DB
 
 # cmd_E9
-
