@@ -15,14 +15,6 @@ from uvscada.bpm.cmd import cmd_01
 
 import i87c51_read_fw as fwm
 
-def where():
-    # 0 represents this line
-    # 1 represents line at caller
-    callerframerecord = inspect.stack()[1]
-    frame = callerframerecord[0]
-    info = inspect.getframeinfo(frame)
-    print '%s.%s():%d' % (info.filename, info.function, info.lineno)
-
 def dexit():
     print 'Debug break'
     sys.exit(0)

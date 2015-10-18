@@ -20,18 +20,6 @@ import i87c51_read
 import i87c51_read_fw
 import i87c51_write_fw
 
-def where():
-    # 0 represents this line
-    # 1 represents line at caller
-    callerframerecord = inspect.stack()[1]
-    frame = callerframerecord[0]
-    info = inspect.getframeinfo(frame)
-    print '%s.%s():%d' % (info.filename, info.function, info.lineno)
-
-def dexit():
-    print 'Debug break'
-    sys.exit(0)
-
 def open_dev(usbcontext=None):
     if usbcontext is None:
         usbcontext = usb1.USBContext()

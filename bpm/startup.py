@@ -1,4 +1,4 @@
-from uvscada.util import add_bool_arg
+from uvscada.util import add_bool_arg, hexdump
 from uvscada.bpm import startup
 from uvscada.wps7 import WPS7
 
@@ -63,12 +63,14 @@ if __name__ == "__main__":
 
     #dev.resetDevice()
     startup.replay(dev)
-    
+
     print
     
-    if startup.gpio_read(dev) & startup.GPIO_SM == 0:
+    hexdump(startup.ta_r(dev, 0x00, 0x3F), label="TA", indent='  ')
+    
+    if startup.gpio_readi(dev) & startup.GPIO_SM == 0:
         print 'Socket module: yes'
-        startup.sm_info(dev)
+        hexdump(startup.sm_r(dev, 0x00, 0x3F), label="SM", indent='  ')
     else:
         print 'Socket module: no'
 

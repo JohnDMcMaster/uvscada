@@ -1,4 +1,5 @@
 import sys
+import inspect
 
 def print_debug(s = None):
     if False:
@@ -72,3 +73,11 @@ def str2hex(buff, prefix='', terse=True):
             
         ret += "\\x%02X" % (buff[i],)
     return ret + '"'
+
+def where(pos=1):
+    # 0 represents this line
+    # 1 represents line at caller
+    callerframerecord = inspect.stack()[pos]
+    frame = callerframerecord[0]
+    info = inspect.getframeinfo(frame)
+    print '%s.%s():%d' % (info.filename, info.function, info.lineno)
