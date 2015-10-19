@@ -15,6 +15,9 @@ def atomic_probe(dev):
     where(2)
     cmd_01(dev)
 
+class BadPrefix(Exception):
+    pass
+
 # prefix: leave to external logic to packetize
 def bulk86(dev, target=None, donef=None, prefix=None):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
@@ -52,8 +55,6 @@ def bulk86(dev, target=None, donef=None, prefix=None):
             hexdump(p, label='  nxt_buff', indent='    ')
         #print str2hex(p)
         prefix_this = ord(p[0])
-        if prefix is not None and prefix_this != prefix:
-            raise Exception("prefix: wanted 0x%02X, got 0x%02X" % (prefix, prefix_this))
         size = (ord(p[-1]) << 8) | ord(p[-2])
         '''
         if size != len(p) - 3:
@@ -93,11 +94,12 @@ def bulk86(dev, target=None, donef=None, prefix=None):
             
             if prefix is not None:
                 if prefix != prefix_this:
-                    raise Exception('Wanted prefix 0x%02X, got 0x%02X' % (prefix, prefix_this))
+                    hexdump(buff_this)
+                    raise BadPrefix('Wanted prefix 0x%02X, got 0x%02X' % (prefix, prefix_this))
             elif prefix_this == 0x08:
                 pass
             else:
-                raise Exception('Unknown prefix 0x%02X' % prefix_this)
+                raise BadPrefix('Unknown prefix 0x%02X' % prefix_this)
             
             if donef and not donef(buff):
                 if dbg:

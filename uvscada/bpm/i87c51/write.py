@@ -44,6 +44,14 @@ def open_dev(usbcontext=None):
 
 # sm scan for large values
 # Exception: prefix: wanted 0x08, got 0x2C
+'''
+TODO: handle better
+If you try to program something you can't
+(ie a non-erased part)
+you'll get
+BadPrefix: Wanted prefix 0x18, got 0x08
+with reply  \x63\x01
+'''
 def fw_w(dev, fw, verbose=False):
     pos = 0
     print 'FW load: begin'
@@ -180,7 +188,7 @@ def replay(dev, fw, cont=True, blank=True):
     validate_read("\x0B", buff, "packet 427/428")
     
     # Generated from packet 429/430
-    fw_w(dev, fw)
+    fw_w(dev, fw, verbose=True)
     
     # Generated from packet 513/514
     cmd_57s(dev, '\x8C', "\x00\x00")
