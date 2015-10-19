@@ -13,8 +13,11 @@ splits = [0]
 
 # prefix: some have 0x18...why?
 # prefix: 0x28 observed
-def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
+def bulk86(dev, target=None, donef=None, prefix=None):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
+    
+    if prefix is not None:
+        raise Exception("fixme")
     
     dbg = bulk86_dbg
     
@@ -35,11 +38,6 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
             return len(buff) == target
     
     '''
-    A suffix of 1 indicates that another buffer is coming
-    However, a buffer can be split into multiple packets
-    Is this an FX2-parallel distinction?
-    Don't think we care at this level
-
     Ex: need to read 4096 bytes
     Max buffer packet size is 512 bytes
     but for some reason only uses up to 256 bytes of real data
@@ -56,8 +54,8 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
         prefix_this = ord(p[0])
         if prefix is not None and prefix_this != prefix:
             raise Exception("prefix: wanted 0x%02X, got 0x%02X" % (prefix, prefix_this))
-        suffix_this = ord(p[-1])
-        size = ord(p[-2])
+        size = (ord(p[-1]) << 8) | ord(p[-2])
+        '''
         if size != len(p) - 3:
             if truncate and size < len(p) - 3:
                 return prefix_this, p[1:1 + size], suffix_this
@@ -67,6 +65,9 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
                 hexdump(p)
                 raise Exception("Bad length (enable truncation?)")
         return prefix_this, p[1:-2], suffix_this
+        '''
+        # No harm seen in always truncating
+        return prefix_this, p[1:1 + size]
 
     buff = ''
     while True:
@@ -84,7 +85,7 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
             # Ignore suffix continue until we have a reason to care
             if dbg:
                 tstart = time.time()
-            prefix_this, buff_this, suffix_this = nxt_buff()
+            prefix_this, buff_this = nxt_buff()
             if dbg:
                 tend = time.time()
                 print '  time: %0.3f' % (tend - tstart,)
@@ -99,14 +100,6 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
                 continue
             else:
                 raise Exception('Unknown prefix 0x%02X' % prefix_this)
-            
-            if suffix_this == 0x00:
-                pass
-            elif suffix_this == 0x01:
-                raise Exception('test')
-                continue
-            else:
-                raise Exception('Unknown suffix 0x%02X' % suffix_this)
             
             if donef and not donef(buff):
                 if dbg:
@@ -124,7 +117,7 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
     #print 'Done w/ buff len %d' % len(buff)
     if target is not None and len(buff) != target:
         hexdump(buff, label='Wrong size', indent='  ')
-        prefix_this, buff_this, suffix_this = nxt_buff()
+        prefix_this, buff_this = nxt_buff()
         raise Exception('Target len: buff %d != target %d' % (len(buff), target))
     if dbg:
         hexdump(buff, label='  ret', indent='    ')
@@ -133,11 +126,11 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
 
 # FIXME: with target set small but not truncate will happily truncate
 # FIXME: suffix 1 means continue read.  Make higher level func
-def bulk2(dev, cmd, target=None, donef=None, truncate=True, prefix=0x08):
+def bulk2(dev, cmd, target=None, donef=None, prefix=None):
     _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
     bulkWrite(0x02, cmd)
-    return bulk86(dev, target=target, donef=donef, truncate=truncate, prefix=prefix)
+    return bulk86(dev, target=target, donef=donef, prefix=prefix)
 
 
 def sn_read(dev):
@@ -155,7 +148,7 @@ SM1_FMT = '<H12s18s'
 SM1 = namedtuple('sm', ('unk0', 'name', 'unk12'))
 
 def sm_read(dev):
-    buff = bulk2(dev, "\x0E\x02", target=0x20, truncate=True)
+    buff = bulk2(dev, "\x0E\x02", target=0x20)
     validate_readv((
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
               "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
@@ -222,8 +215,7 @@ def periph_r(dev, periph, start, end):
         bulk2(dev, "\x22\x01\x00\x00\x7F\x00\x06
     '''
     return bulk2(dev, "\x22" + chr(periph) + chr(start) + "\x00" + chr(end) + "\x00\x06",
-                target=(words*2),
-                truncate=True)
+                target=(words*2))
 
 # Teach adapter (ex: TA84VLV_FX4) EEPROM
 def ta_r(dev, start, end):
@@ -330,7 +322,7 @@ def cmd_01r(dev, validate=True):
 
 def cmd_02(dev, exp, msg='cmd_2'):
     # Generated from packet 188/189
-    buff = bulk2(dev, "\x02", target=6, truncate=True)
+    buff = bulk2(dev, "\x02", target=6)
     validate_read(exp, buff, msg)
 
 # clear => present
@@ -338,7 +330,7 @@ GPIO_SM = 0x0001
 # Not sure if this actually is GPIO
 # but seems like a good guess given that it detects socket module insertion
 def gpio_readi(dev):
-    buff = bulk2(dev, "\x03", target=2, truncate=True)
+    buff = bulk2(dev, "\x03", target=2)
     validate_readv((
             "\x31\x00",
             "\x71\x04",
@@ -356,7 +348,7 @@ def cmd_08(dev, cmd):
     if len(cmdf) != 5:
         raise Exception("Malfored command")
 
-    buff = bulk2(dev, cmdf, target=0x02, truncate=True)
+    buff = bulk2(dev, cmdf, target=0x02)
     validate_read("\x00\x00", buff, "packet W: 359/360, R: 361/362")
 
 def cmd_09(dev):
@@ -394,13 +386,13 @@ def led_mask(dev, mask):
     mask = led_s2i.get(mask, mask)
     if mask < 0 or mask > 7:
         raise ValueError("Bad mask")
-    bulkWrite("0x02, \x0C" + chr(mask), truncate=True)
+    bulkWrite("0x02, \x0C" + chr(mask))
 
 def led_mask_30(dev, mask):
     mask = led_s2i.get(mask, mask)
     if mask < 0 or mask > 7:
         raise ValueError("Bad mask")
-    buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2, truncate=True)
+    buff = bulk2(dev, "\x0C" + chr(mask) + "\x30", target=2)
     validate_read(chr(mask) + "\x00", buff, "packet 9/10")    
 
 # cmd_10
@@ -436,7 +428,7 @@ def cmd_20(dev):
 def sm_rst(dev):
     buff = bulk2(dev,
             "\x23\x02\x12\x00\x13\x00\x06\x00\x00\x00\x00\x00\x00\x12\xAA",
-            target=0x01, truncate=True)
+            target=0x01)
     validate_read("\xAB", buff, "packet W: 5/6, R: 7/8")
 
 # cmd_30: see LED functions
@@ -485,7 +477,7 @@ def cmd_45(dev):
 # Oddly sometimes this requires truncation and sometimes doesn't
 def cmd_49(dev):
     # Generated from packet 156/157
-    buff = bulk2(dev, "\x49", target=2, truncate=True)
+    buff = bulk2(dev, "\x49", target=2)
     validate_read("\x0F\x00", buff, "packet 158/159")
 
 # cmd_4A
@@ -539,14 +531,14 @@ def cmd_57_mk(cmd):
 def cmd_57s(dev, cmds, exp, msg="cmd_57"):
     out = ''.join([cmd_57_mk(c) for c in cmds])
     target = len(exp) if exp else None
-    buff = bulk2(dev, out, target=target, truncate=True)
+    buff = bulk2(dev, out, target=target)
     validate_read(exp, buff, msg)
     return buff
 
 def cmd_57_94(dev):
     cmd_57s(dev, '\x94', "\x62",  "cmd_57_94")
     # Seems to get paired with this
-    buff = bulk86(dev, target=0x01, truncate=True, prefix=0x18)
+    buff = bulk86(dev, target=0x01, prefix=0x18)
     validate_read("\x0B", buff, "packet 545/546")
 
 def cmd_57_50(dev, c57, c50):

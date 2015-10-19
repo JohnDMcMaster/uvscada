@@ -175,10 +175,7 @@ def dump(fin):
                 line('validate_read(%s, buff, "packet %s/%s")' % (
                         fmt_terse(data, p['packn'][0]), p['packn'][0], p['packn'][1]))
             reply_full = binascii.unhexlify(p['data'])
-            reply, truncate, pprefix, suffix = pkt_strip(reply_full)
-            truncate_str = ''
-            if truncate:
-                truncate_str = ', truncate=True'
+            reply, _truncate, pprefix, suffix = pkt_strip(reply_full)
             pprefix_str = ''
             if pprefix != 0x08:
                 pprefix_str = ', prefix=0x%02X' % pprefix
@@ -188,7 +185,7 @@ def dump(fin):
             #line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
             pack_str = 'packet %s/%s' % (
                      p['packn'][0], p['packn'][1])
-            line('buff = bulk86(dev, target=0x%02X%s%s%s)' % (len(reply), truncate_str, pprefix_str, suffix_str))
+            line('buff = bulk86(dev, target=0x%02X%s%s)' % (len(reply), pprefix_str, suffix_str))
             line('validate_read(%s, buff, "%s")' % (fmt_terse(reply, p['packn'][0]), pack_str))
         elif p['type'] == 'bulkWrite':
             '''
@@ -244,11 +241,6 @@ def dump(fin):
             # bulk2(
             else:
                 def bulk2():
-                    truncate_str = ''
-                    if truncate:
-                        truncate_str = ', truncate=True'
-                    #if suffix != 0:
-                    #    raise Exception("Unexpected")
                     pprefix_str = ''
                     if pprefix != 0x08:
                         pprefix_str = ', prefix=0x%02X' % pprefix
@@ -257,7 +249,7 @@ def dump(fin):
                         suffix_str = ', suffix=0x%02X' % suffix
                     pack_str = 'packet W: %s/%s, R: %s/%s' % (
                             p_w['packn'][0], p_w['packn'][1], p_r['packn'][0], p_r['packn'][1])
-                    line('buff = bulk2(dev, %s, target=0x%02X%s%s%s)' % (fmt_terse(cmd, p_w['packn'][0]), len(reply), truncate_str, pprefix_str, suffix_str))
+                    line('buff = bulk2(dev, %s, target=0x%02X%s%s)' % (fmt_terse(cmd, p_w['packn'][0]), len(reply), pprefix_str, suffix_str))
                     #line('# Discarded %d / %d bytes => %d bytes' % (len(reply_full) - len(reply), len(reply_full), len(reply)))
                     line('validate_read(%s, buff, "%s")' % (fmt_terse(reply, p_r['packn'][0]), pack_str))
                 
@@ -269,7 +261,7 @@ def dump(fin):
                     line("'''")
                     line(fmt_terse(reply_full, p['packn'][0]))
                     line("'''")
-                reply, truncate, pprefix, suffix = pkt_strip(reply_full)
+                reply, _truncate, pprefix, suffix = pkt_strip(reply_full)
                 if cmd == "\x01":
                     line('cmd_01(dev)')
                 elif cmd == "\x02":

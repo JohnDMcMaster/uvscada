@@ -261,7 +261,7 @@ def replay(dev):
               "\xE9\x02\x00\x00\x00\x90\x00\xE9\x04\x00\x00\x00\x00\x00\x00\x00"
               "\xE9\x03\x00\x00\x00\x90\x00\x00\x66\xB9\x00\x00\xB2\x00\xFB\xFF"
               "\x25\x44\x11\x00\x00",
-              target=2, truncate=True)
+              target=2)
     validate_read("\x80\x00", buff, "packet 186/187")
 
     # cmd_01[0x15]: 0x00 => 0x50
@@ -285,7 +285,7 @@ def replay(dev):
               "\x81\xE1\x03\x00\x00\x00\xD3\xE2\xD3\xE2\xD3\xE2\xD3\xE2\xD3\xE2"
               "\xC1\xE2\x0A\x89\xD9\x81\xE1\xFC\x03\x00\x00\x09\xCA\x88\x82\x00"
               "\x00\x00\x40\x66\xB9\x00\x00\xB2\x00\xFB\xFF\x25\x44\x11\x00\x00",
-              target=2, truncate=True)
+              target=2)
     validate_read("\x81\x00", buff, "packet 196/197")
 
     # cmd_01: 0x15: 0x50 => 0x01.  0x16: 0x00 => 0x01
@@ -294,7 +294,7 @@ def replay(dev):
 
     if glitch_154:
         buff = bulk2(dev, "\x08\x20\x09\x20\x0A\x20\x0B\x20\x57\x81\x00\x0C\x04\x30",
-                    target=2, truncate=True)
+                    target=2)
         validate_read("\x04\x00", buff, "packet 204/205")
     else:
         # Think this clears the red light
@@ -302,14 +302,14 @@ def replay(dev):
         buff = bulk2(dev,
                   "\x04\x72\x05\x73\x06\x2E\x07\x70\x08\x75\x09\x73\x0A\x68\x0B\x28"
                   "\x57\x81\x00\x0C\x04\x30",
-                  target=2, truncate=True)
+                  target=2)
         validate_read("\x04\x00", buff, "packet 204/205")
     
     # Generated from packet 206/207
     buff = bulk2(dev,
               "\x3B\x0C\x22\x00\xC0\x30\x00\x3B\x0E\x22\x00\xC0\x00\x00\x3B\x1A"
               "\x22\x00\xC0\x18\x00\x0E\x01",
-              target=0x20, truncate=True)
+              target=0x20)
     validate_read(
               "\x14\x00\x54\x41\x38\x34\x56\x4C\x56\x5F\x46\x58\x34\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x3E"
@@ -330,7 +330,7 @@ def replay(dev):
     bulkWrite(0x02, "\x48\x00\x20\x00\x00\x50\x12\x00\x00\x00")
     # Generated from packet 224/225
     buff = bulk2(dev, "\x00\x00\x00\x00\x04\x00\x08\x00\x0C\x00\x10\x00\x14\x00\x18\x00"
-              "\x1C\x00", target=2, truncate=True)
+              "\x1C\x00", target=2)
     validate_read("\x82\x00", buff, "packet 226/227")
 
     # Generated from packet 228/229
@@ -341,7 +341,7 @@ def replay(dev):
     buff = bulk2(dev,
               "\x1D\x10\x01\x09\x00\x00\x00\x15\x60\x00\x00\x00\x00\x00\x00\x00"
               "\x00\x00\x00\x00\x00\x00\x1C\x00\x00\x48\x00\x12\xAA",
-              target=1, truncate=True)
+              target=1)
     validate_read("\xAB", buff, "packet 234/235")
 
     # Generated from packet 236/237
