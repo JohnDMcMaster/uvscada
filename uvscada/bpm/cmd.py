@@ -15,13 +15,9 @@ def atomic_probe(dev):
     where(2)
     cmd_01(dev)
 
-# prefix: some have 0x18...why?
-# prefix: 0x28 observed
+# prefix: leave to external logic to packetize
 def bulk86(dev, target=None, donef=None, prefix=None):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
-    
-    if prefix is not None:
-        raise Exception("fixme")
     
     dbg = bulk86_dbg
     
@@ -95,13 +91,11 @@ def bulk86(dev, target=None, donef=None, prefix=None):
                 print '  time: %0.3f' % (tend - tstart,)
             buff += buff_this
             
-            if prefix_this == 0x08:
+            if prefix is not None:
+                if prefix != prefix_this:
+                    raise Exception('Wanted prefix 0x%02X, got 0x%02X' % (prefix, prefix_this))
+            elif prefix_this == 0x08:
                 pass
-            # More data / split packet
-            elif prefix_this == 0x28:
-                # debug
-                raise Exception("Cont")
-                continue
             else:
                 raise Exception('Unknown prefix 0x%02X' % prefix_this)
             
