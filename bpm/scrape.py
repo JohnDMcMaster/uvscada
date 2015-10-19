@@ -9,8 +9,8 @@ import subprocess
 
 from uvscada.bpm.cmd import led_i2s
 from uvscada.util import hexdump
-from i87c51_read_fw import p_p2n as p_p2n_r
-from i87c51_write_fw import p_p2n  as p_p2n_w
+from uvscada.bpm.i87c51.read_fw import p_p2n as p_p2n_r
+from uvscada.bpm.i87c51.write_fw import p_p2n  as p_p2n_w
 
 prefix = ' ' * 8
 indent = ''

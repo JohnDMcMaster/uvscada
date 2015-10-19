@@ -15,7 +15,6 @@ if __name__ == "__main__":
         startup.cycle()
 
     dev, usbcontext = startup.get()
-    _bulkRead, bulkWrite, controlRead, controlWrite = cmd.usb_wraps(dev)
 
     fw_in = replay(dev, cont=args.cont)
     if args.fout:

@@ -11,6 +11,10 @@ import time
 bulk86_dbg = 0
 splits = [0]
 
+def atomic_probe(dev):
+    where(2)
+    cmd_01(dev)
+
 # prefix: some have 0x18...why?
 # prefix: 0x28 observed
 def bulk86(dev, target=None, donef=None, prefix=None):

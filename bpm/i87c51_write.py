@@ -8,15 +8,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     add_bool_arg(parser, '--cycle', default=False, help='') 
     add_bool_arg(parser, '--cont', default=True, help='Continuity check') 
+    parser.add_argument('fin', nargs='?', help='Input file') 
     args = parser.parse_args()
 
     if args.cycle:
         startup.cycle()
 
     dev, usbcontext = startup.get()
-    _bulkRead, bulkWrite, controlRead, controlWrite = cmd.usb_wraps(dev)
 
-    fw = 4096 * '\xFF'
+    if args.fin:
+        fw = open(args.fin, 'r').read()
+    else:
+        fw = 4096 * '\xFF'
+    if len(fw) != 4096:
+        raise Exception("Bad FW length")
     replay(dev, fw)
 
     print 'Complete'
