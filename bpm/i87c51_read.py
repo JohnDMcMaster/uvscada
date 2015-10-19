@@ -15,6 +15,9 @@ from uvscada.bpm.cmd import cmd_01
 
 import i87c51_read_fw as fwm
 
+class ContFail(Exception):
+    pass
+
 def dexit():
     print 'Debug break'
     sys.exit(0)
@@ -331,7 +334,20 @@ def replay1(dev, fw, cont=True):
         cmd_02(dev, "\x86\x00\xC0\x41\x09\x00", "packet W: 237/238, R: 239/240")
 
         # Generated from packet 241/242
-        cmd_57s(dev, "\x85", "\x01",  "cmd_57")
+        # Takes about 0.515 sec
+        buff = cmd_57s(dev, "\x85", None,  "cmd_57")
+        # Chip inserted
+        if buff == "\x01":
+            print 'Continuity OK'
+        # Chip removed
+        elif buff == ("\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
+                    "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"):
+            raise ContFail('Complete (part not inserted?)')
+        # Inserting chip while running
+        # I'm guessing its telling me which pins failed
+        # Lets bend a pin and verify
+        else:
+            raise ContFail('Partial (dirty contacts?  Inserted wrong?)')
         
         # Generated from packet 245/246
         cmd_50(dev, "\x62\x00")

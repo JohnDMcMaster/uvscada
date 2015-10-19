@@ -9,12 +9,14 @@ from uvscada.util import hexdump, str2hex, where
 from uvscada.wps7 import WPS7
 
 from cmd import *
+import cmd
 
 import binascii
 import struct
 from collections import namedtuple
 import libusb1
 import time
+import usb1
 
 def cycle():
     print 'Cycling'
@@ -139,7 +141,6 @@ def replay(dev):
     buff = bulkRead(0x86, 0x0200)
     # NOTE:: req max 512 but got 4
     validate_read("\x08\x16\x01\x00", buff, "packet 64/65")
-
     # Generated from packet 66/67
     buff = cmd_01(dev)
     # Seems to be okay if we always do this although its only sometimes needed
@@ -347,3 +348,30 @@ def replay(dev):
     gpio_readi(dev)
 
     cmd_01(dev) # temp
+
+def open_dev(usbcontext=None):
+    if usbcontext is None:
+        usbcontext = usb1.USBContext()
+    
+    print 'Scanning for devices...'
+    for udev in usbcontext.getDeviceList(skip_on_error=True):
+        vid = udev.getVendorID()
+        pid = udev.getProductID()
+        if (vid, pid) == (0x14b9, 0x0001):
+            print
+            print
+            print 'Found device'
+            print 'Bus %03i Device %03i: ID %04x:%04x' % (
+                udev.getBusNumber(),
+                udev.getDeviceAddress(),
+                vid,
+                pid)
+            return udev.open()
+    raise Exception("Failed to find a device")
+
+def get():
+    usbcontext = usb1.USBContext()
+    dev = open_dev(usbcontext)
+    dev.claimInterface(0)
+    replay(dev)
+    return dev, usbcontext

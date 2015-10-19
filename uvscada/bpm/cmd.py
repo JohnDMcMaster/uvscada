@@ -1,11 +1,6 @@
 from uvscada.usb import usb_wraps
 from uvscada.usb import validate_read, validate_readv
-from uvscada.bpm.bp1410_fw import load_fx2
-from uvscada.bpm import bp1410_fw_sn
-from uvscada.util import hexdump, str2hex, where
-from uvscada.wps7 import WPS7
-
-from cmd import *
+from uvscada.util import hexdump, where
 
 import binascii
 import struct
@@ -13,30 +8,31 @@ from collections import namedtuple
 import libusb1
 import time
 
+bulk86_dbg = 0
+splits = [0]
+
 # prefix: some have 0x18...why?
 # prefix: 0x28 observed
-def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
+def bulk86(dev, target=None, donef=None, truncate=False, prefix=None):
     bulkRead, _bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     
-    dbg = 1
+    dbg = bulk86_dbg
     
     if dbg:
         print
         print 'bulk86'
         where(2)
-        where(3)
+        try:
+            where(3)
+        except IndexError:
+            pass
     
-    if donef is None:
-        # FIXME: to debug an unknown prefix protocol mode
-        if prefix is None:
-            def donef(buff):
-                return False
-        elif target is None:
-            def donef(buff):
-                return len(buff) > 0
-        else:
-            def donef(buff):
-                return len(buff) >= target
+    # AFAIK certain packets have no way of knowing done
+    # other than knowing in advance how many bytes you should expect
+    # Strange since there are continue markers
+    if donef is None and target is not None:
+        def donef(buff):
+            return len(buff) == target
     
     '''
     A suffix of 1 indicates that another buffer is coming
@@ -51,9 +47,11 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
     So to transfer the data 
     '''
     def nxt_buff():
+        if dbg:
+            print '  nxt_buff: reading'
         p = bulkRead(0x86, 0x0200)
         if dbg:
-            hexdump(p, label='nxt_buff', indent='  ')
+            hexdump(p, label='  nxt_buff', indent='    ')
         #print str2hex(p)
         prefix_this = ord(p[0])
         if prefix is not None and prefix_this != prefix:
@@ -71,40 +69,65 @@ def bulk86(dev, target=None, donef=None, truncate=False, prefix=0x08):
         return prefix_this, p[1:-2], suffix_this
 
     buff = ''
-    while not donef(buff):
-    #while True:
-        if 0 and buff:
-            print 'NOTE: split packet.  Have %d / %d bytes' % (len(buff), target)
-            hexdump(buff)
+    while True:
+        if donef and donef(buff):
+            break
+            
+        # Test on "packet 152/153" (0x64 byte response)
+        # gave 19/1010 splits => 1.9% of split
+        # Ran some torture tests looping on this to verify this logic is okay
+        if dbg and buff:
+            print '  NOTE: split packet.  Have %d / %s bytes' % (len(buff), target)
+            hexdump(buff, indent='    ')
+            splits[0] += 1
         try:
             # Ignore suffix continue until we have a reason to care
+            if dbg:
+                tstart = time.time()
             prefix_this, buff_this, suffix_this = nxt_buff()
+            if dbg:
+                tend = time.time()
+                print '  time: %0.3f' % (tend - tstart,)
             buff += buff_this
             
-            if prefix_this != 0x08:
-                raise Exception('test')
-            if suffix_this != 0x00:
-                raise Exception('test')
-            
-            '''
-            if suffix_this == 0x00:
-                break
-            elif suffix_this == 0x01:
+            if prefix_this == 0x08:
+                pass
+            # More data / split packet
+            elif prefix_this == 0x28:
+                # debug
+                raise Exception("Cont")
                 continue
             else:
-                raise Exception("Unexpected suffix 0x%02X" % suffix_this)
-            '''
+                raise Exception('Unknown prefix 0x%02X' % prefix_this)
+            
+            if suffix_this == 0x00:
+                pass
+            elif suffix_this == 0x01:
+                raise Exception('test')
+                continue
+            else:
+                raise Exception('Unknown suffix 0x%02X' % suffix_this)
+            
+            if donef and not donef(buff):
+                if dbg:
+                    print '  continue: not done'
+                continue
+            if dbg:
+                print '  break: no special markers'
+            break
+        
         # FIXME: temp
         except libusb1.USBError:
-            if prefix is None:
-                return buff
+            #if prefix is None:
+            #    return buff
             raise
     #print 'Done w/ buff len %d' % len(buff)
-    if target and len(buff) > target:
-        hexdump(buff, label='Too big', indent='  ')
-        raise Exception('Buffer grew too big: buff %d > target %d' % (len(buff), target))
+    if target is not None and len(buff) != target:
+        hexdump(buff, label='Wrong size', indent='  ')
+        prefix_this, buff_this, suffix_this = nxt_buff()
+        raise Exception('Target len: buff %d != target %d' % (len(buff), target))
     if dbg:
-        hexdump(buff, label='ret', indent='  ')
+        hexdump(buff, label='  ret', indent='    ')
         print
     return buff
 
@@ -431,7 +454,7 @@ def cmd_41(dev):
     _bulkRead, bulkWrite, _controlRead, _controlWrite = usb_wraps(dev)
     bulkWrite(0x02, "\x41\x00\x00")
 
-def cmd_43_mk(dev, cmd):
+def cmd_43_mk(cmd):
     ret = "\x43\x19" + cmd + "\x00\x00"
     if len(ret) != 5:
         raise Exception("Bad length")
@@ -515,7 +538,8 @@ def cmd_57_mk(cmd):
 
 def cmd_57s(dev, cmds, exp, msg="cmd_57"):
     out = ''.join([cmd_57_mk(c) for c in cmds])
-    buff = bulk2(dev, out, target=len(exp), truncate=True)
+    target = len(exp) if exp else None
+    buff = bulk2(dev, out, target=target, truncate=True)
     validate_read(exp, buff, msg)
     return buff
 
