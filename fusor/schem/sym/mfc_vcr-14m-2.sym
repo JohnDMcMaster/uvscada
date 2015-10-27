@@ -7,8 +7,8 @@ T 1305 845 5 8 0 1 0 6 1
 pinnumber=1
 T 1300 750 5 8 0 1 0 8 1
 pinseq=2
-T 1155 995 9 8 1 1 0 0 1
-pinlabel=VCR-M
+T 1255 1095 9 8 1 1 0 0 1
+pinlabel=VCR-14M
 T 1450 800 5 8 0 1 0 2 1
 pintype=in
 }
@@ -34,8 +34,8 @@ T 3195 845 5 8 0 1 0 0 1
 pinnumber=1
 T 3200 850 5 8 0 1 180 8 1
 pinseq=2
-T 3345 995 9 8 1 1 0 6 1
-pinlabel=VCR-M
+T 3245 1095 9 8 1 1 0 6 1
+pinlabel=VCR-14M
 T 3050 800 5 8 0 1 180 2 1
 pintype=in
 }

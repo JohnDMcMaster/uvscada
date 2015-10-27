@@ -35,7 +35,7 @@ pinnumber=1
 T 2100 850 5 8 0 1 180 8 1
 pinseq=2
 T 2545 895 9 8 1 1 0 6 1
-pinlabel=VCR-M
+pinlabel=VCR-14M
 T 1950 800 5 8 0 1 180 2 1
 pintype=in
 }
