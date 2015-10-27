@@ -1,0 +1,155 @@
+v 20110115 2
+T 300 1150 5 10 0 0 0 0 1
+device=24Cxx
+T 300 1350 5 10 0 0 0 0 1
+footprint=DIP8
+T 300 2150 5 10 0 0 0 0 1
+description=2-wire serial cmos eeprom
+T 300 1950 5 10 0 0 0 0 1
+numslots=0
+T 300 2350 5 10 0 0 0 0 1
+author=Werner Hoch <werner.hoATgmx.de>
+T 300 1550 5 10 0 0 0 0 1
+net=Vcc:8
+T 300 1750 5 10 0 0 0 0 1
+net=GND:4
+T 300 2550 5 10 0 0 0 0 1
+documentation=http://www.asec.com.tw/product/data/992/24C01_2.PDF
+T 300 2750 5 10 0 0 0 0 1
+comment=Pin7 can be WP (write protect) too
+L 1600 2400 800 2400 3 0 0 0 -1 -1
+P 2500 1600 1600 1600 1 0 0
+{
+T 1695 1645 5 8 0 1 0 0 1
+pinnumber=1
+T 1700 1650 5 8 0 1 180 8 1
+pinseq=2
+T 2045 1695 9 8 1 1 0 6 1
+pinlabel=ETH
+T 1550 1600 5 8 0 1 180 2 1
+pintype=in
+}
+L 1600 0 800 0 3 0 0 0 -1 -1
+L 800 2400 800 0 3 0 0 0 -1 -1
+L 1600 2400 1600 0 3 0 0 0 -1 -1
+P 2500 1300 1600 1300 1 0 0
+{
+T 1695 1345 5 8 0 1 0 0 1
+pinnumber=1
+T 1700 1350 5 8 0 1 180 8 1
+pinseq=2
+T 2445 1395 9 8 1 1 0 6 1
+pinlabel=120 VAC IN
+T 1550 1300 5 8 0 1 180 2 1
+pintype=in
+}
+P 0 2200 800 2200 1 0 0
+{
+T 705 2245 5 8 0 1 0 6 1
+pinnumber=1
+T 700 2150 5 8 0 1 0 8 1
+pinseq=2
+T 55 2295 9 8 1 1 0 0 1
+pinlabel=1 120 VAC
+T 850 2200 5 8 0 1 0 2 1
+pintype=in
+}
+P 0 1900 800 1900 1 0 0
+{
+T 705 1945 5 8 0 1 0 6 1
+pinnumber=1
+T 700 1850 5 8 0 1 0 8 1
+pinseq=2
+T 55 1995 9 8 1 1 0 0 1
+pinlabel=2 120 VAC
+T 850 1900 5 8 0 1 0 2 1
+pintype=in
+}
+P 0 1600 800 1600 1 0 0
+{
+T 705 1645 5 8 0 1 0 6 1
+pinnumber=1
+T 700 1550 5 8 0 1 0 8 1
+pinseq=2
+T 55 1695 9 8 1 1 0 0 1
+pinlabel=3 120 VAC
+T 850 1600 5 8 0 1 0 2 1
+pintype=in
+}
+P 0 1300 800 1300 1 0 0
+{
+T 705 1345 5 8 0 1 0 6 1
+pinnumber=1
+T 700 1250 5 8 0 1 0 8 1
+pinseq=2
+T 55 1395 9 8 1 1 0 0 1
+pinlabel=4 120 VAC
+T 850 1300 5 8 0 1 0 2 1
+pintype=in
+}
+P 0 1000 800 1000 1 0 0
+{
+T 705 1045 5 8 0 1 0 6 1
+pinnumber=1
+T 700 950 5 8 0 1 0 8 1
+pinseq=2
+T 55 1095 9 8 1 1 0 0 1
+pinlabel=5 120 VAC
+T 850 1000 5 8 0 1 0 2 1
+pintype=in
+}
+P 0 700 800 700 1 0 0
+{
+T 705 745 5 8 0 1 0 6 1
+pinnumber=1
+T 700 650 5 8 0 1 0 8 1
+pinseq=2
+T 55 795 9 8 1 1 0 0 1
+pinlabel=6 120 VAC
+T 850 700 5 8 0 1 0 2 1
+pintype=in
+}
+P 0 400 800 400 1 0 0
+{
+T 705 445 5 8 0 1 0 6 1
+pinnumber=1
+T 700 350 5 8 0 1 0 8 1
+pinseq=2
+T 55 495 9 8 1 1 0 0 1
+pinlabel=7 120 VAC
+T 850 400 5 8 0 1 0 2 1
+pintype=in
+}
+P 0 100 800 100 1 0 0
+{
+T 705 145 5 8 0 1 0 6 1
+pinnumber=1
+T 700 50 5 8 0 1 0 8 1
+pinseq=2
+T 55 195 9 8 1 1 0 0 1
+pinlabel=8 120 VAC
+T 850 100 5 8 0 1 0 2 1
+pintype=in
+}
+P 2500 1000 1600 1000 1 0 0
+{
+T 1695 1045 5 8 0 1 0 0 1
+pinnumber=1
+T 1700 1050 5 8 0 1 180 8 1
+pinseq=2
+T 2445 1095 9 8 1 1 0 6 1
+pinlabel=9 120 VAC
+T 1550 1000 5 8 0 1 180 2 1
+pintype=in
+}
+P 2500 700 1600 700 1 0 0
+{
+T 1695 745 5 8 0 1 0 0 1
+pinnumber=1
+T 1700 750 5 8 0 1 180 8 1
+pinseq=2
+T 2445 795 9 8 1 1 0 6 1
+pinlabel=10 120 VAC
+T 1550 700 5 8 0 1 180 2 1
+pintype=in
+}

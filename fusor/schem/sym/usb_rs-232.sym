@@ -1,0 +1,45 @@
+v 20110115 2
+T 300 1150 5 10 0 0 0 0 1
+device=24Cxx
+T 300 1350 5 10 0 0 0 0 1
+footprint=DIP8
+T 300 2150 5 10 0 0 0 0 1
+description=2-wire serial cmos eeprom
+T 300 1950 5 10 0 0 0 0 1
+numslots=0
+T 300 2350 5 10 0 0 0 0 1
+author=Werner Hoch <werner.hoATgmx.de>
+T 300 1550 5 10 0 0 0 0 1
+net=Vcc:8
+T 300 1750 5 10 0 0 0 0 1
+net=GND:4
+T 300 2550 5 10 0 0 0 0 1
+documentation=http://www.asec.com.tw/product/data/992/24C01_2.PDF
+T 300 2750 5 10 0 0 0 0 1
+comment=Pin7 can be WP (write protect) too
+L 1900 500 1100 500 3 0 0 0 -1 -1
+P 2600 300 1900 300 1 0 0
+{
+T 1995 345 5 8 0 1 0 0 1
+pinnumber=1
+T 2000 350 5 8 0 1 180 8 1
+pinseq=2
+T 2445 395 9 8 1 1 0 6 1
+pinlabel=RS-232
+T 1850 300 5 8 0 1 180 2 1
+pintype=in
+}
+L 1900 100 1100 100 3 0 0 0 -1 -1
+L 1100 500 1100 100 3 0 0 0 -1 -1
+L 1900 500 1900 100 3 0 0 0 -1 -1
+P 700 200 1100 200 1 0 0
+{
+T 1005 245 5 8 0 1 0 6 1
+pinnumber=1
+T 1000 150 5 8 0 1 0 8 1
+pinseq=2
+T 755 395 9 8 1 1 0 0 1
+pinlabel=USB
+T 1150 200 5 8 0 1 0 2 1
+pintype=in
+}

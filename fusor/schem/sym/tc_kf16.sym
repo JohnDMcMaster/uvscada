@@ -1,0 +1,51 @@
+v 20110115 2
+T 300 1150 5 10 0 0 0 0 1
+device=24Cxx
+T 300 1350 5 10 0 0 0 0 1
+footprint=DIP8
+T 300 2150 5 10 0 0 0 0 1
+description=2-wire serial cmos eeprom
+T 300 1950 5 10 0 0 0 0 1
+numslots=0
+T 300 2350 5 10 0 0 0 0 1
+author=Werner Hoch <werner.hoATgmx.de>
+T 300 1550 5 10 0 0 0 0 1
+net=Vcc:8
+T 300 1750 5 10 0 0 0 0 1
+net=GND:4
+T 300 2550 5 10 0 0 0 0 1
+documentation=http://www.asec.com.tw/product/data/992/24C01_2.PDF
+T 300 2750 5 10 0 0 0 0 1
+comment=Pin7 can be WP (write protect) too
+P 1600 900 900 900 1 0 0
+{
+T 995 945 5 8 0 1 0 0 1
+pinnumber=1
+T 1000 950 5 8 0 1 180 8 1
+pinseq=2
+T 1445 995 9 8 1 1 0 6 1
+pinlabel=KF16
+T 850 900 5 8 0 1 180 2 1
+pintype=in
+}
+L 800 900 600 900 3 0 0 0 -1 -1
+L 800 700 800 600 3 0 0 0 -1 -1
+L 800 1000 800 900 3 0 0 0 -1 -1
+L 900 1000 800 1000 3 0 0 0 -1 -1
+L 900 600 800 600 3 0 0 0 -1 -1
+L 900 1000 900 600 3 0 0 0 -1 -1
+L 600 900 500 800 3 0 0 0 -1 -1
+L 500 800 600 700 3 0 0 0 -1 -1
+V 500 800 100 3 0 0 0 -1 -1 0 -1 -1 -1 -1 -1
+L 800 700 600 700 3 0 0 0 -1 -1
+P 1600 700 900 700 1 0 0
+{
+T 995 745 5 8 0 1 0 0 1
+pinnumber=1
+T 1000 750 5 8 0 1 180 8 1
+pinseq=2
+T 1545 495 9 8 1 1 0 6 1
+pinlabel=SOCKET
+T 850 700 5 8 0 1 180 2 1
+pintype=in
+}
