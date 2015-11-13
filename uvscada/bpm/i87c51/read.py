@@ -9,6 +9,7 @@ from uvscada.bpm.cmd import atomic_probe
 from uvscada.util import hexdump, add_bool_arg
 from uvscada.usb import validate_read, validate_readv
 from uvscada.bpm.cmd import cmd_01
+from uvscada.util import hexdump
 
 import read_fw
 
@@ -306,6 +307,7 @@ def replay1(dev, cont=True):
         buff = cmd_57s(dev, "\x85", None,  "cmd_57")
         tend = time.time()
         print 'Continuity test took %0.3f sec' % (tend - tstart,)
+        hexdump(buff, label='Continuity', indent='  ')
         # Chip inserted
         if buff == "\x01":
             print 'Continuity OK'
@@ -414,7 +416,14 @@ def replay1(dev, cont=True):
     cmd_02(dev, "\x8C\x00\x70\x56\x09\x00", "packet W: 313/314, R: 315/316")
 
     # Generated from packet 317/318
-    cmd_57s(dev, "\x8B", "\x58\x00")
+    # Bad part returns \x59\x00 but otherwise can be read
+    # (with partially corrupt bit pattern)
+    if cont:
+        buff = cmd_57s(dev, "\x8B", None)
+        if buff == "\x59\x00":
+            raise Exception("Failed 0x8B health check")
+        else:
+            validate_read("\x58\x00", buff)
 
     # Atomic
     # Generated from packet 321/322
