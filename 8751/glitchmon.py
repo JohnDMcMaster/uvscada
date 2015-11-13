@@ -7,8 +7,60 @@ import binascii
 import subprocess
 import time
 import argparse
+import tty
+import termios
+import select
 
-def mprint(dat):
+'''
+# http://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
+# hmm don't think this really did anything useful: still have to press enter
+def nextc():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        return sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+'''
+
+def nextc():
+    return sys.stdin.read(1) if select.select([sys.stdin,],[],[],0.0)[0] else None
+
+'''
+def nextc():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        s = select.select([sys.stdin,],[],[],0.0)[0]
+        print s
+        return sys.stdin.read(1) if s else None
+        # return sys.stdin.read(1) if select.select([sys.stdin,],[],[],0.0)[0] else None
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+'''
+
+def buff_print1(dat):
+    # 4096 x ?
+    rows = 4096 / 256
+    cols = 4096 / rows
+    for row in xrange(rows):
+        for col in xrange(cols):
+            val = ord(dat[row * cols + col])
+            bl = val.bit_length()
+            if bl <= 0:
+                c = ' '
+            elif bl <= 3:
+                c = '.'
+            elif bl <= 6:
+                c = ':'
+            else:
+                c = '='
+            sys.stdout.write(c)
+        sys.stdout.write('\n')
+    sys.stdout.flush()
+def buff_print2(dat):
     # 4096 x ?
     rows = 4096 / 256
     cols = 4096 / rows
@@ -32,7 +84,9 @@ def mprint(dat):
         sys.stdout.write('\n')
     sys.stdout.flush()
 
-def diff(l, r):
+buff_print = buff_print2
+
+def buff_op(l, r, op):
     l = bytearray(l)
     r = bytearray(r)
     ret = bytearray()
@@ -40,7 +94,7 @@ def diff(l, r):
     if len(l) != len(r):
         raise ValueError()
     for i in xrange(len(l)):
-        ret.append((l[i] - r[i]) % 0x100)
+        ret.append(op(l[i], r[i]))
     return str(ret)
 
 if __name__ == '__main__':
@@ -49,12 +103,28 @@ if __name__ == '__main__':
 
     m = Minipro(device='87C51')
     baseline = m.read()
+    or_buff = None
     
     frame = 0
     while True:
+        c = nextc()
+        if c == 'q':
+            break
+        elif c == 'r':
+            baseline = m.read()
+            or_buff = None
+        
         this = m.read()
-        d = diff(baseline, this)
+        if 0:
+            out = buff_op(baseline, this, lambda l, r: (l - r) % 0x100)
+        if 1:
+            d = buff_op(baseline, this, lambda l, r: (l - r) % 0x100)
+            if or_buff is None:
+                or_buff = d
+            else:
+                or_buff = buff_op(or_buff, d, lambda l, r: (l + bool(r)) % 0x100)
+            out = or_buff
         os.system('clear')
         print frame
-        mprint(d)
+        buff_print(out)
         frame += 1
