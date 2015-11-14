@@ -1,6 +1,7 @@
 from uvscada.planner import Planner
 from uvscada.benchmark import Benchmark
 from uvscada.cnc_hal.hal import AxisExceeded
+import traceback
 
 import Queue
 import threading
@@ -173,6 +174,7 @@ class PlannerThread(QThread):
             self.log('Planner done!  Took : %s' % str(b))
         except Exception as e:
             self.log('WARNING: planner thread crashed: %s' % str(e))
-            raise
+            traceback.print_exc()
+            #raise
         finally:
             self.plannerDone.emit()

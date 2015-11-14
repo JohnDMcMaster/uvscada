@@ -27,7 +27,7 @@ import sys
 import traceback
 import threading
 
-uscope_config = get_config()
+uconfig = get_config()
 
 gobject = None
 gst = None
@@ -36,7 +36,7 @@ try:
     import gst
     gst_util.register()
 except ImportError:
-    if uscope_config['imager']['engine'] == 'gstreamer' or uscope_config['imager']['engine'] == 'gstreamer-testrc':
+    if uconfig['imager']['engine'] == 'gstreamer' or uconfig['imager']['engine'] == 'gstreamer-testrc':
         print 'Failed to import a gstreamer package when gstreamer is required'
         raise
 
@@ -53,7 +53,7 @@ def dbg(*args):
 
 def get_cnc_hal(log):
     print 'get_cnc_hal', log
-    engine = uscope_config['cnc']['engine']
+    engine = uconfig['cnc']['engine']
     if engine == 'mock':
         return cnc_hal.MockHal(log=log)
     elif engine == 'lcnc-py':
@@ -61,12 +61,15 @@ def get_cnc_hal(log):
         
         return lcnc_hal.LcncPyHal(linuxcnc=linuxcnc, log=log)
     elif engine == 'lcnc-rpc':
+        host = uconfig["cnc"]["lcnc"]["host"]
         try:
-            return lcnc_hal.LcncPyHal(linuxcnc=LCNCRPC(host='mk-xray'), log=log)
+            return lcnc_hal.LcncPyHal(linuxcnc=LCNCRPC(host=host), log=log)
         except socket.error:
-            raise Exception("Failed to connect to LCNCRPC")
+            raise
+            raise Exception("Failed to connect to LCNCRPC %s" % host)
     elif engine == 'lcnc-arpc':
-        return lcnc_ar.LcncPyHalAr(host='mk-xray', log=log)
+        host = uconfig["cnc"]["lcnc"]["host"]
+        return lcnc_ar.LcncPyHalAr(host=host, log=log)
     elif engine == 'lcnc-rsh':
         return lcnc_hal.LcncRshHal(log=log)
     else:
@@ -102,7 +105,7 @@ class AxisWidget(QWidget):
         self.gb.setLayout(self.gl)
         row = 0
         
-        self.gl.addWidget(QLabel("Pos (um):"), row, 0)
+        self.gl.addWidget(QLabel("Pos (mm):"), row, 0)
         self.pos_value = QLabel("Unknown")
         self.gl.addWidget(self.pos_value, row, 1)
         row += 1
@@ -119,14 +122,14 @@ class AxisWidget(QWidget):
         
         self.abs_pos_le = QLineEdit('0.0')
         self.gl.addWidget(self.abs_pos_le, row, 0)
-        self.mv_abs_pb = QPushButton("Go absolute (um)")
+        self.mv_abs_pb = QPushButton("Go absolute (mm)")
         self.mv_abs_pb.clicked.connect(self.mv_abs)
         self.gl.addWidget(self.mv_abs_pb, row, 1)
         row += 1
         
         self.rel_pos_le = QLineEdit('0.0')
         self.gl.addWidget(self.rel_pos_le, row, 0)
-        self.mv_rel_pb = QPushButton("Go relative (um)")
+        self.mv_rel_pb = QPushButton("Go relative (mm)")
         self.mv_rel_pb.clicked.connect(self.mv_rel)
         self.gl.addWidget(self.mv_rel_pb, row, 1)
         row += 1
@@ -182,7 +185,7 @@ class GstImager(Imager):
         self.image_ready.wait()
         self.gui.emit_log('Got image %s' % self.image_id)
         image = self.gui.capture_sink.pop_image(self.image_id)
-        factor = float(uscope_config['imager']['scalar'])
+        factor = float(uconfig['imager']['scalar'])
         # Use a reasonably high quality filter
         scaled = get_scaled(image, factor, Image.ANTIALIAS)
         #if not self.gui.dry():
@@ -196,7 +199,7 @@ class CNCGUI(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
         self.showMaximized()
-        self.uscope_config = uscope_config
+        self.uconfig = uconfig
 
         self.jog_run = None
         self.jog_running = {}
@@ -218,7 +221,7 @@ class CNCGUI(QMainWindow):
         
         # Must not be initialized until after layout is set
         self.gstWindowId = None
-        engine_config = self.uscope_config['imager']['engine']
+        engine_config = self.uconfig['imager']['engine']
         if engine_config == 'auto':
             if os.path.exists("/dev/video0"):
                 engine_config = 'gstreamer'
@@ -248,7 +251,7 @@ class CNCGUI(QMainWindow):
         
         self.home()
         
-        if self.uscope_config['cnc']['startup_run']:
+        if self.uconfig['cnc']['startup_run']:
             self.run()
         
     def __del__(self):
@@ -283,7 +286,7 @@ class CNCGUI(QMainWindow):
     
     def update_pos(self, pos):
         for axis, axis_pos in pos.iteritems():
-            self.axes[axis].pos_value.setText('%d' % axis_pos)
+            self.axes[axis].pos_value.setText('%0.3f' % axis_pos)
     
     def hal_progress(self, pos):
         self.emit(SIGNAL('pos'), pos)
@@ -306,18 +309,18 @@ class CNCGUI(QMainWindow):
         self.obj_cb.clear()
         self.obj_config = None
         self.obj_configi = None
-        for objective in self.uscope_config['objective']:
+        for objective in self.uconfig['objective']:
             self.obj_cb.addItem(objective['name'])
     
     def update_obj_config(self):
         '''Make resolution display reflect current objective'''
         self.obj_configi = self.obj_cb.currentIndex()
-        self.obj_config = self.uscope_config['objective'][self.obj_configi]
+        self.obj_config = self.uconfig['objective'][self.obj_configi]
         self.log('Selected objective %s' % self.obj_config['name'])
         #self.obj_mag.setText('Magnification: %0.2f' % self.obj_config["mag"])
 
-        im_w_pix = int(self.uscope_config['imager']['width'])
-        im_h_pix = int(self.uscope_config['imager']['height'])
+        im_w_pix = int(self.uconfig['imager']['width'])
+        im_h_pix = int(self.uconfig['imager']['height'])
         im_w_um = self.obj_config["x_view"]
         im_h_um = im_w_um * im_h_pix / im_w_pix
         self.obj_x_view.setText('X view (um): %0.3f' % im_w_um)
@@ -515,16 +518,17 @@ class CNCGUI(QMainWindow):
         self.cnc_thread.cmd('mv_abs', pos)
     
     def processCncProgress(self, pictures_to_take, pictures_taken, image, first):
-        dbg('Processing CNC progress')
+        #dbg('Processing CNC progress')
         if first:
-            dbg('First CB with %d items' % pictures_to_take)
+            #self.log('First CB with %d items' % pictures_to_take)
             self.pb.setMinimum(0)
             self.pb.setMaximum(pictures_to_take)
             self.bench = Benchmark(pictures_to_take)
         else:
-            dbg('took %s at %d / %d' % (image, pictures_taken, pictures_to_take))
+            #self.log('took %s at %d / %d' % (image, pictures_taken, pictures_to_take))
             self.bench.set_cur_items(pictures_taken)
-            self.log(str(self.bench))
+            self.log('Captured: %s' % (image,))
+            self.log('%s' % (str(self.bench)))
             
         self.pb.setValue(pictures_taken)
         
@@ -554,10 +558,11 @@ class CNCGUI(QMainWindow):
         if dry:
             dbg('Dry run checked')
         
+        
         imager = None
         if not dry:
             self.log('Loading imager...')
-            itype = self.uscope_config['imager']['engine']
+            itype = self.uconfig['imager']['engine']
             
             if itype == 'auto':
                 if os.path.exists('/dev/video0'):
@@ -578,10 +583,10 @@ class CNCGUI(QMainWindow):
                 image = ''
             self.cncProgress.emit(pictures_to_take, pictures_taken, image, first)
         
-        if not dry and not os.path.exists(self.uscope_config['out_dir']):
-            os.mkdir(self.uscope_config['out_dir'])
+        if not dry and not os.path.exists(self.uconfig['out_dir']):
+            os.mkdir(self.uconfig['out_dir'])
         
-        out_dir = os.path.join(self.uscope_config['out_dir'], str(self.job_name_le.text()))
+        out_dir = os.path.join(self.uconfig['out_dir'], str(self.job_name_le.text()))
         if os.path.exists(out_dir):
             self.log("job name dir %s already exists" % out_dir)
             return
@@ -602,7 +607,7 @@ class CNCGUI(QMainWindow):
                 'out_dir': out_dir,
                 
                 # Comprehensive config structure
-                'uscope': self.uscope_config,
+                'uscope': self.uconfig,
                 # Which objective to use in above config
                 'obj': self.obj_configi,
                 
@@ -640,7 +645,7 @@ class CNCGUI(QMainWindow):
         self.pt = None
         self.cnc_thread.hal.dry = False
         self.setControlsEnabled(True)
-        if self.uscope_config['cnc']['startup_run_exit']:
+        if self.uconfig['cnc']['startup_run_exit']:
             print 'Planner debug break on completion'
             os._exit(1)
     
@@ -669,7 +674,7 @@ class CNCGUI(QMainWindow):
             def get_go():
                 layout = QHBoxLayout()
                 
-                self.ret0_pb = QPushButton("Home all")
+                self.ret0_pb = QPushButton("Ret0 all")
                 self.ret0_pb.clicked.connect(self.ret0)
                 layout.addWidget(self.ret0_pb)
         
@@ -720,7 +725,7 @@ class CNCGUI(QMainWindow):
         gb = QGroupBox('Snapshot')
         layout = QGridLayout()
 
-        snapshot_dir = self.uscope_config['imager']['snapshot_dir']
+        snapshot_dir = self.uconfig['imager']['snapshot_dir']
         if not os.path.isdir(snapshot_dir):
             self.log('Snapshot dir %s does not exist' % snapshot_dir)
             if os.path.exists(snapshot_dir):
@@ -780,7 +785,7 @@ class CNCGUI(QMainWindow):
         while True:
             self.snapshot_serial += 1
             fn_base = '%s%03u' % (prefix, self.snapshot_serial)
-            fn_full = os.path.join(self.uscope_config['imager']['snapshot_dir'], fn_base + str(self.snapshot_suffix_le.text()))
+            fn_full = os.path.join(self.uconfig['imager']['snapshot_dir'], fn_base + str(self.snapshot_suffix_le.text()))
             print 'check %s' % fn_full
             if os.path.exists(fn_full):
                 dbg('Snapshot %s already exists, skipping' % fn_full)
@@ -819,11 +824,11 @@ class CNCGUI(QMainWindow):
             image = self.capture_sink.pop_image(image_id)
             txt = str(self.snapshot_fn_le.text()) + str(self.snapshot_suffix_le.text())
             
-            fn_full = os.path.join(self.uscope_config['imager']['snapshot_dir'], txt)
+            fn_full = os.path.join(self.uconfig['imager']['snapshot_dir'], txt)
             if os.path.exists(fn_full):
                 self.log('WARNING: refusing to overwrite %s' % fn_full)
                 return
-            factor = float(self.uscope_config['imager']['scalar'])
+            factor = float(self.uconfig['imager']['scalar'])
             # Use a reasonably high quality filter
             try:
                 get_scaled(image, factor, Image.ANTIALIAS).save(fn_full)
@@ -852,7 +857,7 @@ class CNCGUI(QMainWindow):
         layout.addWidget(self.pb, 1, 1)
         layout.addWidget(QLabel('Dry?'), 2, 0)
         self.dry_cb = QCheckBox()
-        self.dry_cb.setChecked(self.uscope_config['cnc']['dry'])
+        self.dry_cb.setChecked(self.uconfig['cnc']['dry'])
         layout.addWidget(self.dry_cb, 2, 1)
 
         self.pause_pb = QPushButton("Pause")

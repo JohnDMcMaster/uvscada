@@ -193,6 +193,9 @@ class MockHal(Hal):
                 # quicker gui updates by only updating it
                 progress({axis: self._pos[axis]})
             time.sleep(0.1)
+    
+    def ar_stop(self):
+        pass
 
 '''
 Legacy uvscada.mc adapter

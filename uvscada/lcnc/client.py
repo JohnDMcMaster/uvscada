@@ -25,7 +25,9 @@ class LCNCRPCCommand:
 
 class LCNCRPC:
     def __init__(self, host='localhost', port=PORT):
-        self.server = xmlrpclib.ServerProxy('http://%s:%d' % (host, port), allow_none=True)
+        url = 'http://%s:%d' % (host, port)
+        print url
+        self.server = xmlrpclib.ServerProxy(url, allow_none=True)
         for k, v in self.server.constants().iteritems():
             setattr(self, k, v)
 

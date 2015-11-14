@@ -51,9 +51,9 @@ class PlannerAxis(object):
                 # Desired image overlap
                 # Actual may be greater if there is more area
                 # than minimum number of pictures would support
-                req_overlap_percent, 
-                # How much the imager can see (in um)
-                view_units,
+                req_overlap, 
+                # How much the imager can see (in mm)
+                view_au,
                 # How much the imager can see (in pixels)
                 view_pix,
                 # start and end absolute positions (in um)
@@ -76,16 +76,16 @@ class PlannerAxis(object):
         Overlap of 1.0 means that images are all unique sections
         Overlap of 0.0 means never move and keep taking the same spot
         '''
-        self.req_overlap_percent = req_overlap_percent
+        self.req_overlap = req_overlap
         
         self.start = start
         # Requested end, not necessarily true end
         self.req_end = end
         self.end = end
-        if self.delta() < view_units:
-            self.log('Axis %s: delta %0.3f < view %0.3f, expanding end' % (self.name, self.delta(), view_units))
-            self.end = start + view_units
-        self.view_units = view_units
+        if self.delta() < view_au:
+            self.log('Axis %s: delta %0.3f < view %0.3f, expanding end' % (self.name, self.delta(), view_au))
+            self.end = start + view_au
+        self.view_au = view_au
 
         # Its actually less than this but it seems it takes some stepping
         # to get it out of the system
@@ -110,11 +110,11 @@ class PlannerAxis(object):
 
     def delta(self):
         '''Total distance that will actually be imaged'''
-        return self.end - self.start + 1
+        return self.end - self.start
                 
     def req_delta(self):
         '''Total distance that needs to be imaged (ie requested)'''
-        return self.req_end - self.start + 1
+        return self.req_end - self.start
                 
     def delta_pixels(self):
         return self.images_ideal() * self.view_pixels
@@ -126,9 +126,9 @@ class PlannerAxis(object):
         Remaining distance from the first image divided by
         how many pixels of each image are unique to the previously taken image when linear
         '''
-        if self.req_delta() <= self.view_units:
-            return 1.0 * self.req_delta() / self.view_units
-        ret = 1.0 + (self.req_delta() - self.view_units) / (self.req_overlap_percent * self.view_units)
+        if self.req_delta() <= self.view_au:
+            return 1.0 * self.req_delta() / self.view_au
+        ret = 1.0 + (self.req_delta() - self.view_au) / (self.req_overlap * self.view_au)
         if ret < 0:
             raise Exception('bad number of idea images %s' % ret)
         return ret
@@ -155,12 +155,12 @@ class PlannerAxis(object):
         if images_to_take == 1:
             return self.delta()
         else:
-            return (self.delta() - self.view_units) / (images_to_take - 1.0)
+            return (self.delta() - self.view_au) / (images_to_take - 1.0)
         
     def step_percent(self):
         '''Actual percentage we move to take the next picture'''
-        # Contrast with requested value self.req_overlap_percent
-        return self.step() / self.view_units
+        # Contrast with requested value self.req_overlap
+        return self.step() / self.view_au
         
     def points(self):
         step = self.step()
@@ -187,6 +187,7 @@ class Planner(object):
         self.dry = dry
         # os.path.join(config['cnc']['out_dir'], self.rconfig.job_name)
         self.out_dir = out_dir
+        self.img_sz = img_sz
         
         self.normal_running = threading.Event()
         self.normal_running.set()
@@ -199,7 +200,7 @@ class Planner(object):
             'y':{},
             }
         
-        ideal_overlap = 2.0 / 3.0
+        ideal_overlap = 0.7
         if 'overlap' in scan_config:
             ideal_overlap = float(scan_config['overlap'])
         # Maximum allowable overlap proportion error when trying to fit number of snapshots
@@ -346,34 +347,32 @@ class Planner(object):
                 self.notify_progress(img_fn)
         else:
             img_fn = self.img_fn()
-            self.take_picture(img_fn)        
-            self.notify_progress(img_fn)
-
+            self.take_picture(img_fn)
         self.xy_imgs += 1
+        self.notify_progress(img_fn)
     
     def validate_point(self, p):
         (cur_x, cur_y), (cur_row, cur_col) = p
         #self.log('xh: %g vs cur %g, yh: %g vs cur %g' % (xh, cur_x, yh, cur_y))
-        #do = False
-        #do = cur_x > 3048 and cur_y > 3143
-        x_tol = 3.0
-        y_tol = 3.0
-        xmax = cur_x + self.x.view_units
-        ymax = cur_y + self.y.view_units
+        au_tol = 0.005
+        # Basic sanity check
+        au_tol = self.y.view_au / 100
+        xmax = cur_x + self.x.view_au
+        ymax = cur_y + self.y.view_au
         
         fail = False
         
         if cur_col < 0 or cur_col >= self.x.images():
             self.log('Col out of range 0 <= %d <= %d' % (cur_col, self.x.images()))
             fail = True
-        if cur_x < self.x.start - x_tol or xmax > self.x.end + x_tol:
+        if cur_x < self.x.start - au_tol or xmax > self.x.end + au_tol:
             self.log('X out of range')
             fail = True
             
         if cur_row < 0 or cur_row >= self.y.images():
             self.log('Row out of range 0 <= %d <= %d' % (cur_row, self.y.images()))
             fail = True
-        if cur_y < self.y.start - y_tol or ymax > self.y.end + y_tol:
+        if cur_y < self.y.start - au_tol or ymax > self.y.end + au_tol:
             self.log('Y out of range')
             fail = True        
         
@@ -384,8 +383,8 @@ class Planner(object):
             self.log('  Row: %g' % cur_row)
             self.log('  Col: %g' % cur_col)
             raise Exception('Bad point (%g + %g = %g, %g + %g = %g) for range (%g, %g) to (%g, %g)' % (
-                    cur_x, self.x.view_units, xmax,
-                    cur_y, self.y.view_units, ymax,
+                    cur_x, self.x.view_au, xmax,
+                    cur_y, self.y.view_au, ymax,
                     self.x.start, self.y.start,
                     self.x.end, self.y.end))
     
@@ -458,20 +457,25 @@ class Planner(object):
         hal_dry_old = self.hal.dry
         self.max_mv = {'x': 0, 'y': 0}
         try:
-            self.hal.dry = self.dry
+            self.hal.set_dry(self.dry)
             self.comment('Generated by pr0ncnc on %s' % (time.strftime("%d/%m/%Y %H:%M:%S"),))
-            self.comment('x size: %f um / %d pix, y size: %f um / %d pix' % (self.x.delta(), self.x.delta_pixels(), self.y.delta(), self.y.delta_pixels()))
+            self.comment('Size: x %f um / %d pix, y %f um / %d pix' % (self.x.delta(), self.x.delta_pixels(), self.y.delta(), self.y.delta_pixels()))
             mp = self.x.delta_pixels() * self.y.delta_pixels() / (10**6)
+            imgr_mp = self.img_sz[0] * self.img_sz[0] / 1.e6
+            # uconfig['imager']['scalar']
+            imgr_scalar = 0.5
+            self.comment('Imager size: %0.1f MP (%dw x %dh) raw => %0.1f MP' % (imgr_mp, self.img_sz[0], self.img_sz[1], imgr_mp * imgr_scalar))
+
             if mp >= 1000:
                 self.comment('Image size: %0.1f GP' % (mp/1000,))
             else:
                 self.comment('Image size: %0.1f MP' % (mp,))
-            self.comment('x fov: %f, y fov: %f' % (self.x.view_units, self.y.view_units))
-            self.comment('x_step: %f, y_step: %f' % (self.x.step(), self.y.step()))
+            self.comment('fov: x %f, y %f' % (self.x.view_au, self.y.view_au))
+            self.comment('step: x %f, y %f' % (self.x.step(), self.y.step()))
             
             self.comment('pictures: %d' % self.pictures_to_take)
             self.comment()
-    
+            
             self.prepare_image_output()
             
             # Do initial backlash compensation
@@ -488,7 +492,7 @@ class Planner(object):
                     self.log('Planner unpaused')
                 
                 #self.log('', 3)
-                #self.comment('comp (%d, %d), pos (%f, %f)' % (self.x.comp, self.y.comp, cur_x, cur_y), 3)
+                self.comment('comp (%d, %d), pos (%f, %f)' % (self.x.comp, self.y.comp, cur_x, cur_y), 3)
     
                 self.mv_abs_backlash({'x':cur_x, 'y':cur_y})
                 self.take_pictures()
@@ -511,7 +515,8 @@ class Planner(object):
             if not self.dry:
                 self.write_meta()
         finally:
-            self.hal.dry = hal_dry_old
+            print 'Planner: restoring old dry'
+            self.hal.set_dry(hal_dry_old)
         
     def meta(self):
         '''Can only be called after run'''
