@@ -25,26 +25,6 @@ def dexit():
     print 'Debug break'
     sys.exit(0)
 
-def open_dev(usbcontext=None):
-    if usbcontext is None:
-        usbcontext = usb1.USBContext()
-    
-    print 'Scanning for devices...'
-    for udev in usbcontext.getDeviceList(skip_on_error=True):
-        vid = udev.getVendorID()
-        pid = udev.getProductID()
-        if (vid, pid) == (0x14b9, 0x0001):
-            print
-            print
-            print 'Found device'
-            print 'Bus %03i Device %03i: ID %04x:%04x' % (
-                udev.getBusNumber(),
-                udev.getDeviceAddress(),
-                vid,
-                pid)
-            return udev.open()
-    raise Exception("Failed to find a device")
-
 def fw_read(dev, target=4096):
     print 'Verifying firmware readback'
     # Generated from packet 381/382
