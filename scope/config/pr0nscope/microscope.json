@@ -4,8 +4,8 @@
     "scan_json": "scan.json",
     "cnc": {
         "!engine":  "auto",       
-        "engine": "mock",
-        "!engine": "lcnc-arpc",
+        "!engine": "mock",
+        "engine": "lcnc-arpc",
         "!dry":true,
         "mock":0,
         "out_dir":"out",
@@ -29,8 +29,8 @@
     },
     "imager": {
         "!engine":"mock",
-        "engine":"gstreamer-testsrc",
-        "!engine":"gstreamer",
+        "!engine":"gstreamer-testsrc",
+        "engine":"gstreamer",
         "snapshot_dir":"snapshot",
 		"width": 3264,
 		"height": 2448,
