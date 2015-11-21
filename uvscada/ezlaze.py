@@ -190,6 +190,19 @@ class EzLaze(object):
     # 1   -   Attenuator Setting         -  255
     # 2   -   X Marker Setting           -  255
     # 3   -   Y Marker Setting           -  255
+    
+    def shut_open(self):
+        self.cmd('2', 255)
+        time.sleep(0.1)
+        self.cmd('3', 255)
+        time.sleep(0.1)
+        
+    def shut_close(self):
+        self.cmd('2', 1)
+        time.sleep(0.1)
+        self.cmd('3', 1)
+        time.sleep(0.1)
+    
     # 4   -   Energy Setting             -  Hi
     # 5   -   Single Pulse or Cont       -  Pul
     # 6   -   Spot Marker Setting        -  Off
@@ -214,3 +227,4 @@ class EzLaze(object):
     # B   -   Filter Number Select       -  2
     # Q   -   Q-Switch On/Off            -  On
     # W   -   Warm Up Pulse Number       -  0
+

@@ -1,43 +1,9 @@
 import time
 import argparse
 import sys
-from uvscada.plx_usb import PUGpib
 
-class K2750(object):
-    def __init__(self, port='/dev/ttyUSB0', clr=True):
-        self.gpib = PUGpib(port=port, addr=16, clr=clr, eos=3, ser_timeout=1.0, gpib_timeout=0.9)
+from uvscada.k2750 import K2750
 
-    def tim_int(self):
-        '''Query timer interval'''
-        return float(self.gpib.snd_rcv('TRIGger:TIMer?'))
-
-    def local(self):
-        '''Go to local mode'''
-        # Error -113
-        self.gpib.snd('GTL')
-
-    def set_beep(self, en):
-        '''
-        You can disable the beeper for limits and continuity tests. However, when limits or CONT
-        is again selected, the beeper will automatically enable.
-        '''
-        if en:
-            self.gpib.snd("SYSTEM:BEEPER OFF")
-        else:
-            self.gpib.snd("SYSTEM:BEEPER ON")
-
-    def error(self):
-        '''Get next error from queue'''
-        return self.gpib.snd_rcv("SYSTEM:ERROR?")
-
-    def errors(self):
-        ret = []
-        while True:
-            e = self.error()
-            if e == '0,"No error"':
-                return ret
-            ret.append(e)
-        
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--port', default='/dev/ttyUSB0', help='GPIB serial port')

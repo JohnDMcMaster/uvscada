@@ -9,6 +9,7 @@ import time
 import sys
 #from PIL import Image
 import csv
+import datetime
 
 def main(hal, dmm, el):
     # 50x max ap size
@@ -31,13 +32,15 @@ def main(hal, dmm, el):
         hal.mv_abs({'x': -SPOT, 'y': row * SPOT})
         for col in xrange(cols):
             hal.mv_abs({'x': col * SPOT})
-            curr_close = dmm.curr()
+            curr_close = dmm.curr_dc()
+            # time?
             el.shut_open()
-            curr_open = dmm.curr()
+            time.sleep(0.5)
+            curr_open = dmm.curr_dc()
             el.shut_close()
             curr_delta = curr_open - curr_close
             cw.writerow([col, row, curr_close, curr_open, curr_delta])
-            print '%dc, %dr: %0.9f A' % (col, row, curr_delta)
+            print '%s %dc, %dr: %0.9f A' % (datetime.datetime.utcnow(), col, row, curr_delta)
 
     print 'Ret home'
     hal.mv_abs({'x': 0, 'y': 0})
@@ -67,6 +70,8 @@ if __name__ == "__main__":
         print 'Initializing laser'
         el = EzLaze(args.laser)
 
+        print
+        print 'Running'
         main(hal, dmm, el)
     finally:
         print 'Shutting down hal'
