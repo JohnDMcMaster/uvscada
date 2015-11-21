@@ -1,6 +1,4 @@
-import pycurl
 import time
-import os
 from uvscada.wps7 import WPS7
 import argparse
 
