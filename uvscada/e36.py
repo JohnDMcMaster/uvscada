@@ -7,6 +7,7 @@ http://cp.literature.agilent.com/litweb/pdf/E3646-90001.pdf
 import time
 import sys
 import datetime
+import serial
 
 class Timeout(Exception):
     pass
