@@ -9,7 +9,7 @@ class WPS7Exception(Exception):
 class WPS7:
     def __init__(self, host=None, user=None, pass_=None):
         # WPS7 defaults
-        self.host = host or '192.168.0.1'
+        self.host = host or os.getenv('WPS7_HOST', '192.168.0.1')
         self.user = user or os.getenv('WPS7_USER', 'admin')
         self.pass_ = pass_ or os.getenv('WPS7_PASS', '1234')
         self.verbose = 0

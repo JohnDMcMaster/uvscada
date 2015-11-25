@@ -11,7 +11,7 @@ if __name__ == '__main__':
     parser.add_argument('--hv', type=int, default=3, help='HV fire time')
     args = parser.parse_args()
 
-    wps = WPS7(host='energon')
+    wps = WPS7()
     
     try:
         print 'Warming filament %d sec...' % args.fil
