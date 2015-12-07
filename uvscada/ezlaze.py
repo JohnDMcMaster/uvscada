@@ -188,20 +188,49 @@ class EzLaze(object):
         return self.query('@')
 
     # 1   -   Attenuator Setting         -  255
-    # 2   -   X Marker Setting           -  255
-    # 3   -   Y Marker Setting           -  255
+
+    
+    '''
+    On my unit
+    x begins to open around 23
+    y begins to open around 29
+    Also theres a fair amount of backlash
+    Hmm still not square
+    adjusted visually at w=8
+    '''
+    def shut_square(self, w):
+        self.shut(x=1, y=1)
+        self.shut(x=(w + 16), y=(w + 29))
     
     def shut_open(self):
-        self.cmd('2', 255)
-        time.sleep(0.1)
-        self.cmd('3', 255)
-        time.sleep(0.1)
+        self.shut(xy=255)
         
     def shut_close(self):
-        self.cmd('2', 1)
-        time.sleep(0.1)
-        self.cmd('3', 1)
-        time.sleep(0.1)
+        self.shut(xy=1)
+
+    # 2   -   X Marker Setting           -  255
+    # 3   -   Y Marker Setting           -  255
+    def shut(self, xy=None, x=None, y=None):
+        if xy is not None:
+            x = xy
+            y = xy
+
+        # Seems that some delay is required for it to reliably take the next command
+        # although it does seem to do some queuing
+        # shutter also takes some time to move
+        # (not fully accounted for here)
+        
+        if x is not None:
+            if not 1 <= x <= 255:
+                raise ValueError("Require 1 <= x=%d <= 255" % x)
+            self.cmd('2', x)
+            time.sleep(0.1)
+        
+        if y is not None:
+            if not 1 <= y <= 255:
+                raise ValueError("Require 1 <= y=%d <= 255" % y)
+            self.cmd('3', y)
+            time.sleep(0.1)
     
     # 4   -   Energy Setting             -  Hi
     # 5   -   Single Pulse or Cont       -  Pul

@@ -44,8 +44,7 @@ class K2750(object):
     def volt_dc_ex(self):
         if self.func != 'VOLT:DC':
             self.gpib.snd(":FUNC 'VOLT:DC'")
-            # Seems to take at least 0.1 sec
-            time.sleep(0.15)
+            time.sleep(0.20)
             self.func = 'VOLT:DC'
         if self.volt_dc_re is None:
             # -1.25629986E-02VDC,+2319.404SECS,+10155RDNG#
@@ -68,7 +67,8 @@ class K2750(object):
         if self.func != 'CURR:DC':
             self.gpib.snd(":FUNC 'CURR:DC'")
             # Seems to take at least 0.1 sec
-            time.sleep(0.15)
+            # had problems with 0.15
+            time.sleep(0.20)
             self.func = 'CURR:DC'
         if self.curr_dc_re is None:
             # -4.15096054E-07ADC,+5064.727SECS,+22239RDNG#
@@ -85,3 +85,4 @@ class K2750(object):
 
     def curr_dc(self):
         return self.curr_dc_ex()["ADC"]
+

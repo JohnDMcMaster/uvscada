@@ -3,6 +3,7 @@
 from uvscada.cnc_hal import lcnc_ar
 from uvscada.ezlaze import EzLaze
 from uvscada.k2750 import K2750
+from uvscada.benchmark import time_str
 
 import argparse
 import time
@@ -10,41 +11,70 @@ import sys
 #from PIL import Image
 import csv
 import datetime
+import os
 
 def main(hal, dmm, el):
     # 50x max ap size
     # Very approx
-    SPOT = 0.06
+    #SPOT = 0.06
+
+    shut_open = el.shut_open
+    if 0:
+        # 10x
+        SPOT = 0.3
+        el.shut_square(args.square)
+    if 1:
+        # 10x reduced
+        SPOT = 0.05
+        # From trial and error
+        def shut_open():
+            el.shut_square(30)
     
     hal.mv_abs({'x': -SPOT, 'y': -SPOT})
     
-    cwf = open('pwrmap.csv', 'wb')
-    cw = csv.writer(cwf)
-    cw.writerow(["col", "row", "close", "open", "delta"])
+    if not args.dry:
+        cwf = open(args.fout, 'wb')
+        cw = csv.writer(cwf)
+        cw.writerow(["t", "col", "row", "close", "open", "delta"])
     
-    rows = 4
-    cols = 4
+    cols = int(4.6 / SPOT)
+    rows = int(3.8 / SPOT)
+    tpic = 2.3
+    npic = cols * rows
+    print 'Taking %dc x %dr => %d pics => ETA %s' % (cols, rows, npic, time_str(tpic * npic))
+    tstart = time.time()
     
     # Takes some time to settle
     # Close early
     el.shut_close()
+    posi = 0
     for row in xrange(rows):
         hal.mv_abs({'x': -SPOT, 'y': row * SPOT})
         for col in xrange(cols):
+            posi += 1
             hal.mv_abs({'x': col * SPOT})
-            curr_close = dmm.curr_dc()
-            # time?
-            el.shut_open()
-            time.sleep(0.5)
-            curr_open = dmm.curr_dc()
-            el.shut_close()
-            curr_delta = curr_open - curr_close
-            cw.writerow([col, row, curr_close, curr_open, curr_delta])
-            print '%s %dc, %dr: %0.9f A' % (datetime.datetime.utcnow(), col, row, curr_delta)
-
+            if args.dry:
+                continue
+            print 'Taking %d / %d' % (posi, npic)
+            for i in xrange(8):
+                curr_close = dmm.curr_dc()
+                # Time to open shutter?  Time to have effect?
+                # Seems to power drift quick so think quicker => generally better
+                shut_open()
+                time.sleep(0.2)
+                curr_open = dmm.curr_dc()
+                el.shut_close()
+                curr_delta = curr_open - curr_close
+                cw.writerow([time.time(), col, row, curr_close, curr_open, curr_delta])
+                cwf.flush()
+                print '%s %dc, %dr: %0.9f A' % (datetime.datetime.utcnow(), col, row, curr_delta)
     print 'Ret home'
     hal.mv_abs({'x': 0, 'y': 0})
     print 'Movement done'
+    # Convenient to be open at end to retarget
+    shut_open()
+    tend = time.time()
+    print 'Took %s' % time_str(tend - tstart)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Use ezlaze with LinuxCNC to carve a bitmap')
@@ -52,9 +82,12 @@ if __name__ == "__main__":
     parser.add_argument('--laser', default='/dev/ttyUSB1', help='ezlaze serial port')
     parser.add_argument('--host', default='mk-bs', help='LinuxCNC host')
     parser.add_argument('--dry', action='store_true', help='Dry run')
-    #parser.add_argument('fout', help='Store data to')
+    parser.add_argument('fout', nargs='?', default='pwrmap.csv', help='Store data to')
     args = parser.parse_args()
 
+    if os.path.exists(args.fout):
+        raise Exception("Refusing to overwrite")
+    
     hal = None
     try:
         print

@@ -6,6 +6,17 @@ Copyright 2010 John McMaster
 
 import time
 
+def time_str(delta):
+    fraction = delta % 1
+    delta -= fraction
+    delta = int(delta)
+    seconds = delta % 60
+    delta /= 60
+    minutes = delta % 60
+    delta /= 60
+    hours = delta
+    return '%02d:%02d:%02d.%04d' % (hours, minutes, seconds, fraction * 10000)
+
 class Benchmark:
     start_time = None
     end_time = None
@@ -31,18 +42,6 @@ class Benchmark:
     def set_cur_items(self, n):
         self.cur_items = n
 		
-    @staticmethod
-    def time_str(delta):
-        fraction = delta % 1
-        delta -= fraction
-        delta = int(delta)
-        seconds = delta % 60
-        delta /= 60
-        minutes = delta % 60
-        delta /= 60
-        hours = delta
-        return '%02d:%02d:%02d.%04d' % (hours, minutes, seconds, fraction * 10000)
-    
     def delta_s(self):    
         if self.end_time:
             return self.end_time - self.start_time
@@ -51,7 +50,7 @@ class Benchmark:
     
     def __str__(self):
         if self.end_time:
-            return self.time_str(self.end_time - self.start_time)
+            return time_str(self.end_time - self.start_time)
         elif self.max_items:
             cur_time = time.time()
             delta_t = cur_time - self.start_time
@@ -63,10 +62,10 @@ class Benchmark:
                     eta_str = 'inf'
                 else:
                     remaining = (self.max_items - self.cur_items) / rate
-                    eta_str = self.time_str(remaining)
+                    eta_str = time_str(remaining)
             else:
                 eta_str = "indeterminate"
             return '%d / %d, ETA: %s @ %s' % (self.cur_items, self.max_items, eta_str, rate_s)
         else:
-            return self.time_str(time.time() - self.start_time)
+            return time_str(time.time() - self.start_time)
 
