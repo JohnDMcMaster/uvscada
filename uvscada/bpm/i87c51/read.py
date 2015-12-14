@@ -403,7 +403,7 @@ def replay1(dev, cont=True):
         if buff == "\x59\x00":
             raise Exception("Failed 0x8B health check")
         else:
-            validate_read("\x58\x00", buff)
+            validate_read("\x58\x00", buff, "")
 
     # Atomic
     # Generated from packet 321/322
