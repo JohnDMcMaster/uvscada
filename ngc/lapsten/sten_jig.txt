@@ -1,0 +1,46 @@
+G3: CCW
+
+G90
+G0 X1.875
+G3 I Z-0.05 F1
+
+2.75" D
+1.375" R
+
+1.875 - 1.375 - 1/8/2
+0.4375
+G0 X0.4375 Y1.875
+
+actual arc R is R + EM/2
+1.375 + 1/8/2 = 1.4375
+G3 I1.438 Z-0.05 F1
+
+
+cut with 1/8" 2 flut carbide endmill
+near max speed on low speed range
+final g-code
+    (Start at left)
+    (X: center - R + EM/2)
+    (1.875 - 1.375 + 1/8/2)
+    (Y: center)
+    G0 Z0.75
+    G0 X0.5625 Y1.875
+    (I: R - EM/2)
+    (1.375 - 1/8/2)
+    G0 Z0.05
+    G1 Z0.001 F1
+    G3 I1.313 Z-0.05 F2
+    G3 I1.313 Z-0.10 F2
+    G3 I1.313 Z-0.15 F2
+    G3 I1.313 Z-0.20 F2
+    G3 I1.313 Z-0.25 F2
+    G1 Z-0.28 F1
+    G3 I1.313 F2
+hole cycle
+    G0 X0.300 Y1.125
+    G0 X0.300 Y2.625
+    G0 X3.450 Y2.625
+    G0 X3.450 Y1.125
+
+
+
