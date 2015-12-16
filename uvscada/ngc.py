@@ -1,3 +1,9 @@
+# http://linuxcnc.org/docs/html/gcode.html
+
+'''
+Think I should take more of a matplotlib approach with global module state
+'''
+
 class CNC(object):
     def __init__(self, em=1./8):
         self._em = em
@@ -6,6 +12,7 @@ class CNC(object):
         self._clear_zn = -0.020
         self._fr = 2.0
         self._fr_z = 1.0
+        print '(Endmill: %0.4f)' % self._em
     
     def clear_z(self):
         print 'G1 Z%0.3f F%0.3f' % (self._clear_zps, self._fr_z)
@@ -43,8 +50,9 @@ class CNC(object):
         print 'G0 X%0.3f Y%0.3f' % (x, y)
 
     # Cut rectangle with upper left coordinate given
-    def rect_slot_ul(self, x, y, w, h, comment=True):
-        if comment:
+    # Cutter centered on rectangle
+    def rect_slot_ul(self, x, y, w, h, com=True):
+        if com:
             print
             print '(rect_slot X%0.3f Y%0.3f W%0.3f H%0.3f)' % (x, y, w, h)
         self.xy_g0(x, y)
@@ -57,10 +65,31 @@ class CNC(object):
         
     # Cut rectangle, compensating to cut inside of it
     # Endmill is assumed to be square
-    def rect_in_ul(self, x, y, w, h):
+    def rect_in_ul(self, x, y, w, h, finishes=1):
         print
         print '(rect_in X%0.3f Y%0.3f W%0.3f H%0.3f)' % (x, y, w, h)
-        self.rect_slot_ul(x + self._em/2, y + self._em/2, w - self._em, h - self._em, comment=False)
+        # Roughing pass
+        if finishes:
+            if finishes != 1:
+                raise Exception("FIXME")
+            finish_u = 0.005
+            self.rect_slot_ul(x + self._em/2 + finish_u, y + self._em/2 + finish_u, w - self._em - finish_u, h - self._em - finish_u, com=False)
+        # Finishing pass
+        self.rect_slot_ul(x + self._em/2, y + self._em/2, w - self._em, h - self._em, com=False)
+
+    '''
+    G2: clockwise arc
+    G3: counterclockwise arc
+    ''' 
+    def circ_cent_slot(self, x, y, r, cw=False, com=True, clear=True):
+        if com:
+            print
+            print '(circ_cent_slot X%0.3f Y%0.3f R%0.3f)' % (x, y, r)
+        # Arbitrarily start at left
+        self.xy_g0(x - r - self._em, y)
+        self.clear_zn()
+        print 'G3 I%0.3f F%0.3f' % (r, self._fr)
+        self.clear_zq()
 
     # Cut circle centered at x, y 
     # Leaves a hole the size of r
@@ -71,14 +100,16 @@ class CNC(object):
 
     # Cut circle centered at x, y 
     # Leaves a cylinder the size of r
-    def circ_cent_out(self, x, y, r):
+    def circ_cent_out(self, x, y, r, finishes=1):
         print
         print '(circ_cent_out X%0.3f Y%0.3f R%0.3f)' % (x, y, r)
-        # Arbitrarily start at left
-        self.xy_g0(x - r - self._em, y)
-        self.clear_zn()
-        print 'G3 I%0.3f F%0.3f' % (r - self._em, self._fr)
-        self.clear_zq()
+        # Roughing pass
+        if finishes:
+            if finishes != 1:
+                raise Exception("FIXME")
+            finish_u = 0.005
+            self.circ_cent_slot(x, y, r - self._em - finish_u, cw=True, com=False)
+        self.circ_cent_slot(x, y, r - self._em, cw=False, com=False)
     
     def end(self):
         print
