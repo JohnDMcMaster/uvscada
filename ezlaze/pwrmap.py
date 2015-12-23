@@ -144,6 +144,71 @@ def main2(hal, dmm, el):
     tend = time.time()
     print 'Took %s' % time_str(tend - tstart)
 
+def main3(hal, dmm, el):
+    # 50x max ap size
+    # Very approx
+    #SPOT = 0.06
+
+    shut_open = el.shut_open
+    if 0:
+        # 10x
+        SPOT = 0.3
+        el.shut_square(args.square)
+    if 1:
+        # 10x reduced
+        SPOT = 0.05
+        # From trial and error
+        def shut_open():
+            el.shut_square(30, quick=True)
+    
+    hal.mv_abs({'x': -SPOT, 'y': -SPOT})
+    
+    if not args.dry:
+        cwf = open(args.fout, 'wb')
+    
+    cols = int(4.6 / SPOT)
+    rows = int(3.8 / SPOT)
+    tpic = 2.3
+    npic = cols * rows
+    print 'Taking %dc x %dr => %d pics => ETA %s' % (cols, rows, npic, time_str(tpic * npic))
+    tstart = time.time()
+    
+    # Takes some time to settle
+    # Close early
+    el.shut_close()
+    for row in xrange(rows):
+        hal.mv_abs({'x': -SPOT, 'y': row * SPOT})
+        for col in xrange(cols):
+            hal.mv_abs({'x': col * SPOT})
+            if args.dry:
+                continue
+            print '%s %dc, %dr: ' % (datetime.datetime.utcnow(), col, row)
+
+            closed = []
+            for i in xrange(4):
+                t = time.time()
+                closed.append((t, dmm.curr_dc()))
+            
+            shut_open()
+            opened = []
+            ts = time.time()
+            while time.time() - ts < 10.0:
+                t = time.time()
+                curr = dmm.curr_dc()
+                opened.append((t, curr))
+            print '  Samples: %d' % len(opened)
+            cwf.write(repr({'col': col, 'row': row, 'open': opened, 'close': closed}) + '\n')
+            el.shut_close()
+            cwf.flush()
+
+    print 'Ret home'
+    hal.mv_abs({'x': 0, 'y': 0})
+    print 'Movement done'
+    # Convenient to be open at end to retarget
+    shut_open()
+    tend = time.time()
+    print 'Took %s' % time_str(tend - tstart)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Use ezlaze with LinuxCNC to carve a bitmap')
     parser.add_argument('--dmm', default='/dev/serial/by-id/usb-Prologix_Prologix_GPIB-USB_Controller_PX8ZBY4W-if00-port0', help='K2750 serial port')
@@ -173,7 +238,7 @@ if __name__ == "__main__":
 
         print
         print 'Running'
-        main2(hal, dmm, el)
+        main3(hal, dmm, el)
     finally:
         print 'Shutting down hal'
         if hal:

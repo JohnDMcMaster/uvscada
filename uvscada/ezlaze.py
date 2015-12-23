@@ -198,9 +198,10 @@ class EzLaze(object):
     Hmm still not square
     adjusted visually at w=8
     '''
-    def shut_square(self, w):
-        self.shut(x=1, y=1)
-        self.shut(x=(w + 16), y=(w + 29))
+    def shut_square(self, w, quick=False):
+        if not quick:
+            self.shut(x=1, y=1)
+        self.shut(x=(w + 16), y=(w + 29), quick=quick)
     
     def shut_open(self):
         self.shut(xy=255)
@@ -210,7 +211,7 @@ class EzLaze(object):
 
     # 2   -   X Marker Setting           -  255
     # 3   -   Y Marker Setting           -  255
-    def shut(self, xy=None, x=None, y=None):
+    def shut(self, xy=None, x=None, y=None, quick=False):
         if xy is not None:
             x = xy
             y = xy
@@ -224,13 +225,15 @@ class EzLaze(object):
             if not 1 <= x <= 255:
                 raise ValueError("Require 1 <= x=%d <= 255" % x)
             self.cmd('2', x)
-            time.sleep(0.1)
+            if not quick:
+                time.sleep(0.1)
         
         if y is not None:
             if not 1 <= y <= 255:
                 raise ValueError("Require 1 <= y=%d <= 255" % y)
             self.cmd('3', y)
-            time.sleep(0.1)
+            if not quick:
+                time.sleep(0.1)
     
     # 4   -   Energy Setting             -  Hi
     # 5   -   Single Pulse or Cont       -  Pul
