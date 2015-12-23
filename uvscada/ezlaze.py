@@ -251,8 +251,23 @@ class EzLaze(object):
             time.sleep(1)
     
     # 8   -   Wavelength Select          -  GRN
+    
     # 9   -   Number of Shots in Burst   -  1
+    # 9 - Number of Shots in Burst (1 - 60) = 60
+    # 5 hz => 12 sec
+    # seems to be able to do two bursts close to each other
+    # suspect sleep 12 
+    def burst(self, n):
+        if n < 1 or n > 60:
+            raise ValueError("Require 1 <= %d <= 60") % n
+        self.cmd('9', n)
+    
     # A   -   Pulse Rate (Hz)            -  5
+    def pulse_rate(self, hz):
+        if hz < 1 or hz > 5:
+            raise ValueError("Require 1 <= %d <= 5") % hz
+        self.cmd('A', hz)
+    
     # B   -   Filter Number Select       -  2
     # Q   -   Q-Switch On/Off            -  On
     # W   -   Warm Up Pulse Number       -  0
