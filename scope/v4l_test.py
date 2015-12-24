@@ -335,62 +335,42 @@ def test_VIDIOC_S_CTRL(fd):
 
 # Return name of all controls
 def ctrls(fd):
-    cap = v4l2.v4l2_capability()
-    fcntl.ioctl(fd, v4l2.VIDIOC_QUERYCAP, cap)
-  
     ret = []
-    def test_set_control(fd, input_or_output):
-        for queryctrl in get_device_controls(fd):
-            if queryctrl.flags & v4l2.V4L2_CTRL_FLAG_DISABLED:
-                continue
-            ret.append(queryctrl.name)
-    foreach_device_input(fd, test_set_control)
+    for queryctrl in get_device_controls(fd):
+        if queryctrl.flags & v4l2.V4L2_CTRL_FLAG_DISABLED:
+            continue
+        ret.append(queryctrl.name)
     return ret
 
 def ctrl_get(fd, name):
-    cap = v4l2.v4l2_capability()
-    fcntl.ioctl(fd, v4l2.VIDIOC_QUERYCAP, cap)
-  
-    ret = []
-    def test_set_control(fd, input_or_output):
-        for queryctrl in get_device_controls(fd):
-            if queryctrl.flags & v4l2.V4L2_CTRL_FLAG_DISABLED:
-                continue
-
-            if queryctrl.name != name:
-                continue
-            
-            control = v4l2.v4l2_control(queryctrl.id)
-            fcntl.ioctl(fd, v4l2.VIDIOC_G_CTRL, control)
-            ret.append(control.value)
-  
-    # general test
-    foreach_device_input(fd, test_set_control)
+    for queryctrl in get_device_controls(fd):
+        if queryctrl.flags & v4l2.V4L2_CTRL_FLAG_DISABLED:
+            continue
+        if queryctrl.name != name:
+            continue
+        
+        control = v4l2.v4l2_control(queryctrl.id)
+        fcntl.ioctl(fd, v4l2.VIDIOC_G_CTRL, control)
+        return control.value
     
-    if len(ret) == 0:
-        raise ValueError("Failed to find control")
-    return ret[0]
+    raise ValueError("Failed to find control %s" % name)
 
 def ctrl_set(fd, name, value):
-    cap = v4l2.v4l2_capability()
-    fcntl.ioctl(fd, v4l2.VIDIOC_QUERYCAP, cap)
-  
-    def test_set_control(fd, input_or_output):
-        for queryctrl in get_device_controls(fd):
-            if queryctrl.flags & v4l2.V4L2_CTRL_FLAG_DISABLED:
-                continue
+    for queryctrl in get_device_controls(fd):
+        if queryctrl.flags & v4l2.V4L2_CTRL_FLAG_DISABLED:
+            continue
 
-            #print 'Ctrl: %s' % queryctrl.name
-            if queryctrl.name != name:
-                continue
-            
-            if value < queryctrl.minimum or value > queryctrl.maximum:
-                raise ValueError("Require %d <= %d <= %d" % (queryctrl.minimum, value, queryctrl.maximum))
-  
-            control = v4l2.v4l2_control(queryctrl.id, value)
-            fcntl.ioctl(fd, v4l2.VIDIOC_S_CTRL, control)
-  
-    foreach_device_input(fd, test_set_control)
+        #print 'Ctrl: %s' % queryctrl.name
+        if queryctrl.name != name:
+            continue
+        
+        if value < queryctrl.minimum or value > queryctrl.maximum:
+            raise ValueError("Require %d <= %d <= %d" % (queryctrl.minimum, value, queryctrl.maximum))
+
+        control = v4l2.v4l2_control(queryctrl.id, value)
+        fcntl.ioctl(fd, v4l2.VIDIOC_S_CTRL, control)
+        return
+    raise ValueError("Failed to find control %s" % name)
   
 '''
     Control: Red Balance
@@ -403,9 +383,9 @@ def ctrl_set(fd, name, value):
       Range: 0 - 800
 '''
 print 'Setting stuff'
-ctrl_set(vd, 'Red Balance', 512)
-ctrl_set(vd, 'Blue Balance', 512)
-ctrl_set(vd, 'Gain', 256)
+ctrl_set(vd, 'Red Balance', 513)
+ctrl_set(vd, 'Blue Balance', 514)
+ctrl_set(vd, 'Gain', 250)
 
 print 'Controls'
 for ctrl in ctrls(vd):
