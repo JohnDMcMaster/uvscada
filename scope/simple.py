@@ -24,7 +24,12 @@ class CNCGUI(QMainWindow):
         engine_config = 'gstreamer'
         if engine_config == 'gstreamer':
             self.source = gst.element_factory_make("v4l2src", "vsource")
+            
             self.source.set_property("device", "/dev/video0")
+            print 'FD', self.source.get_property("device-fd")
+            #self.fd = open('/dev/video0', 'rw')
+            #self.source.set_property("uri", 'fd://%s' % self.fd.fileno())
+            
             self.setupGst()
         elif engine_config == 'gstreamer-testsrc':
             self.source = gst.element_factory_make("videotestsrc", "video-source")
@@ -83,6 +88,29 @@ class CNCGUI(QMainWindow):
     
     def on_message(self, bus, message):
         t = message.type
+        
+        #print dir(self.source)
+        #print self.source.props
+        fd = self.source.get_property("device-fd")
+        if 0 and fd != -1:
+            '''
+            FD 10
+            <flags GST_MESSAGE_STATE_CHANGED of type GstMessageType>
+            <gst.Message GstMessageState, old-state=(GstState)GST_STATE_NULL, new-state=(GstState)GST_STATE_READY, pending-state=(GstState)GST_STATE_VOID_PENDING; from sinkx_overview at 0x1e4ab80>
+            
+            ['__class__', '__cmp__', '__delattr__', '__dict__', '__doc__', '__format__', '__getattribute__', '__grefcount__', '__gstminiobject_init__', '__gtype__', '__hash__', 
+            '__init__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'copy', 'flags', 'parse_async_start', 
+            'parse_buffering', 'parse_buffering_stats', 'parse_clock_lost', 'parse_clock_provide', 'parse_duration', 'parse_error', 'parse_info', 'parse_new_clock', 'parse_qos',
+            'parse_qos_stats', 'parse_qos_values', 'parse_request_state', 'parse_segment_done', 'parse_segment_start', 'parse_state_changed', 'parse_step_done', 'parse_step_start', 
+            'parse_stream_status', 'parse_structure_change', 'parse_tag', 'parse_tag_full', 'parse_warning', 'set_buffering_stats', 'set_qos_stats', 'set_qos_values', 'set_seqnum', 
+            'src', 'structure', 'timestamp', 'type']
+            '''
+            print 'FD', fd
+            print t
+            print message
+            print dir(message)
+            sys.exit(1)
+        
         if t == gst.MESSAGE_EOS:
             self.player.set_state(gst.STATE_NULL)
             print "End of stream"
@@ -90,7 +118,8 @@ class CNCGUI(QMainWindow):
             err, debug = message.parse_error()
             print "Error: %s" % err, debug
             self.player.set_state(gst.STATE_NULL)
-            ''
+        #else:
+        #    print t
 
     def on_sync_message(self, bus, message):
         if message.structure is None:
