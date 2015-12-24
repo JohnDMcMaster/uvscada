@@ -34,7 +34,13 @@
         "snapshot_dir":"snapshot",
 		"width": 3264,
 		"height": 2448,
-		"scalar": 0.5
+		"scalar": 0.5,
+		"v4l2": {
+            "Red Balance":  170,
+            "Gain":         165,
+            "Blue Balance": 325,
+            "Exposure":     30
+		}
     },
     "objective": [
 		{
