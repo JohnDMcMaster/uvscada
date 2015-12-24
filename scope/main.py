@@ -10,6 +10,7 @@ from uvscada.cnc_hal import lcnc_ar
 from uvscada.cnc_hal import lcnc as lcnc_hal
 from uvscada.lcnc.client import LCNCRPC
 from uvscada import gst_util
+from uvscada.v4l2_util import ctrl_set
 
 from threads import CncThread, PlannerThread
 from cStringIO import StringIO
@@ -219,6 +220,8 @@ class CNCGUI(QMainWindow):
         self.connect(self.cnc_thread, SIGNAL('log'), self.log)
         self.initUI()
         
+        self.vid_fd = None
+        
         # Must not be initialized until after layout is set
         self.gstWindowId = None
         engine_config = self.uconfig['imager']['engine']
@@ -231,6 +234,7 @@ class CNCGUI(QMainWindow):
         if engine_config == 'gstreamer':
             self.source = gst.element_factory_make("v4l2src", "vsource")
             self.source.set_property("device", "/dev/video0")
+            self.vid_fd = -1
             self.setupGst()
         elif engine_config == 'gstreamer-testsrc':
             self.source = gst.element_factory_make("videotestsrc", "video-source")
@@ -471,6 +475,14 @@ class CNCGUI(QMainWindow):
     
     def on_message(self, bus, message):
         t = message.type
+
+        if self.vid_fd is not None and self.vid_fd < 0:
+            self.vid_fd = self.source.get_property("device-fd")
+            if self.vid_fd >= 0:
+                print 'Initializing V4L controls'
+                for k, v in uconfig["imager"].get("v4l2", {}).iteritems():
+                    ctrl_set(self.vid_fd, k, v)
+        
         if t == gst.MESSAGE_EOS:
             self.player.set_state(gst.STATE_NULL)
             print "End of stream"
@@ -478,11 +490,6 @@ class CNCGUI(QMainWindow):
             err, debug = message.parse_error()
             print "Error: %s" % err, debug
             self.player.set_state(gst.STATE_NULL)
-        else:
-            #print 'Other message: %s' % t
-            # Deadlocks upon calling this...
-            #print 'Cur state %s' % self.player.get_state()
-            ''
 
     def on_sync_message(self, bus, message):
         if message.structure is None:
