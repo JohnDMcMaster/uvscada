@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+from config import get_config
+from uvscada.v4l2_util import ctrl_set
+
 from PyQt4 import Qt
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
@@ -18,6 +21,8 @@ import gst
 
 import StringIO
 from PIL import Image
+
+uconfig = get_config()
 
 '''
 Do not encode images in gstreamer context or it brings system to halt
@@ -142,8 +147,11 @@ class ImageProcessor(QThread):
 class CNCGUI(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
+        self.showMaximized()
 
         self.initUI()
+
+        self.vid_fd = None
         
         # Must not be initialized until after layout is set
         self.gstWindowId = None
@@ -151,6 +159,7 @@ class CNCGUI(QMainWindow):
         if engine_config == 'gstreamer':
             self.source = gst.element_factory_make("v4l2src", "vsource")
             self.source.set_property("device", "/dev/video0")
+            self.vid_fd = -1
             self.setupGst()
         elif engine_config == 'gstreamer-testsrc':
             self.source = gst.element_factory_make("videotestsrc", "video-source")
@@ -195,6 +204,30 @@ class CNCGUI(QMainWindow):
         
         layout = QHBoxLayout()
         layout.addLayout(low_res_layout())
+        return layout
+
+    def get_ctrl_layout(self):
+
+        layout = QGridLayout()
+        row = 0
+        
+        self.ctrls = {}
+        for name in ("Red Balance", "Gain", "Blue Balance", "Exposure"):
+            def textChanged(name):
+                def f():
+                    if self.vid_fd >= 0:
+                        val = int(self.ctrls[name].text())
+                        print '%s changed => %d' % (name, val)
+                        ctrl_set(self.vid_fd, name, val)
+                return f
+        
+            layout.addWidget(QLabel(name), row, 0)
+            ctrl = QLineEdit('0')
+            ctrl.textChanged.connect(textChanged(name))
+            self.ctrls[name] = ctrl
+            layout.addWidget(ctrl, row, 1)
+            row += 1
+        
         return layout
     
     def get_rgb_layout(self):
@@ -266,6 +299,17 @@ class CNCGUI(QMainWindow):
     
     def on_message(self, bus, message):
         t = message.type
+        
+        if self.vid_fd is not None and self.vid_fd < 0:
+            self.vid_fd = self.source.get_property("device-fd")
+            if self.vid_fd >= 0:
+                print 'Initializing V4L controls'
+                for k, v in uconfig["imager"].get("v4l2", {}).iteritems():
+                    if k in self.ctrls:
+                        self.ctrls[k].setText(str(v))
+                    else:
+                        ctrl_set(self.vid_fd, k, v)
+        
         if t == gst.MESSAGE_EOS:
             self.player.set_state(gst.STATE_NULL)
             print "End of stream"
@@ -297,6 +341,7 @@ class CNCGUI(QMainWindow):
         # top layout
         layout = QHBoxLayout()
         
+        layout.addLayout(self.get_ctrl_layout())
         layout.addLayout(self.get_rgb_layout())
         layout.addLayout(self.get_video_layout())
         
