@@ -14,6 +14,9 @@ class CNC(object):
         self._fr_z = 1.0
         print '(Endmill: %0.4f)' % self._em
     
+    def g0(self, x, y):
+        print 'G0 X%0.3f Y%0.3f' % (x, y)
+    
     def clear_z(self):
         print 'G1 Z%0.3f F%0.3f' % (self._clear_zps, self._fr_z)
         print 'G0 Z%0.3f' % self._clear_zp
