@@ -1,10 +1,10 @@
 from uvscada.ngc import CNC
 
 cnc = CNC(em=0.0472)
-D = 0.25
+D = 0.27
 cnc._clear_zn = -0.05
 cnc._fr = 0.15
-cnc._fr_z = 0.1
+cnc._fr_z = 0.05
 
 print '(Machine centered on window)'
 print 'G90'
