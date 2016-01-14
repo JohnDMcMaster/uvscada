@@ -13,7 +13,7 @@
         "steps_per_um": 8.510,
         "steps_per_um": 212.75,
         "lcnc": {
-            "host": "mk-ps"
+            "host": "mk"
         },
         "axes": {
             "x": {

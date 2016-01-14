@@ -477,6 +477,9 @@ class Planner(object):
             self.comment()
             
             self.prepare_image_output()
+
+            if not self.dry:
+                self.hal.begin()
             
             # Do initial backlash compensation
             self.backlash_init()

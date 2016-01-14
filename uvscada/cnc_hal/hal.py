@@ -91,12 +91,12 @@ class Hal(object):
         pass
 
     def begin(self):
-        '''Call at start of active planer use'''
-        raise Exception("Required")
+        '''Call at start of active planer use (not dry)'''
+        pass
     
     def end(self):
         '''Called after machine is no longer in planer use.  Motors must maintain position for MDI'''
-        raise Exception("Required")
+        pass
 
     def stop(self):
         '''Stop motion as soon as convenient.  Motors must maintain position'''

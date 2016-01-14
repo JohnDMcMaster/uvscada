@@ -81,7 +81,7 @@ class LcncPyHalAr(LcncPyHal):
             # Makes sure process dies when we close connection
             self.linuxcnc_channel.get_pty()
             #self.linuxcnc_stdin, self.linuxcnc_stdout, self.linuxcnc_stderr = self.ssh.exec_command('linuxcnc %s' % ini) 
-            if 1:
+            if 0:
                 self.linuxcnc_channel.exec_command('screen -t linuxcnc linuxcnc %s' % remote_ini) 
             else:
                 self.linuxcnc_channel.exec_command('linuxcnc %s' % remote_ini) 
@@ -103,7 +103,7 @@ class LcncPyHalAr(LcncPyHal):
             # Makes sure process dies when we close connection
             self.server_channel.get_pty()
             #self.server_stdin, self.server_stdout, self.server_stderr = self.ssh.exec_command('python %s' % dst) 
-            if 1:
+            if 0:
                 self.server_channel.exec_command('screen -t lcnc_ar python %s' % dst)
             else:
                 self.server_channel.exec_command('python %s' % dst)

@@ -84,13 +84,16 @@ class LcncPyHal(LcncHal):
         if self.verbose:
             print 'Enabled: %s' % self.stat.enabled
         
+        # Do this explicitly: in many setups I'm already homed
         # prevent "can't do that (EMC_AXIS_HOME:123) in MDI mode"
         # You must home all axes, not just those used
+        '''
         if not dry:
             self.command.mode(self.linuxcnc.MODE_MANUAL)
             for axisi in xrange(self.stat.axes):
                 self._home(axisi=axisi, lazy=True)
             self.command.mode(self.linuxcnc.MODE_MDI)
+        '''
         
         self.stat.poll()
         if self.verbose:
@@ -197,6 +200,10 @@ class LcncPyHal(LcncHal):
 
     def limit(self, axes=None):
         return self._limit
+
+    def begin(self):
+        self.command.mode(self.linuxcnc.MODE_MDI)
+        LcncHal.begin(self)
 
 # LinuxCNC remote connection
 class LcncRshHal(LcncHal):
