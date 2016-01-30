@@ -403,13 +403,13 @@ class GXS700:
         all_dat = all_dat[0]
         return all_dat
     
-    def _cap_bin(self):
+    def _cap_bin(self, scan_cb=lambda itr: None):
         '''Capture a raw binary frame, waiting for trigger'''
-        
         self.wait_trig_cb()
         
         i = 0
         while True:
+            scan_cb(i)
             if i % 1000 == 0:
                 print 'scan %d' % (i,)
             
@@ -477,12 +477,12 @@ class GXS700:
 
         return self._cap_frame_bulk()
 
-    def cap_binv(self, n, cap_cb, loop_cb=lambda: None):
+    def cap_binv(self, n, cap_cb, loop_cb=lambda: None, scan_cb=lambda itr: None):
         self._cap_setup()
         
         taken = 0
         while taken < n:
-            imgb = self._cap_bin()
+            imgb = self._cap_bin(scan_cb=scan_cb)
             rc = cap_cb(imgb)
             # hack: consider doing something else
             if rc:

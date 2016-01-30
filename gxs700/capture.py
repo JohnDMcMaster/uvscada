@@ -12,6 +12,7 @@ import glob
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
+    parser.add_argument('--force', '-f', action='store_true', help='Force trigger')
     parser.add_argument('--number', '-n', type=int, default=1, help='number to take')
     args = parser.parse_args()
 
@@ -27,6 +28,11 @@ if __name__ == "__main__":
         imagen += 1
     print 'Taking first image to %s' % ('capture_%03d.bin' % imagen,)
     
+    def scan_cb(itr):
+        if args.force and itr == 0:
+            print 'Forcing trigger'
+            gxs.sw_trig()
+        
     def cb(imgb):
         global taken
         global imagen
@@ -44,5 +50,5 @@ if __name__ == "__main__":
         taken += 1
         imagen += 1
     
-    gxs.cap_binv(args.number, cb)
+    gxs.cap_binv(args.number, cb, scan_cb=scan_cb)
 
