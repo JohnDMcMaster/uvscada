@@ -1,52 +1,56 @@
-from uvscada.ngc import CNC
+from uvscada.ngc import *
 
-cnc = CNC(em=0.0472)
-D = 0.27
-cnc._clear_zn = -0.05
-cnc._fr = 0.15
-cnc._fr_z = 0.05
+cnc = init(
+        em=0.0472, # 1.2 mm
+        fr=0.15,
+        fr_z=0.05,
+        rpm=600,
+        verbose=True)
 
-print '(Machine centered on window)'
-print 'G90'
+D = 0.277
+cnc.clear_zn_u = -0.06
+
+line('(Machine centered on window)')
 # Full speed (2800 RPM)
-print 'S100'
-cnc.clear_zq()
+# Really should be running 15k w/ air spindle
+line('S100')
+clear_zq()
 
-d = D - cnc._em
+d = D - cnc.em
 r = d / 2
 
-print
+line()
 
-print '(Points:)'
-cnc.g0(r, 0)
-cnc.g0(0, r)
-cnc.g0(-r, 0)
-cnc.g0(0, -r)
+line('(Points:)')
+g0(r, 0)
+g0(0, r)
+g0(-r, 0)
+g0(0, -r)
 
-print
+line()
 
 # G2/G3
 # X/Y: end point (G90/G91 influenced)
 # I/J: center relative to current position
 
-print '(Move to bottom)'
-print 'G0 X0 Y%0.3f' % (r,)
-cnc.clear_zn()
-print '(Right side, arc bottom to top)'
-print 'G2 X0 Y%0.3f I0 J%0.3f F%0.3F' % (-r, -r, cnc._fr)
+line('(Move to bottom)')
+line('G0 X0 Y%0.3f' % (r,))
+clear_zn()
+line('(Right side, arc bottom to top)')
+line('G2 X0 Y%0.3f I0 J%0.3f F%0.3F' % (-r, -r, cnc.fr))
 if 0:
-    cnc.clear_z()
+    clear_z()
 
-    print
-    print '(Pause)'
-    print 'M0'
-    print
+    line()
+    line('(Pause)')
+    line('M0')
+    line()
 
-    cnc.clear_zn()
-print '(Left side, arc top to botom)'
-print 'G2 X0 Y%0.3f I0 J%0.3f F%0.3F' % (r, r, cnc._fr)
-cnc.clear_z()
-print 'G0 Z2'
+    clear_zn()
+line('(Left side, arc top to botom)')
+line('G2 X0 Y%0.3f I0 J%0.3f F%0.3F' % (r, r, cnc.fr))
+clear_z()
+line('G0 Z2')
 
-cnc.end()
+end()
 
