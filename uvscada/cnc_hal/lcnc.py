@@ -78,8 +78,11 @@ class LcncPyHal(LcncHal):
         self.stat = self.linuxcnc.stat()
         self.command = self.linuxcnc.command()
 
+        '''
+        breaks homing?
         if not dry:
             self.command.state(self.linuxcnc.STATE_ON)
+        '''
         self.stat.poll()
         if self.verbose:
             print 'Enabled: %s' % self.stat.enabled
@@ -164,6 +167,8 @@ class LcncPyHal(LcncHal):
         self.wait_mdi_idle()
         if self.verbose:
             print 'executing command'
+        # Doesn't seem to hurt perf notably and reduces a lot of errors
+        self.command.mode(self.linuxcnc.MODE_MDI)
         self.command.mdi(cmd)            
         if self.verbose:
             print 'waiting mdi idle (exit)'

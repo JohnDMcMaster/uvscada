@@ -253,8 +253,6 @@ class CNCGUI(QMainWindow):
             dbg("Starting gstreamer pipeline")
             self.player.set_state(gst.STATE_PLAYING)
         
-        self.home()
-        
         if self.uconfig['cnc']['startup_run']:
             self.run()
         

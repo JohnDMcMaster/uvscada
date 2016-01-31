@@ -89,9 +89,9 @@ class PlannerAxis(object):
 
         # Its actually less than this but it seems it takes some stepping
         # to get it out of the system
-        #self.backlash = 0.050
+        self.backlash = 0.050
         # sort out later
-        self.backlash = None
+        #self.backlash = None
         
         '''
         Backlash compensation
