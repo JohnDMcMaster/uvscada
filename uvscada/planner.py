@@ -436,7 +436,7 @@ class Planner(object):
             x_list, col, cold = active
             
             for cur_x in x_list:
-                yield ((cur_x, cur_y), (row, col))
+                yield ((cur_x, cur_y), (col, row))
                 col += cold
             # swap direction
             active, nexts = nexts, active
