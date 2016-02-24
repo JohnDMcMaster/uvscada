@@ -11,16 +11,22 @@ import os
 
 def main3(hal, dmm):
     # 10x reduced
-    SPOT = 0.05
+    SPOT = 0.005
     
     hal.mv_abs({'x': -SPOT, 'y': -SPOT})
     
     if not args.dry:
         cwf = open(args.fout, 'wb')
     
-    cols = int(4.6 / SPOT)
-    rows = int(3.8 / SPOT)
-    tpic = 2.3
+    # full chip
+    #cols = int(2.3 / SPOT)
+    #rows = int(2.1 / SPOT)
+    
+    cols = int(1.0 / SPOT)
+    rows = int(1.0 / SPOT)
+    
+    dwellt = 0.5
+    tpic = dwellt + 0.1
     npic = cols * rows
     print 'Taking %dc x %dr => %d pics => ETA %s' % (cols, rows, npic, time_str(tpic * npic))
     tstart = time.time()
@@ -35,11 +41,13 @@ def main3(hal, dmm):
 
             mas = []
             ts = time.time()
-            while time.time() - ts < 10.0:
+            while time.time() - ts < dwellt:
                 t = time.time()
                 curr = dmm.curr_dc()
-                mas.append((t, curr))
-            print '  Samples: %d' % len(mas)
+                mas.append((t, 1000 * curr))
+            ma_avg = [ma for t, ma in mas]
+            ma_avg = sum(ma_avg) / len(ma_avg)
+            print '  %0.5f mA, Samples: %d' % (ma_avg, len(mas))
             cwf.write(repr({'col': col, 'row': row, 'mA': mas}) + '\n')
             cwf.flush()
 
@@ -54,7 +62,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Use ezlaze with LinuxCNC to carve a bitmap')
     parser.add_argument('--dmm', default='/dev/serial/by-id/usb-Prologix_Prologix_GPIB-USB_Controller_PX8ZBY4W-if00-port0', help='K2750 serial port')
     parser.add_argument('--laser', default='/dev/serial/by-id/usb-1a86_USB2.0-Ser_-if00-port0', help='ezlaze serial port')
-    parser.add_argument('--host', default='mk-bs', help='LinuxCNC host')
+    parser.add_argument('--host', default='mk', help='LinuxCNC host')
     parser.add_argument('--dry', action='store_true', help='Dry run')
     parser.add_argument('fout', nargs='?', default='cwmap.pv', help='Store data to')
     args = parser.parse_args()
