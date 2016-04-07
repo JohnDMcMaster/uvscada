@@ -28,8 +28,9 @@ Serial
 Just send commands verbatim
 '''
 class PUSerial:
-    def __init__(self, port="/dev/ttyS0", baudrate=9600, timeout=0):
+    def __init__(self, port="/dev/ttyUSB0", baudrate=9600, timeout=0, verbose=False):
         self.port = port
+        self.verbose = verbose
         self.ser = serial.Serial(port,                          
                 baudrate=baudrate,
                 bytesize=serial.EIGHTBITS,
@@ -38,33 +39,40 @@ class PUSerial:
                 rtscts=False,
                 dsrdtr=False,
                 xonxoff=False,
-                timeout=0,
+                timeout=3,
                 writeTimeout=0)
+        self.ser.flushInput()
+        self.ser.flushOutput()
     
     def interface(self):
         return "RS232"
     
     def send_str(self, s):
-        print 'DBG: sending "%s"' % (s)
+        if self.verbose:
+            print 'DBG: sending "%s"' % (s)
         s += "\n"
         self.ser.write(s)
         self.ser.flush()
     
     def recv_str(self):
-        s = self.ser.readline(3)
+        s = self.ser.readline()
         s = s.rstrip()
-        print 'DBG: received "%s"' % (s)
+        if self.verbose:
+            print 'DBG: received "%s"' % (s)
         return s
     
     def sendrecv_str(self, s):
+        if self.verbose:
+            print 'DBG: sending "%s"' % (s)
         # send without sleep
         self.ser.write(s + '\n')
         self.ser.flush()
         
         # wait for response line
-        s = self.ser.readline(3)
+        s = self.ser.readline()
         s = s.rstrip()
-        #print 'received "%s"' % (s)
+        if self.verbose:
+            print 'DBG: received "%s"' % (s)
         return s
 
     def version(self):
@@ -77,7 +85,7 @@ Device tracks which is currently enabled
 By default commands act on the last selected output
 Option argument to per-output commands can switch output if not already selected
 '''
-class PS:
+class E36:
     def __init__(self, io, verbose=False):
         self.verbose = verbose
         self.vendor = None
@@ -87,7 +95,8 @@ class PS:
         self.outp = None
         self.io = io
         # Make sure simple queries work
-        self.version()
+        if not self.version():
+            raise Exception("Failed init")
 
     '''
     *********************************8
@@ -117,13 +126,17 @@ class PS:
         # for some reason you need to issue the GPIB instead of the device local command
         self.io.local()
 
-    def off(self):
+    def off(self, tsleep=0.2):
         '''Turn off both outputs'''
         self.io.send_str("OUTPUT OFF")
+        # Copied from on.  Needed?
+        time.sleep(tsleep)
     
-    def on(self):
+    def on(self, tsleep=0.2):
         '''Turn on both outputs'''
         self.io.send_str("OUTPUT ON")
+        # 0.1 causes error, 0.15 fine
+        time.sleep(tsleep)
     
     def set_outp(self, outp):
         '''Force selecting given rail'''
@@ -160,7 +173,7 @@ class PS:
         '''
         while True:
             print "sending *OPC?"
-            self.ser.write("*OPC?\012")
+            self.io.send_str("*OPC?\012")
             self.ser.flush()
             rx = self.ser.readline(100).rstrip()
             print "got ",rx
@@ -169,7 +182,7 @@ class PS:
     
     def apply(self, voltage, current):
         '''Set both voltage and current at once?'''
-        self.ser.write("APPL %s,%s" % (voltage, current))
+        self.io.send_str("APPL %s,%s" % (voltage, current))
 
 
     '''
@@ -204,17 +217,19 @@ class PS:
     def text_clr(self):
         self.io.send_str("DISPlay:TEXT:CLEar")
 
-    def reset(self):
-        '''Reset the device entirely'''
-        self.sersend_str("SYSTEM:BEEPER")
+    def rst(self, tsleep=1.0):
+        '''Reset the device except for errors'''
+        self.io.send_str("*RST")
+        # Device locks up for a bit
+        time.sleep(tsleep)
 
-    def clear(self):
+    def clr(self):
         '''Clear error queue'''
-        self.io.send_str("SYSTEM:BEEPER")
+        self.io.send_str("*CLS")
 
-    def get_error(self):
+    def get_err(self):
         '''Get next error from queue'''
-        return self.io.sendrecv_str("SYSTEM:ERROR?")
+        return self.io.sendrecv_str("SYST:ERR?")
 
     '''
     *********************************8
@@ -242,6 +257,7 @@ class PS:
     *********************************8
     '''
     
+    # 0.185 s over serial
     def volt(self, outp=None):
         '''Get voltage reading'''
         if outp is not None and outp != self.outp:
@@ -284,48 +300,16 @@ class PS:
             self.set_outp(outp)
         self.io.send_str("VOLTAGE:PROT:CLEAR")
 
-if __name__ == '__main__':
-    import argparse
-    import random
-    from plx_usb import PUGpib
-
-    parser = argparse.ArgumentParser(description='Write a flash device to death, recording health as we go')
-    parser.add_argument('--buffer', action='store_true', help='Unless set will use unbuffered I/O')
-    parser.add_argument('--verbose', action='store_true')
-    parser.add_argument('ps', help='Device to act on')
-    parser.add_argument('action', help='One of: on, off, beep, text')
-    args = parser.parse_args()
-    action = args.action.upper()
-
-    io = PUGpib(args.ps)
-    ps = PS(io=io, verbose=args.verbose)
-    if action == 'OFF':
-        print 'Turning off'
-        ps.off()
-    elif action == 'ON':
-        print 'Turning on'
-        ps.on()
-    elif action == 'BEEP':
-        print 'The machine that goes beep!'
-        ps.beep()
-    elif action == 'TEXT':
-        print 'Sending diabolical message'
-        msgs = ['MAYONAIS LO', ('turbo-', 'encabulator', 'online')]
-        msgs = ['MAYONAIS LO', 'MELTDWN NOW']
-        msg = random.sample(msgs, 1)[0]
-        for i in xrange(3):
-            if type(msg) == tuple:
-                for m in msg:
-                    ps.text(msg)
-                    time.sleep(0.5)
-            else:
-                ps.text(msg)
-                time.sleep(0.5)
-            ps.text('')
-            time.sleep(0.5)
-        ps.text(msg)
-    elif action == 'GPIB':
-        io.dump_config()
+def print_errors(ps):
+    print 'Errors:'
+    errors = []
+    while True:
+        s = ps.get_err()
+        if s == '+0,"No error"':
+            break
+        errors.append(s)
+    if errors:
+        for error in errors:
+            print '  %s' % error
     else:
-        print 'invalid action %s' % action
-
+        print '  None'
