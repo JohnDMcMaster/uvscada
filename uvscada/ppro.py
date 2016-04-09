@@ -159,6 +159,8 @@ def parse(buff):
     pos = 0
     ret = {}
     if len(buff) != 18 * 16 + 1:
+        print 'Dump'
+        hexdump(buff)
         raise ValueError("Bad buffer size")
     ret['seq'] = buff[1]
     pos = 7
@@ -166,7 +168,7 @@ def parse(buff):
         ret[field] = struct.unpack('<H', buff[pos:pos+2])[0]
         pos += 2
     # 8 bytes leftover
-    print pos, 18 * 16 + 1
+    #print pos, 18 * 16 + 1
     return ret
 
 
@@ -187,28 +189,24 @@ class PPro(object):
         self.ser.flushInput()
         self.ser.flushOutput()
         # FIXME: send dummy command
-        self.seq = random.randint(0, 255)
+        self.seq = random.randint(1, 255)
+        #self.seq = 0
     
-    def get(self):
+    def getb(self):
         #  Ex: 00 01 FE 00 00 00 99 90 12
         cmd = struct.pack(PCMD_FMT, 0x00, self.seq, 0xFF - self.seq, '\x00\x00\x00\x99\x90\x12')
-        self.seq = (self.seq + 1) % 0x100
-        hexdump(cmd)
+        # 0 appears to be invalid
+        #print 'seq', self.seq
+        #self.seq = (self.seq + 1) % 0x100
+        if self.seq == 0xFF:
+            self.seq = 1
+        else:
+            self.seq = self.seq + 1
         self.ser.write(cmd)
         self.ser.flush()
         reply = self.ser.read(18 * 16 + 1)
-        print 'Reply: %d' % len(reply)
-        hexdump(reply)
-        return parse(reply)
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Use ezlaze with LinuxCNC to carve a bitmap')
-    parser.add_argument('--port', default='/dev/ttyUSB0', help='ezlaze serial port')
-    args = parser.parse_args()
+        return reply
     
-    pp = PPro()
-    ret = pp.get()
-    print ret
-    for f in ('Application Version', 'Product Code', 'Input Voltage[1]', 'Operation Mode[1]', 'Operation Status[1]', 'Cycle Number[1]', 'Minute[1]', 'Second[1]'):
-        print f, ret[f]
+    def get(self):
+        return parse(self.getb())
 
