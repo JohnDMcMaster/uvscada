@@ -38,6 +38,7 @@ if __name__ == "__main__":
         except Exception:
             print fn
             raise
+        dec['fn'] = fn
         
         if 0:
             ver = dec['Application Version']
@@ -80,6 +81,17 @@ if __name__ == "__main__":
             else:
                 seq_exp = seq + 1
         print 'pass'
+
+    if 0:
+        print 'Checking'
+        last = None
+        for i, this in enumerate([x['Minute[1]'] for x in datas]):
+            if last is not None:
+                if this < last:
+                    print i, last, this, datas[i]['fn']
+                    raise Exception()
+            last = this
+        print 'pass'
     
     if 0:
         plt.clf()
@@ -93,6 +105,8 @@ if __name__ == "__main__":
         plt.show()
     if 1:
         for k in datas[0]:
+            if k == 'fn':
+                continue
             print k
             plt.clf()
             #plt.gca().get_yaxis().get_major_formatter().set_scientific(False)
