@@ -1,5 +1,7 @@
+# Product Code useful?
+
 from uvscada.util import hexdump
-from uvscada.ppro import parse, CRCBad
+from uvscada.ppro import parse, CRCBad, opr_i2s
 
 import argparse
 import os
@@ -11,6 +13,10 @@ if __name__ == "__main__":
     parser.add_argument('din', default='log', nargs='?', help='log dir')
     args = parser.parse_args()
     
+    dout = os.path.join(args.din, 'out')
+    if not os.path.exists(dout):
+        os.mkdir(dout)
+    
     itr = 0
     datas = []
     print 'Loading...'
@@ -20,6 +26,10 @@ if __name__ == "__main__":
     while True:
         if 0 and itr > 1000:
             break
+        if 0 and itr < 18000:
+            itr += 1
+            continue
+        
         if time.time() - tprint > 5.0:
             print '%d' % itr
             tprint = time.time()
@@ -30,8 +40,11 @@ if __name__ == "__main__":
             break
         try:
             dec = parse(raw, convert=False)
-        except CRCBad:
-            print 'WARNING: %s bad CRC' % (fn,)
+        except ValueError as e:
+            # Lots of CRC errors
+            # Ocassional sequence errors
+            if not type(e) in (CRCBad,):
+                print 'WARNING: %s bad packet: %s' % (fn, e)
             crc += 1
             itr += 1
             continue
@@ -105,7 +118,7 @@ if __name__ == "__main__":
         plt.show()
     if 1:
         for k in datas[0]:
-            if k == 'fn':
+            if k in ('fn', 'AC Check Flag', 'Application Version', 'crc', 'res1', 'res2', 'seq', 'seqn', 'Product Code'):
                 continue
             print k
             plt.clf()
@@ -119,4 +132,18 @@ if __name__ == "__main__":
             except:
                 print y
                 raise
-            plt.savefig('out/%s.png' % (k,))
+            plt.savefig('%s/out/%s.png' % (args.din, k,))
+
+    # Max mAh reported
+    if 1:
+        print 'Checking capacity'
+        cap = max([x['Output Capacity[1]'] for x in datas])
+        print '%0.3f Ah' % (cap / 1000.,)
+
+    # Last charge current
+    if 1:
+        ma = 0
+        for data in datas:
+            if opr_i2s[data['Operation Mode[1]']] == 'CHARGE':
+                ma = data['Output Current[1]']
+        print 'Last charge mA: %d' % (ma,)

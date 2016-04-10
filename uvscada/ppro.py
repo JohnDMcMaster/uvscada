@@ -261,7 +261,7 @@ def parse(buff, convert=True, crc=True):
     pos += 1
     seqx = ret['seq'] ^ ret['seqn']
     if seqx != 0xFF:
-        raise Exception("Unexpected seq 0x%02X w/ seqn 0x%02X => 0x%02X" % (ret['seq'], ret['seqn'], seqx))
+        raise ValueError("Unexpected seq 0x%02X w/ seqn 0x%02X => 0x%02X" % (ret['seq'], ret['seqn'], seqx))
     
     for field in fields.split('\n'):
         field = field.strip()
@@ -279,12 +279,12 @@ def parse(buff, convert=True, crc=True):
     # 8 bytes leftover
     #hexdump(buff)
     if pos != PKT_SZ:
-        raise Exception('Expected parse %d bytes but got %d' % (PKT_SZ, pos))
+        raise ValueError('Expected parse %d bytes but got %d' % (PKT_SZ, pos))
     
     if ret['res1'] != 0x0118:
-        raise Exception("Unexpected res1: 0x%04X" % ret['res1'])
+        raise ValueError("Unexpected res1: 0x%04X" % ret['res1'])
     if ret['res2'] != 0x0100:
-        raise Exception("Unexpected res2: 0x%04X" % ret['res2'])
+        raise ValueError("Unexpected res2: 0x%04X" % ret['res2'])
     
     if crc:
         buffc = buff[3:-2]
