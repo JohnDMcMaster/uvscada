@@ -332,6 +332,7 @@ class PPro(object):
             self.seq = 1
         else:
             self.seq = self.seq + 1
+        self.ser.flushInput()
         self.ser.write(cmd)
         self.ser.flush()
         reply = self.ser.read(18 * 16 + 1)
