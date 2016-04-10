@@ -8,12 +8,24 @@ from collections import namedtuple
 import struct
 import serial
 import random
+import crcmod
+
+# Forward CRC-16-CCITT
+crcf = crcmod.mkCrcFun(poly=0x11021, initCrc=0x0000, rev=False, xorOut=0x0000)
 
 # namedtuple
 PCmd = namedtuple('PCmd', 'res0 seq sum res3')
 PCMD_FMT = 'BBB6s'
 
+'''
+Volt: mV
+Amp: mA
+Resistance: mOhm
+'''
+
 fields = '''\
+res1
+res2
 Application Version
 Product Code
 Input Voltage[1]
@@ -166,7 +178,8 @@ Cycle Discharge Res.[2]
 NOUSE29
 PAD1
 PAD2
-AC Check Flag'''
+AC Check Flag
+crc'''
 
 PRply = namedtuple('PRply', '')
 PRply_FMT = 'BBB6s'
@@ -223,10 +236,13 @@ stat_i2so = {
     16: 'Tcs Capacity Finish',
 }
 
+class CRCBad(ValueError):
+    pass
+
 def parsef(f):
     return parse(f.read(PKT_SZ))
 
-def parse(buff):
+def parse(buff, convert=True, crc=True):
     pos = 0
     ret = {}
     ret = OrderedDict()
@@ -234,25 +250,48 @@ def parse(buff):
         print 'Dump'
         hexdump(buff)
         raise ValueError("Bad buffer size")
+    
+    if ord(buff[0]) != 0x00:
+        raise ValueError("Bad prefix")
+    pos += 1
+    
     ret['seq'] = ord(buff[1])
-    pos = 7
+    pos += 1
+    ret['seqn'] = ord(buff[2])
+    pos += 1
+    seqx = ret['seq'] ^ ret['seqn']
+    if seqx != 0xFF:
+        raise Exception("Unexpected seq 0x%02X w/ seqn 0x%02X => 0x%02X" % (ret['seq'], ret['seqn'], seqx))
+    
     for field in fields.split('\n'):
         field = field.strip()
         v = struct.unpack('<H', buff[pos:pos+2])[0]
-        if field in ('Operation Mode[1]', 'Operation Mode[2]'):
-            v = opr_i2s[v]
-        # FIXME: 2 bad
-        elif field in ('Operation Status[1]', 'Operation Status[2]'):
-        #elif field in ('Operation Status[1]',):
-            v = stat_i2so[v]
+        if convert:
+            if field in ('Operation Mode[1]', 'Operation Mode[2]'):
+                v = opr_i2s[v]
+            # FIXME: 2 bad
+            elif field in ('Operation Status[1]', 'Operation Status[2]'):
+            #elif field in ('Operation Status[1]',):
+                v = stat_i2so[v]
         ret[field] = v
         pos += 2
     
     # 8 bytes leftover
-    print pos, PKT_SZ
-    hexdump(buff)
-    if 0 and pos != PKT_SZ - 4:
-        raise Exception()
+    #hexdump(buff)
+    if pos != PKT_SZ:
+        raise Exception('Expected parse %d bytes but got %d' % (PKT_SZ, pos))
+    
+    if ret['res1'] != 0x0118:
+        raise Exception("Unexpected res1: 0x%04X" % ret['res1'])
+    if ret['res2'] != 0x0100:
+        raise Exception("Unexpected res2: 0x%04X" % ret['res2'])
+    
+    if crc:
+        buffc = buff[3:-2]
+        check = crcf(buffc)
+        if check != ret['crc']:
+            raise CRCBad('CRC fail: given 0x%04X, calc 0x%04X' % (ret['crc'], check))
+    
     return ret
 
 def ppprint(d):
