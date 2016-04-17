@@ -1,9 +1,5 @@
-
-
 from uvscada.util import hexdump
 
-import argparse
-from collections import OrderedDict
 from collections import namedtuple
 import struct
 import serial
@@ -206,7 +202,7 @@ opr_i2s = {
     1:  'CHARGE',
     2:  'DISCHARGE',
     3:  'DELAY',
-    4:  'OVERHEAT',
+    4:  'CHRGR_HOT',
     5:  'DONE',
     6:  'ERROR',
     7:  'LCB ',
@@ -242,13 +238,13 @@ class CRCBad(ValueError):
 def parsef(f):
     return parse(f.read(PKT_SZ))
 
-def parse(buff, convert=True, crc=True):
+def parse(buff, convert=True, crc=True, verbose=False):
     pos = 0
     ret = {}
-    ret = OrderedDict()
     if len(buff) != PKT_SZ:
-        print 'Dump'
-        hexdump(buff)
+        if verbose:
+            print 'Dump'
+            hexdump(buff)
         raise ValueError("Bad buffer size")
     
     if ord(buff[0]) != 0x00:
@@ -269,15 +265,11 @@ def parse(buff, convert=True, crc=True):
         if convert:
             if field in ('Operation Mode[1]', 'Operation Mode[2]'):
                 v = opr_i2s[v]
-            # FIXME: 2 bad
             elif field in ('Operation Status[1]', 'Operation Status[2]'):
-            #elif field in ('Operation Status[1]',):
                 v = stat_i2so[v]
         ret[field] = v
         pos += 2
     
-    # 8 bytes leftover
-    #hexdump(buff)
     if pos != PKT_SZ:
         raise ValueError('Expected parse %d bytes but got %d' % (PKT_SZ, pos))
     
