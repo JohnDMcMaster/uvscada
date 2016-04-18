@@ -1,7 +1,8 @@
 from uvscada.util import hexdump
-from uvscada.ppro import PPro, parse
+from uvscada.ppro import PPro, parse, ppprint
 
 import argparse
+import binascii
 import datetime
 import json
 import os
@@ -10,16 +11,13 @@ import traceback
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Log Graupner Polaron Pro data')
-    parser.add_argument('--port', default='/dev/ttyUSB0', help='ezlaze serial port')
+    parser.add_argument('--port', default='/dev/ttyUSB0', help='Serial port')
+    parser.add_argument('outf', default='log.jl', nargs='?', help='output file')
     args = parser.parse_args()
-    
-    if os.path.exists('log'):
-        raise Exception('Refusing to overwrite')
-    os.mkdir('log')
     
     pp = PPro()
     itr = 0
-    fj = open(os.path.join('log', 'log.jl'), 'w')
+    fj = open(args.outf, 'w')
     while True:
         try:
             retb = pp.getb()
@@ -28,12 +26,7 @@ if __name__ == "__main__":
             traceback.print_exc()
             continue
 
-        # 1 day charging => 24 * 60 * 60 =              86400
-        # 3 month charging => 3 * 30 * 24 * 60 * 60 = 7776000
-        # eh do 6 digit, mostly expect few days max
-        with open(os.path.join('log', 'l%06d.bin' % itr), 'w') as f:
-            f.write(retb)
-        fj.write(json.dumps({'t': time.time(), 'i': itr}) + '\n')
+        fj.write(json.dumps({'t': time.time(), 'i': itr, 'data': binascii.hexlify(retb)}) + '\n')
         fj.flush()
 
         try:
@@ -43,7 +36,8 @@ if __name__ == "__main__":
             traceback.print_exc()
             continue
         
-        print '%s: I: % 4dmV, OM: %d, OS: %d, CN: %d, O: % 4dmV @ % 4dmA' % (
+        #ppprint(retd)
+        print '%s: I: % 4dmV, OM: % 6s, OS: % 6s, CN: % 6s, O: % 4dmV @ % 4dmA' % (
                 datetime.datetime.now().isoformat(),
                 retd['Input Voltage[1]'],
                 retd['Operation Mode[1]'], retd['Operation Status[1]'], retd['Cycle Number[1]'],
