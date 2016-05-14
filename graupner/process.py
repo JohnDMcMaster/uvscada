@@ -6,6 +6,7 @@ from uvscada.ppro_util import load_logst
 
 import argparse
 import csv
+import glob
 import os
 import time
 import matplotlib.pyplot as plt
@@ -14,7 +15,7 @@ import shutil
 def replaces(s, frm, to):
     sret = s.replace(frm, to)
     if sret == s:
-        raise ValueError("s/%s/%s/ => %s" % (s, frm, to, sret))
+        raise ValueError("%s => s/%s/%s/ => %s" % (s, frm, to, sret))
     return sret
 
 def k2fn(k):
@@ -54,19 +55,10 @@ def plot_k(datast, fout, k):
         raise
     plt.savefig(fout)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Analyze data')
-    parser.add_argument('--verbose', action='store_true', help='')
-    parser.add_argument('--limit', default=None, type=int, help='')
-    parser.add_argument('--range', default=None, type=int, help='')
-    parser.add_argument('fin', help='Input file')
-    parser.add_argument('dout', default=None, nargs='?', help='')
-    args = parser.parse_args()
+def process(fin, dout):
+    print 'Processing %s => %s' % (fin, dout)
+    #return
     
-    
-    dout = args.dout
-    if dout is None:
-        dout = replaces(args.fin, '.jl', '')
     if os.path.exists(dout):
         shutil.rmtree(dout)
     os.mkdir(dout)
@@ -82,7 +74,7 @@ if __name__ == "__main__":
         hi = int(hi)
         limit = lambda itr: lo <= itr <= hi
     #limit = lambda itr: itr < 250
-    datast = load_logst(args.fin, convert=False, limit=limit)
+    datast = load_logst(fin, convert=False, limit=limit)
     print 'Loaded %d records' % len(datast)
     if not datast:
         raise ValueError("No points")
@@ -152,3 +144,26 @@ if __name__ == "__main__":
                         'Output Voltage[1]'):
                     fout = '%s/CHARGE/%s_%02d.png' % (dout, k2fn(k), starti)
                     plot_k(subset, fout, k)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Analyze data')
+    parser.add_argument('--verbose', action='store_true', help='')
+    parser.add_argument('--limit', default=None, type=int, help='')
+    parser.add_argument('--range', default=None, type=int, help='')
+    parser.add_argument('fin', help='Input file')
+    parser.add_argument('dout', default=None, nargs='?', help='')
+    args = parser.parse_args()
+    
+    fin = args.fin
+    dout = args.dout
+    
+    if os.path.isdir(fin):
+        for fin2 in sorted(glob.glob(fin + '/*.jl')):
+            print
+            dout = replaces(fin2, '.jl', '')
+            process(fin2, dout)
+    else:
+        if dout is None:
+            dout = replaces(fin, '.jl', '')
+        process(fin, dout)
+

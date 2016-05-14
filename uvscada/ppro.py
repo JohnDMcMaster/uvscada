@@ -235,6 +235,37 @@ stat_i2so = {
 class CRCBad(ValueError):
     pass
 
+def buff2pkt(seq, buff):
+    if seq < 1 or seq > 0xFF:
+        raise Exception("Bad seq")
+    return '\x00' + chr(seq) + chr(0xFF - seq) + buff + struct.pack('<H', crcf(buff))
+
+def pkt2buff(pkt, seq_exp=None, crc=True):
+    pos = 0
+    
+    if ord(pkt[0]) != 0x00:
+        raise ValueError("Bad prefix")
+    pos += 1
+    
+    seq = ord(pkt[1])
+    pos += 1
+    seqn = ord(pkt[2])
+    pos += 1
+    seqx = seq ^ seqn
+    if seqx != 0xFF:
+        raise ValueError("Unexpected seq 0x%02X w/ seqn 0x%02X => 0x%02X" % (seq, seqn, seqx))
+    if seq_exp is not None and seq_exp != seq:
+        raise ValueError("Unexpected seq: exp 0x%02X, got 0x%02X" % (seq_exp, seq))
+    
+    buff = pkt[3:-2]
+    if crc:
+        check = crcf(buff)
+        crc_exp = struct.unpack('<H', pkt[-2:])[0]
+        if check != crc_exp:
+            raise CRCBad('CRC fail: given 0x%04X, calc 0x%04X' % (crc_exp, check))
+    
+    return buff
+
 def parsef(f):
     return parse(f.read(PKT_SZ))
 

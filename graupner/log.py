@@ -50,8 +50,3 @@ if __name__ == "__main__":
                 retd['Output Voltage[1]'], retd['Output Current[1]'])
         time.sleep(1)
         itr += 1
-        
-    print ret
-    for f in ('Input Voltage[1]', 'Operation Mode[1]', 'Operation Status[1]', 'Cycle Number[1]'):
-        print f, ret[f]
-
