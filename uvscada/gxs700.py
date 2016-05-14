@@ -286,16 +286,19 @@ class GXS700:
           Expected; 0000
           Actual:   0001
         '''
-        if self.fpga_r(0x2002) != 0x0000:
-            print "WARNING: bad FPGA read"
+        v = self.fpga_r(0x2002)
+        if v != 0x0000:
+            print "WARNING: bad FPGA read: 0x%04X" % v
         
-        if self.fpga_rsig() != 0x1234:
-            raise Exception("Invalid FPGA signature")
+        v = self.fpga_rsig()
+        if v != 0x1234:
+            raise Exception("Invalid FPGA signature: 0x%04X" % v)
         
         self._setup_fpga1()
         
-        if self.fpga_rsig() != 0x1234:
-            raise Exception("Invalid FPGA signature")
+        v = self.fpga_rsig()
+        if v != 0x1234:
+            raise Exception("Invalid FPGA signature: 0x%04X" % v)
         
         self._setup_fpga2()
         
@@ -319,38 +322,43 @@ class GXS700:
         
         self.flash_sec_act(0x0000)
 
-    
-        if self.img_wh() != (1344, 1850):
-            raise Exception("Unexpected w/h")
+        v = self.img_wh()
+        if v != (1344, 1850):
+            raise Exception("Unexpected w/h: %s" % (v,))
         
         '''
         FIXME: fails verification if already plugged in
         '''
-        if self.state() != 1:
-            print 'WARNING: unexpected state'
+        v = self.state()
+        if v != 1:
+            print 'WARNING: unexpected state %s' % (v,)
     
         self.img_wh_w(1344, 1850)
         
         self.flash_sec_act(0x0000)
         
         
-        if self.img_wh() != (1344, 1850):
-            raise Exception("Unexpected w/h")
+        v = self.img_wh()
+        if v != (1344, 1850):
+            raise Exception("Unexpected w/h: %s" % (v,))
         
-        if self.state() != 1:
-            raise Exception('Unexpected state')
+        v = self.state()
+        if v != 1:
+            print 'WARNING: unexpected state %s' % (v,)
         
         self.img_wh_w(1344, 1850)
         
         self.flash_sec_act(0x0000)
     
     
-        if self.img_wh() != (1344, 1850):
-            raise Exception("Unexpected w/h")
+        v = self.img_wh()
+        if v != (1344, 1850):
+            raise Exception("Unexpected w/h: %s" % (v,))
         
         
-        if self.state() != 1:
-            raise Exception('Unexpected state')
+        v = self.state()
+        if v != 1:
+            print 'WARNING: unexpected state %s' % (v,)
         
         self.int_t_w(0x02BC)
         
