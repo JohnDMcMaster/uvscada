@@ -31,8 +31,6 @@ if __name__ == "__main__":
     parser.add_argument('fout', default=None, nargs='?', help='File name out')
     args = parser.parse_args()
 
-    # 2103231663
-    # 0x7d5cc4af
     buff = open(args.fin).read()
     magic = buff[0:4]
     # 2/2 sensors, both flat and dark have this value
