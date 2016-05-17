@@ -20,6 +20,8 @@ from PIL import Image
 import binascii
 from uvscada.gxs700_util import histeq
 
+MAGIC = '\x42\x05\xa4\x06'
+
 if __name__ == "__main__":
     import argparse 
     
@@ -32,8 +34,10 @@ if __name__ == "__main__":
     # 2103231663
     # 0x7d5cc4af
     buff = open(args.fin).read()
-    header = buff[0:4]
-    print 'Header: %s' % binascii.hexlify(header)
+    magic = buff[0:4]
+    # 2/2 sensors, both flat and dark have this value
+    if magic != MAGIC:
+        raise ValueError('Bad magic: expect %s but got %s' % (binascii.hexlify(MAGIC), binascii.hexlify(magic)))
     
     raw = buff[4:]
     if args.hist_eq:
