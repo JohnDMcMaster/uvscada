@@ -119,9 +119,12 @@ class IOTimestamp(object):
 
 # Log file descriptor to file
 class IOLog(object):
-    def __init__(self, obj=sys, name='stdout', out_fn=None, out_fd=None, mode='a', shift=False):
-        if out_fd:
-            self.out_fd = out_fd
+    def __init__(self, obj=sys, name='stdout', out_fn=None, out_fd=None, mode='a', shift=False, multi=False):
+        if not multi:
+            if out_fd:
+                self.out_fd = out_fd
+            else:
+                self.out_fd = open(out_fn, 'w')
         else:
             # instead of jamming logs together, shift last to log.txt.1, etc
             if shift and os.path.exists(out_fn):
