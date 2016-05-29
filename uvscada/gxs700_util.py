@@ -60,10 +60,14 @@ def open_dev(usbcontext=None):
     dev = udev.open()
     return dev
 
-def ez_open(verbose=False):
+def ez_open_ex(verbose=False):
     usbcontext = usb1.USBContext()
     dev = open_dev(usbcontext)
-    return gxs700.GXS700(usbcontext, dev, verbose=verbose)
+    return usbcontext, dev, gxs700.GXS700(usbcontext, dev, verbose=verbose)
+
+def ez_open(verbose=False):
+    _usbcontext, _dev, gxs700 = ez_open_ex(verbose)
+    return gxs700
 
 # http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
 def histeq(buff, nbr_bins=256, height=1850, width=1344):
@@ -96,4 +100,15 @@ def histeq(buff, nbr_bins=256, height=1850, width=1344):
     ret = bytearray()
     for i in xrange(len(rs)):
         ret += struct.pack('>H', int(rs[i]))
+    return str(ret)
+
+def ram_r(dev, addr, datal):
+    bs = 16
+    offset = 0
+    ret = bytearray()
+    while offset < datal:
+        l = min(bs, datal - offset)
+        #print 'Read 0x%04X: %d' % (addr + offset, l)
+        ret += dev.controlRead(0xC0, 0xA0, addr + offset, 0x0000, l, timeout=1000)
+        offset += bs
     return str(ret)

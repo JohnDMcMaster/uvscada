@@ -12,6 +12,9 @@ except ImportError:
     from StringIO import StringIO
 
 '''
+in many cases index and length are ignored
+if you request less it will return a big message anyway, causing an overflow exception
+
 19.5 um pixels
 
 General notes
@@ -22,6 +25,13 @@ General notes
 '''
 
 FRAME_SZ = 4972800
+# Wraps around after 0x2000
+EEPROM_SZ = 0x2000
+# don't think this is setup correctly
+# is there not more?
+# where did 0x800 come from?
+FLASH_SZ = 0x10000
+FLASH_PGS = FLASH_SZ / 0x100
 
 class GXS700:
     def __init__(self, usbcontext=None, dev=None, verbose=False, init=True):
@@ -63,27 +73,39 @@ class GXS700:
         '''Disable taking picture when x-rays are above threshold'''
         self.dev.controlWrite(0x40, 0xB0, 0x2F, 0, '\x00')
 
-    def eeprom_r(self, addr, n):
+    def eeprom_r(self, addr=0, n=EEPROM_SZ):
         # FIXME: should be 0x0D?
+        # 0x0B seems to work as well
+        # self.dev.controlRead(0xC0, 0xB0, req, addr + i, l_this, timeout=self.timeout)
+        if addr + n > EEPROM_SZ:
+            raise ValueError("Address out of range: 0x%04X > 0x%04X" % (addr + n, EEPROM_SZ))
         return self._controlRead_mem(0x0B, 0x80, addr, n)
         
     def eeprom_w(self, addr, buff):
+        if addr + len(buff) > EEPROM_SZ:
+            raise ValueError("Address out of range: 0x%04X > 0x%04X" % (addr + len(buff), EEPROM_SZ))
         return self._controlWrite_mem(0x0C, 0x80, addr, buff)
     
-    def flash_erase(self, addr):
-        '''Erase a flash page'''
-        self.dev.controlWrite(0x40, 0xB0, 0x11, addr, chr(addr), timeout=self.timeout)
+    '''
+    Note that R/W address is in bytes except erase which specifies a 256 byte page offset
+    '''
 
-    def sw_trig(self):
-        '''Force taking an image without x-rays.  Takes a few seconds'''
-        self.dev.controlWrite(0x40, 0xB0, 0x2b, 0, '\x00', timeout=self.timeout)
-
-    def flash_r(self, addr, n):
+    def flash_r(self, addr=0, n=FLASH_SZ):
         '''Read (FPGA?) flash'''
+        if addr + n > FLASH_SZ:
+            raise ValueError("Address out of range: 0x%04X > 0x%04X" % (addr + n, FLASH_SZ))
         return self._controlRead_mem(0x10, 0x100, addr, n)
+
+    def flash_erase(self, page):
+        '''Erase a flash page'''
+        if page > FLASH_PGS:
+            raise ValueError("Page out of range: 0x%02X > 0x%02X" % (page, FLASH_PGS))
+        self.dev.controlWrite(0x40, 0xB0, 0x11, page, chr(page), timeout=self.timeout)
 
     def flash_w(self, addr, buff):
         '''Write (FPGA?) flash'''
+        #if addr + len(buff) > FLASH_SZ:
+        #    raise ValueError("Address out of range: 0x%04X > 0x%04X" % (addr + len(buff), EEPROM_PGS))
         return self._controlWrite_mem(0x0F, 0x100, addr, buff)
     
     def fpga_r(self, addr):
@@ -97,10 +119,17 @@ class GXS700:
             raise Exception("Didn't get all data")
         return struct.unpack('>' + ('H' * n), ret)
 
-    def fpga_rsig(self):
+    def fpga_rsig(self, decode=True):
         '''Read FPGA signature'''
+        '''
+        index (0) is ignored
+        size is ignored
+        '''
         # 0x1234 expected
-        return struct.unpack('>H', self.dev.controlRead(0xC0, 0xB0, 0x04, 0, 2, timeout=self.timeout))[0]
+        buff = self.dev.controlRead(0xC0, 0xB0, 0x04, 0, 2, timeout=self.timeout)
+        if not decode:
+            return buff
+        return struct.unpack('>H', buff)[0]
     
     def fpga_w(self, addr, v):
         '''Write an FPGA register'''
@@ -120,6 +149,7 @@ class GXS700:
     
     def trig_param_r(self):
         '''Read trigger parameter'''
+        # index, len ignored
         return self.dev.controlRead(0xC0, 0xB0, 0x25, 0, 6, timeout=self.timeout)
 
     def i2c_r(self, addr, n):
@@ -178,19 +208,23 @@ class GXS700:
         '''Get exposure timestamp as string'''
         return self.eeprom_r(self, 0x20, 0x17)
 
-    def versions(self):
-        '''Get versions as strings'''
-        # 12 actual bytes...
-        buff = bytearray(self.dev.controlRead(0xC0, 0xB0, 0x51, 0, 0x1C, timeout=self.timeout))
+    def versions(self, decode=True):
+        # index, length ignored
+        buff = self.dev.controlRead(0xC0, 0xB0, 0x51, 0, 0x1C, timeout=self.timeout)
+        if not decode:
+            return buff
+        buff = bytearray(buff)
         print "MCU:     %s.%s.%s" % (buff[0], buff[1], buff[2] << 8 | buff[3])
         print 'FPGA:    %s.%s.%s' % (buff[4], buff[5], buff[6] << 8 | buff[7])
         print 'FGPA WG: %s.%s.%s' % (buff[8], buff[9], buff[10] << 8 | buff[11])
         
-    def img_ctr_r(self, n):
+    def img_ctr_r(self, n=8):
+        # think n is ignored
         return self.dev.controlRead(0xC0, 0xB0, 0x40, 0, n, timeout=self.timeout)
 
     def img_wh(self):
         '''Get image (width, height)'''
+        # length, index ignored
         return struct.unpack('>HH', self.dev.controlRead(0xC0, 0xB0, 0x23, 0, 4, timeout=self.timeout))
     
     def img_wh_w(self, w, h):
@@ -202,8 +236,9 @@ class GXS700:
         self.dev.controlWrite(0x40, 0xB0, 0x2C, 0, struct.pack('>H', t), timeout=self.timeout)
 
     def int_time(self):
-        '''Get integration time units?'''
-        return struct.unpack('>HH', self.dev.controlRead(0xC0, 0xB0, 0x2D, 0, 4, timeout=self.timeout))[0]
+        '''Get integration time (in ms?)'''
+        buff = self.dev.controlRead(0xC0, 0xB0, 0x2D, 0, 4, timeout=self.timeout)
+        return struct.unpack('>H', buff)[0]
         
     def img_ctr_rst(self):
         '''Reset image counter'''
@@ -215,7 +250,7 @@ class GXS700:
             raise Exception('Invalid timestamp')
         self.eeprom_w(0x20, ts)
 
-    def flash_sec_act(self, sec):
+    def set_act_sec(self, sec):
         '''Activate flash sector?'''
         self.dev.controlWrite(0x40, 0xB0, 0x0E, sec, '')
     
@@ -237,6 +272,10 @@ class GXS700:
         buff.append((pix_clust_ctr_thresh >> 16) & 0xFF)
         self.dev.controlWrite(0x40, 0xB0, 0x24, 0, buff)
 
+    def sw_trig(self):
+        '''Force taking an image without x-rays.  Takes a few seconds'''
+        self.dev.controlWrite(0x40, 0xB0, 0x2b, 0, '\x00', timeout=self.timeout)
+
     def state(self):
         '''Get camera state'''
         '''
@@ -245,11 +284,14 @@ class GXS700:
         -0x02: short lived
         -0x04: longer lived than 2
         -0x08: read right before capture
+
+        index, length ignored
         '''
         return ord(self.dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1))
 
     def error(self):
         '''Get error code'''
+        # index, len ignored
         return ord(self.dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1))
 
     '''
@@ -274,18 +316,12 @@ class GXS700:
     
         self.img_wh_w(1344, 1850)
         
-        self.flash_sec_act(0x0000)
+        self.set_act_sec(0x0000)
     
             
         if self.img_wh() != (1344, 1850):
             raise Exception("Unexpected w/h")
         
-        '''
-        FIXME: fails verification if already ran
-        Failed packet 453/454
-          Expected; 0000
-          Actual:   0001
-        '''
         v = self.fpga_r(0x2002)
         if v != 0x0000:
             print "WARNING: bad FPGA read: 0x%04X" % v
@@ -310,32 +346,23 @@ class GXS700:
         # XXX: why did the integration time change?
         self.int_t_w(0x0064)
         
-        '''
-        FIXME: fails verification if already ran
-          Expected; 01
-          Actual:   02
-        '''
         if self.state() != 1:
             print 'WARNING: unexpected state'
         
-        #self.img_wh_w(1344, 1850)
-        
-        self.flash_sec_act(0x0000)
+        self.set_act_sec(0x0000)
 
         v = self.img_wh()
         if v != (1344, 1850):
+        
             raise Exception("Unexpected w/h: %s" % (v,))
         
-        '''
-        FIXME: fails verification if already plugged in
-        '''
         v = self.state()
         if v != 1:
             print 'WARNING: unexpected state %s' % (v,)
     
         self.img_wh_w(1344, 1850)
         
-        self.flash_sec_act(0x0000)
+        self.set_act_sec(0x0000)
         
         
         v = self.img_wh()
@@ -348,7 +375,7 @@ class GXS700:
         
         self.img_wh_w(1344, 1850)
         
-        self.flash_sec_act(0x0000)
+        self.set_act_sec(0x0000)
     
     
         v = self.img_wh()
@@ -733,7 +760,7 @@ class GXS700:
         
         self.img_wh_w(1344, 1850)
         
-        self.flash_sec_act(0x0000)
+        self.set_act_sec(0x0000)
         
         if self.img_wh() != (1344, 1850):
             raise Exception("Unexpected w/h")
@@ -779,7 +806,7 @@ class GXS700:
             raise Exception('Unexpected error')
         
         self.img_wh_w(1344, 1850)
-        self.flash_sec_act(0x0000)
+        self.set_act_sec(0x0000)
         if self.img_wh() != (1344, 1850):
             raise Exception("Unexpected w/h")
     

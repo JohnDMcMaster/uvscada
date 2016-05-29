@@ -1,17 +1,15 @@
-# https://github.com/vpelletier/python-libusb1
-# Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
-import usb1
-# Bare ctype wrapper, inspired from library C header file.
-import libusb1
-import argparse
-from uvscada.gxs700_util import open_dev
-import os
 from uvscada import gxs700
+from uvscada.gxs700_util import open_dev
+
+import argparse
 import glob
+import os
+import usb1
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
+    parser.add_argument('--dir', default='out', help='Output dir')
     parser.add_argument('--force', '-f', action='store_true', help='Force trigger')
     parser.add_argument('--number', '-n', type=int, default=1, help='number to take')
     args = parser.parse_args()
@@ -22,11 +20,14 @@ if __name__ == "__main__":
     
     fn = ''
     
+    if not os.path.exists(args.dir):
+        os.mkdir(args.dir)
+    
     taken = 0
     imagen = 0
-    while glob.glob('capture_%03d*' % imagen):
+    while glob.glob('%s/capture_%03d*' % (args.dir, imagen)):
         imagen += 1
-    print 'Taking first image to %s' % ('capture_%03d.bin' % imagen,)
+    print 'Taking first image to %s' % ('%s/capture_%03d.bin' % (args.dir, imagen),)
     
     def scan_cb(itr):
         if args.force and itr == 0:
@@ -51,4 +52,3 @@ if __name__ == "__main__":
         imagen += 1
     
     gxs.cap_binv(args.number, cb, scan_cb=scan_cb)
-
