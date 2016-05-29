@@ -1,3 +1,6 @@
+import gxs700_fw
+import gxs700
+
 # https://github.com/vpelletier/python-libusb1
 # Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
 import usb1
@@ -6,50 +9,46 @@ import libusb1
 import sys
 import numpy as np
 import struct
-import gxs700_fw
-import gxs700
+import os
 
-pidvid2name = {
-        # note: load_firmware.py deals with pre-enumeration
-        (0x5328, 0x2010): 'Dexis Platinum (post-enumeration)',
-        (0x5328, 0x2030): 'Gendex GXS700 (post enumeration)',
-        }
-
-def check_device(usbcontext=None):
+def check_device(usbcontext=None, verbose=True):
     if usbcontext is None:
         usbcontext = usb1.USBContext()
     
     for udev in usbcontext.getDeviceList(skip_on_error=True):
         vid = udev.getVendorID()
         pid = udev.getProductID()
-        if (vid, pid) in pidvid2name.keys():
-            print
-            print
-            print 'Found device'
-            print 'Bus %03i Device %03i: ID %04x:%04x' % (
-                udev.getBusNumber(),
-                udev.getDeviceAddress(),
-                vid,
-                pid)
+        if (vid, pid) in gxs700_fw.pidvid2name_post.keys():
+            if verbose:
+                print
+                print
+                print 'Found device'
+                print 'Bus %03i Device %03i: ID %04x:%04x' % (
+                    udev.getBusNumber(),
+                    udev.getDeviceAddress(),
+                    vid,
+                    pid)
             return udev
     return None
 
-def open_dev(usbcontext=None):
+def open_dev(usbcontext=None, verbose=None):
     '''
     Return a device with the firmware loaded
     '''
+    
+    verbose = verbose if verbose is not None else os.getenv('GXS700_VERBOSE', 'N') == 'Y'
     
     if usbcontext is None:
         usbcontext = usb1.USBContext()
     
     print 'Checking if firmware load is needed'
-    if gxs700_fw.load_all(wait=True):
+    if gxs700_fw.load_all(wait=True, verbose=verbose):
         pass
     else:
         print 'Firmware load not needed'
     
     print 'Scanning for devices...'
-    udev = check_device(usbcontext)
+    udev = check_device(usbcontext, verbose=verbose)
     if udev is None:
         raise Exception("Failed to find a device")
 

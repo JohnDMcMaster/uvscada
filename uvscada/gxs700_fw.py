@@ -13,6 +13,41 @@ import argparse
 import time
 import gxs700_util
 
+'''
+small sensor from adam
+both large and small enumerate the same
+how to tell them apart?
+stage1 verified identical
+stage2 curosry glance looks identical (not to mention same VID/PID)
+
+Bus 003 Device 029: ID 5328:202f  
+Bus 003 Device 030: ID 5328:2030  
+
+dexis
+pre-enumer
+post-enumeration
+Bus 003 Device 036: ID 5328:2010  
+'''
+pidvid2name_pre = {
+        # Note: util deals with post-enumeration
+        # Hmm one of my Gendex units is 0x202F and the other is 0x2009
+        # but I think that is because I messed up the EEPROM and re-programmed it to a Dexis by mistake
+        (0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)',
+        # FIXME: load small firmware (which I think is different)
+        #(0x5328, 0x201F): 'Gendex GXS700SM (pre-enumeration)',
+        (0x5328, 0x202F): 'Gendex GXS700LG (pre-enumeration)',
+        # ooops
+        # Bus 002 Device 043: ID 04b4:8613 Cypress Semiconductor Corp. CY7C68013 EZ-USB FX2 USB 2.0 Development Kit
+        (0x04b4, 0x8613): 'CY7C68013 EZ-USB FX2 USB 2.0 Development Kit',
+        }
+
+pidvid2name_post = {
+        # note: load_firmware.py deals with pre-enumeration
+        (0x5328, 0x2010): 'Dexis Platinum (post-enumeration)',
+        #(0x5328, 0x2020): 'Gendex GXS700SM (post enumeration)',
+        (0x5328, 0x2030): 'Gendex GXS700LG (post enumeration)',
+        }
+
 def stage1(dev):
     # Generated from packet 107/108
     # hold in reset to allow fw load
@@ -771,49 +806,29 @@ def stage2(dev):
     # Generated from packet 285/286
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x00")
 
-'''
-small sensor from adam
-both large and small enumerate the same
-how to tell them apart?
-stage1 verified identical
-stage2 curosry glance looks identical (not to mention same VID/PID)
 
-Bus 003 Device 029: ID 5328:202f  
-Bus 003 Device 030: ID 5328:2030  
-
-dexis
-pre-enumer
-post-enumeration
-Bus 003 Device 036: ID 5328:2010  
-'''
-pidvid2name = {
-        # Note: util deals with post-enumeration
-        (0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)',
-        (0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)',
-        # ooops
-        # Bus 002 Device 043: ID 04b4:8613 Cypress Semiconductor Corp. CY7C68013 EZ-USB FX2 USB 2.0 Development Kit
-        (0x04b4, 0x8613): 'CY7C68013 EZ-USB FX2 USB 2.0 Development Kit',
-        }
-
-def load_all(wait=False):
+def load_all(wait=False, verbose=True):
     ret = False
     usbcontext = usb1.USBContext()
-    print 'Scanning for devices...'
+    if verbose:
+        print 'Scanning for devices...'
     for udev in usbcontext.getDeviceList(skip_on_error=True):
         vid = udev.getVendorID()
         pid = udev.getProductID()
-        if (vid, pid) in pidvid2name.keys():
-            print
-            print
-            print 'Found device'
-            print 'Bus %03i Device %03i: ID %04x:%04x' % (
-                udev.getBusNumber(),
-                udev.getDeviceAddress(),
-                vid,
-                pid)
-            print 'Loading firmware'
+        if (vid, pid) in pidvid2name_pre.keys():
+            if verbose:
+                print
+                print
+                print 'Found device'
+                print 'Bus %03i Device %03i: ID %04x:%04x' % (
+                    udev.getBusNumber(),
+                    udev.getDeviceAddress(),
+                    vid,
+                    pid)
+                print 'Loading firmware'
             load(udev.open())
-            print 'Firmware load OK'
+            if verbose:
+                print 'Firmware load OK'
             ret = True
 
     if ret and wait:
