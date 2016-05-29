@@ -222,6 +222,18 @@ class GXS700:
         # think n is ignored
         return self.dev.controlRead(0xC0, 0xB0, 0x40, 0, n, timeout=self.timeout)
 
+    '''
+    w/h: 1, 1 at boot
+    how to inteligently set?
+    GXS700-lg: 1344w x 1850h
+        0x540 x 0x73a
+    but I'm told Windows app captures a different size
+    
+    calibration files also come in unexpected resolutions:
+    .flf:      1346w x 1700h
+    .dfm:      1352w x 1700h
+    '''
+    
     def img_wh(self):
         '''Get image (width, height)'''
         # length, index ignored
@@ -314,6 +326,7 @@ class GXS700:
         elif state != 0x01:
             raise Exception('Not idle, refusing to setup')
     
+        # small vs large: how to correctly set?
         self.img_wh_w(1344, 1850)
         
         self.set_act_sec(0x0000)

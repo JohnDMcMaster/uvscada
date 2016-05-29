@@ -180,8 +180,10 @@ class E36:
             if(rx == "1"):
                 break
     
-    def apply(self, voltage, current):
+    def apply(self, voltage, current, outp=None):
         '''Set both voltage and current at once?'''
+        if outp is not None and outp != self.outp:
+            self.set_outp(outp)
         self.io.send_str("APPL %s,%s" % (voltage, current))
 
 

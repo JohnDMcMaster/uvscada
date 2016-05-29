@@ -771,11 +771,24 @@ def stage2(dev):
     # Generated from packet 285/286
     dev.controlWrite(0x40, 0xA0, 0xE600, 0x0000, "\x00")
 
+'''
+small sensor from adam
+both large and small enumerate the same
+how to tell them apart?
+stage1 verified identical
+stage2 curosry glance looks identical (not to mention same VID/PID)
 
+Bus 003 Device 029: ID 5328:202f  
+Bus 003 Device 030: ID 5328:2030  
+
+dexis
+pre-enumer
+post-enumeration
+Bus 003 Device 036: ID 5328:2010  
+'''
 pidvid2name = {
+        # Note: util deals with post-enumeration
         (0x5328, 0x2009): 'Dexis Platinum (pre-enumeration)',
-        #(0x5328, 0x2010): '??? auto enum',
-        #(0x5328, 0x2010): 'Dexis Platinum (pre-enumeration something)',
         (0x5328, 0x202F): 'Gendex GXS700 (pre-enumeration)',
         # ooops
         # Bus 002 Device 043: ID 04b4:8613 Cypress Semiconductor Corp. CY7C68013 EZ-USB FX2 USB 2.0 Development Kit
@@ -820,6 +833,7 @@ def load(dev):
     # Source data: cap1.cap
     # Source range: 107 - 286
     
+    # Verified stage1 is the same for gendex small and large
     stage1(dev)
     # xxx: should sleep here?
     stage2(dev)
