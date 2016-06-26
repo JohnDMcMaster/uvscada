@@ -138,7 +138,8 @@ class E36:
         # 0.1 causes error, 0.15 fine
         time.sleep(tsleep)
     
-    def set_outp(self, outp):
+    # .15 worked + some margin
+    def set_outp(self, outp, tsleep=0.25):
         '''Force selecting given rail'''
         if not outp in (1, 2):
             raise Exception('Bad outp %s' % (outp,))
@@ -147,6 +148,7 @@ class E36:
             return
         self.io.send_str("INSTRUMENT:SELECT OUTP%d" % outp)
         self.outp = outp
+        time.sleep(tsleep)
     
     def disp_vi(self, outp=None):
         '''display actual currents on front panel'''   
