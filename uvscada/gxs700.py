@@ -84,7 +84,7 @@ class GXS700:
     def eeprom_w(self, addr, buff):
         if addr + len(buff) > EEPROM_SZ:
             raise ValueError("Address out of range: 0x%04X > 0x%04X" % (addr + len(buff), EEPROM_SZ))
-        return self._controlWrite_mem(0x0C, 0x80, addr, buff)
+        return self._controlWrite_mem(0x0C, 0x20, addr, buff)
     
     '''
     Note that R/W address is in bytes except erase which specifies a 256 byte page offset
