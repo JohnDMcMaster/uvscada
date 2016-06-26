@@ -4,14 +4,14 @@ import os
 import glob
 
 from uvscada import gxs700
-from uvscada.gxs700_util import histeq
+from uvscada import gxs700_util
 
 def process(fin, fout):
     print 'Reading %s...' % fin
     buff = open(fin, 'r').read()
     if args.hist_eq:
         print 'Equalizing histogram...'
-        buff = histeq(buff)
+        buff = gxs700_util.histeq(buff)
     print 'Decoding image...'
     img = gxs700.GXS700.decode(buff)
     print 'Saving %s...' % fout
