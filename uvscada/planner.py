@@ -239,7 +239,7 @@ class Planner(object):
         expected_n_pictures = self.x.images() * self.y.images()
         self.log('Ideally taking %g pictures (%g X %g) but actually taking %d (%d X %d), %0.1f%% efficient' % (
                 ideal_n_pictures, self.x.images_ideal(), self.y.images_ideal(), 
-                expected_n_pictures, self.y.images(), self.y.images(),
+                expected_n_pictures, self.x.images(), self.y.images(),
                 ideal_n_pictures / expected_n_pictures * 100.0), 2)
         
         # Try actually generating the points and see if it matches how many we thought we were going to get
@@ -352,9 +352,12 @@ class Planner(object):
         self.notify_progress(img_fn)
     
     def validate_point(self, p):
-        (cur_x, cur_y), (cur_row, cur_col) = p
+        (cur_x, cur_y), (cur_col, cur_row) = p
         #self.log('xh: %g vs cur %g, yh: %g vs cur %g' % (xh, cur_x, yh, cur_y))
+        # mm vs inch...hmm
         au_tol = 0.005
+        au_tol *= 25.4
+        
         # Basic sanity check
         au_tol = self.y.view_au / 100
         xmax = cur_x + self.x.view_au
@@ -363,14 +366,14 @@ class Planner(object):
         fail = False
         
         if cur_col < 0 or cur_col >= self.x.images():
-            self.log('Col out of range 0 <= %d <= %d' % (cur_col, self.x.images()))
+            self.log('Col out of range 0 <= %d < %d' % (cur_col, self.x.images()))
             fail = True
         if cur_x < self.x.start - au_tol or xmax > self.x.end + au_tol:
             self.log('X out of range')
             fail = True
             
         if cur_row < 0 or cur_row >= self.y.images():
-            self.log('Row out of range 0 <= %d <= %d' % (cur_row, self.y.images()))
+            self.log('Row out of range 0 <= %d < %d' % (cur_row, self.y.images()))
             fail = True
         if cur_y < self.y.start - au_tol or ymax > self.y.end + au_tol:
             self.log('Y out of range')
