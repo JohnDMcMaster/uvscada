@@ -10,8 +10,6 @@
         "mock":0,
         "out_dir":"out",
         "overwrite":0,
-        "steps_per_um": 8.510,
-        "steps_per_um": 212.75,
         "lcnc": {
             "host": "mk"
         },
