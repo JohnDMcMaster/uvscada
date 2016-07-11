@@ -216,9 +216,13 @@ class CNCGUI(QMainWindow):
             def textChanged(name):
                 def f():
                     if self.vid_fd >= 0:
-                        val = int(self.ctrls[name].text())
-                        print '%s changed => %d' % (name, val)
-                        ctrl_set(self.vid_fd, name, val)
+                        try:
+                            val = int(self.ctrls[name].text())
+                        except ValueError:
+                            pass
+                        else:
+                            print '%s changed => %d' % (name, val)
+                            ctrl_set(self.vid_fd, name, val)
                 return f
         
             layout.addWidget(QLabel(name), row, 0)
