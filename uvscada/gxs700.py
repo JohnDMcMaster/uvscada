@@ -11,6 +11,8 @@ try:
 except ImportError:
     from StringIO import StringIO
 
+import sys
+
 '''
 in many cases index and length are ignored
 if you request less it will return a big message anyway, causing an overflow exception
@@ -102,11 +104,21 @@ class GXS700:
             raise ValueError("Page out of range: 0x%02X > 0x%02X" % (page, FLASH_PGS))
         self.dev.controlWrite(0x40, 0xB0, 0x11, page, chr(page), timeout=self.timeout)
 
+    def flash_erase_all(self, verbose=True):
+        
+        for page in xrange(FLASH_PGS):
+            self.flash_erase(page)
+            if verbose:
+                sys.stdout.write('.')
+                sys.stdout.flush()
+        print
+    
     def flash_w(self, addr, buff):
         '''Write (FPGA?) flash'''
         #if addr + len(buff) > FLASH_SZ:
         #    raise ValueError("Address out of range: 0x%04X > 0x%04X" % (addr + len(buff), EEPROM_PGS))
-        return self._controlWrite_mem(0x0F, 0x100, addr, buff)
+        self._controlWrite_mem(0x0F, 0x100, addr, buff)
+        #self._controlWrite_mem(0x0F, 0x10, addr, buff)
     
     def fpga_r(self, addr):
         '''Read FPGA register'''
@@ -206,7 +218,7 @@ class GXS700:
 
     def exp_ts(self):
         '''Get exposure timestamp as string'''
-        return self.eeprom_r(self, 0x20, 0x17)
+        return self.eeprom_r(0x20, 0x17)
 
     def versions(self, decode=True):
         # index, length ignored
@@ -278,10 +290,10 @@ class GXS700:
         buff = bytearray()
         buff.append((pix_clust_ctr_thresh >> 8) & 0xFF)
         buff.append((pix_clust_ctr_thresh >> 0) & 0xFF)
-        buff.append((pix_clust_ctr_thresh >> 8) & 0xFF)
-        buff.append((pix_clust_ctr_thresh >> 0) & 0xFF)
-        buff.append((pix_clust_ctr_thresh >> 24) & 0xFF)
-        buff.append((pix_clust_ctr_thresh >> 16) & 0xFF)
+        buff.append((bin_thresh >> 8) & 0xFF)
+        buff.append((bin_thresh >> 0) & 0xFF)
+        buff.append((bin_thresh >> 24) & 0xFF)
+        buff.append((bin_thresh >> 16) & 0xFF)
         self.dev.controlWrite(0x40, 0xB0, 0x24, 0, buff)
 
     def sw_trig(self):
