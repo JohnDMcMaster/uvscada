@@ -34,9 +34,9 @@
 		"scalar": 0.5,
 		"v4l2": {
             "Red Balance":  450,
-            "Gain":         165,
+            "Gain":         140,
             "Blue Balance": 340,
-            "Exposure":     30
+            "Exposure":     50
 		}
     },
     "objective": [
@@ -44,29 +44,29 @@
             "name":"Nikon CF Plan 10X",
             "mag": 10.0,
             "scalar": 0.5,
-            "x_view": 636,
-            "y_view": 477
+            "x_view": 0.636,
+            "y_view": 0.477
         },
         {
             "name":"Nikon CF Plan 20X",
             "mag": 20.0,
             "scalar": 0.5,
-            "x_view": 318,
-            "y_view": 238
+            "x_view": 0.318,
+            "y_view": 0.238
         },
         {
             "name":"Nikon CF Plan 50X",
             "mag": 50.0,
             "scalar": 0.5,
-            "x_view": 127,
-            "y_view": 95
+            "x_view": 0.127,
+            "y_view": 0.095
         },
         {
             "name":"Nikon CF Plan 100X",
             "mag": 100.0,
             "scalar": 0.5,
-            "x_view": 64,
-            "y_view": 48
+            "x_view": 0.064,
+            "y_view": 0.048
         }
     ]
 }
