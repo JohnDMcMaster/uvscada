@@ -1,12 +1,21 @@
 '''
-http://linuxcnc.org/docs/html/gcode.html'''
+Standard references
+http://linuxcnc.org/docs/html/gcode.html
+http://www.shender4.com/thread_chart.htm
+https://www.fnal.gov/pub/takefive/pdfs/Drill_Press_Speed_Chart.pdf
+'''
 
 import sys
 from os import path
 
 cnc = None
 class CNC(object):
-    def __init__(self, em=1./8, rpm=None, fr=2.0, fr_z=1.0, verbose=True):
+    def __init__(self, em=-1, rpm=None, fr=2.0, fr_z=1.0, verbose=False):
+        # was default 1./8
+        # for drilling?
+        if em is not None and em <= 0:
+            raise ValueError("Invalid endmill diameter")
+        
         # Endmill diameter
         self.em = em
         
@@ -55,11 +64,27 @@ def line(s='', verbose=None):
     if verbose:
         print s
 
+def comment(s):
+    if s.find('(') >= 0:
+        raise ValueError("Nested comment")
+    line('(%s)' % s)
+
+def comment_block(s):
+    comment('*' * 80)
+    comment(s)
+    comment('*' * 80)
+
 def start():
-    line('(Endmill: %0.4f)' % cnc.em)
+    if cnc.em is None:
+        comment('Endmill: none.  Drill only')
+    else:
+        comment('Endmill: %0.4f' % cnc.em)
     line('G90')
     clear_zq()
-    line('M3 S%0.1f' % cnc.rpm)
+    rpm(cnc.rpm)
+
+def rpm(val):
+    line('M3 S%0.1f' % val)
 
 def end():
     line()
@@ -100,11 +125,35 @@ def clear_dn(pos):
     line('(Clear- %0.3f)' % pos)
     return '%0.3f' % (pos - cnc.em/2 - 0.25)
 
-def g0(x, y):
-    line('G0 X%0.3f Y%0.3f' % (x, y))
+def g0(x=None, y=None, z=None):
+    xstr = ''
+    ystr = ''
+    zstr = ''
+    if x is not None:
+        xstr = ' X%s' % fmt(x)
+    if y is not None:
+        ystr = ' Y%s' % fmt(y)
+    if z is not None:
+        zstr = ' Z%s' % fmt(z)
+    line('G0%s%s%s' % (xstr, ystr, zstr))
 
-def g1(x, y):
-    line('G1 X%s Y%s F%0.3f' % (fmt(x), fmt(y), cnc.fr))
+def g1(x=None, y=None, z=None):
+    xstr = ''
+    ystr = ''
+    zstr = ''
+    if x is not None:
+        xstr = ' X%s' % fmt(x)
+    if y is not None:
+        ystr = ' Y%s' % fmt(y)
+    if z is not None:
+        zstr = ' Z%s' % fmt(z)
+    line('G1%s%s%s F%0.3f' % (xstr, ystr, zstr, cnc.fr))
+
+def m0():
+    line('M0')
+
+def m1():
+    line('M1')
 
 # Cut rectangle with upper left coordinate given
 # Cutter centered on rectangle
@@ -199,3 +248,153 @@ def circ_cent_out(x, y, r, finishes=1):
         circ_cent_slot(x, y, r + cnc.em, cw=False, com=False, leadin='g1')
     else:
         circ_cent_slot(x, y, r + cnc.em, cw=False, com=False)
+
+
+def endrange(start, end, inc, finish=0.001, com=False):
+    '''Inclusive float range(): ending at end instead of beginning like range does'''
+    if com:
+        comment('endrange %0.3f, %0.3f, %0.3f, finish=%0.3f' % (start, end, inc, finish))
+    ret = []
+    if inc < 0:
+        raise ValueError()
+    if finish:
+        ret.append(end)
+        pos = end + finish
+    else:
+        pos = end
+    if start < end:
+        while pos > start:
+            ret.append(pos)
+            pos -= inc
+    else:
+        while pos < start:
+            ret.append(pos)
+            pos += inc
+    ret.reverse()
+    return ret
+
+'''
+for cutting a pocket with the edge at the bottom (below y)
+
+pre-chain:
+endmill should be below the part edge
+it will rapid move x into position and then actuate y
+
+post-chain
+endmill will be in lower right corner
+
+align
+lr: lower right
+goes left right
+coordinates relative to align
+'''
+def pocket_lr(x, y, w, h, finishes=1, finish_only=False):
+    '''
+    # clear Y
+    g0(y=(cnc.em/2 + 0.05))
+    # Back to X
+    g0(x=-(x + cnc.em/2))
+    
+    for y in endrange(-(y + cnc.em / 2), -(y + h - cnc.em / 2), cnc.em/2):
+        g1(y=y)
+        g1(x=-(x + w + cnc.em / 2))
+        # Clear
+        g0(x=-(x + cnc.em / 2))
+    '''
+
+    comment('pocket_lr X%0.3f Y%0.3f W%0.3F H%0.3F' % (x, y, w, h))
+
+    # left, right
+    # upper, lower
+    xl = x - w + cnc.em/2
+    xr = x - cnc.em/2
+    yu = y - h + cnc.em/2
+    yl = y - cnc.em/2
+    
+    finish = 0.005
+    if finishes:
+        comment('Finish: %d %0.3f' % (finishes, finish))
+    # unfinished boundary
+    if finishes:
+        xl_uf = xl + finish
+        xr_uf = xr - finish
+        yu_uf = yu + finish
+        yl_uf = yl - finish
+    else:
+        xl_uf = xl
+        xr_uf = xr
+        yu_uf = yu
+        yl_uf = yl
+    
+    line()
+    comment("chain to lower right corner")
+    # clear Y
+    y_clear = y + cnc.em/2 + 0.05
+    g0(y=y_clear)
+    
+    for ythis in endrange(y, yu_uf, cnc.em/2, finish=0, com=True):
+        if finish_only:
+            continue
+        line()
+        comment('y=%.03f' % ythis)
+        # clear
+        g0(x=xl_uf)
+        # feed into material
+        g1(y=ythis)
+        # cut
+        g1(x=xr_uf)
+    
+    if finish_only:
+        g0(x=xr_uf)
+    
+    line()
+    
+    # cutter is at right
+    # slowly cut to return y, clearing the nubs
+    comment('cut nubs')
+    g1(y=y_clear)
+
+    line()
+    
+    comment('pocket perimeter')
+    # Now do finishing pass around
+    
+    # Return known location
+    # WARNING: right side will have nubs
+    # clear, moving to lower right avoiding nubs
+    #g0(x=xl_uf)
+    #g0(y=y_clear)
+    #g0(x=xr_uf)
+    # and dig in for the perimeter cut
+    #g1(x=xr, y=yl)
+
+    # TODO: verify chain
+    # chain good
+    # line('M1')
+
+    # Now carve out
+    def perim(delta):
+        comment('perim w/ delta %0.3f' % delta)
+        comment('chain to lr')
+        g1(x=xr - delta)
+        g1(y=yl - delta)
+        comment('lr to ur')
+        g1(xr - delta, yu + delta)
+        comment('ur to ul')
+        if finish_only:
+            g0(xl + delta, yu + delta)
+        else:
+            g1(xl + delta, yu + delta)
+        comment('ul to ll')
+        g1(xl + delta, yl - delta)
+        # already cut
+        #comment('ll to lr')
+        #g1(xr - delta, yl - delta)
+
+    #if finishes:
+    #    perim(finish)
+    perim(0.0)
+
+    # chain to edge
+    g1(y=y_clear)
+    
