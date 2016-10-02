@@ -10,9 +10,10 @@ def fmt(f):
     return '%1.1E' % f
 
 class GP307(object):
-    def __init__(self, port="/dev/ttyUSB0", ser_timeout=10.0):
+    def __init__(self, port="/dev/ttyUSB0", ser_timeout=10.0, ser=None):
         self.verbose = 0
-        self.ser = serial.Serial(port,
+        if not ser:
+            ser = serial.Serial(port,
                 baudrate=9600,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
@@ -23,6 +24,7 @@ class GP307(object):
                 timeout=ser_timeout,
                 # Blocking writes
                 writeTimeout=None)
+        self.ser = ser
         self.ser.flushInput()
         self.ser.flushOutput()
         self.mode = None
