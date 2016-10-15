@@ -42,34 +42,34 @@
     },
     "objective": [
 		{
-			"name":"Mitutoyo Apo 20X (trinocular)",
+			"name":"Mitutoyo Apo 20X",
 			"scalar": 0.5,
 			"x_view": 0.544
 		},
 		{
-			"name":"Mitutoyo Apo 2X (trinocular)",
+			"name":"Mitutoyo Apo 2X",
 			"scalar": 0.5,
 			"x_view": 5.44
 		},
 		{
-			"name":"Mitutoyo Apo 5X (trinocular)",
+			"name":"Mitutoyo Apo 5X",
 			"scalar": 0.5,
 			"x_view": 2.176
 		},
 		{
-			"name":"Mitutoyo Apo 10X (trinocular)",
+			"name":"Mitutoyo Apo 10X",
 			"scalar": 0.5,
 			"x_view": 1.088
 		},
 		{
-			"name":"Mitutoyo Apo 100X (trinocular)",
+			"name":"Mitutoyo Apo 50X",
 			"scalar": 0.5,
-			"x_view": 0.109
+			"x_view": 0.2176
 		},
 		{
-			"name":"Olympus Neo SPlan 50X ULWD w/ DIC (trinocular)",
+			"name":"Mitutoyo Apo 100X",
 			"scalar": 0.5,
-			"x_view": 0.220
+			"x_view": 0.109
 		}
     ]
 }
