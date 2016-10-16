@@ -28,13 +28,14 @@ class LcncHal(Hal):
     def _cmd(self, cmd):
         raise Exception("Required")
    
-    def mv_abs(self, pos):
+    def mv_abs(self, pos, limit=True):
         if len(pos) == 0:
             return
-        limit = self.limit()
-        for k, v in pos.iteritems():
-            if v < limit[k][0] or v > limit[k][1]:
-                raise AxisExceeded("Axis %c to %s exceeds liimt (%s, %s)" % (k, v, limit[k][0], limit[k][1]))
+        if limit:
+            limit = self.limit()
+            for k, v in pos.iteritems():
+                if v < limit[k][0] or v > limit[k][1]:
+                    raise AxisExceeded("Axis %c to %s exceeds liimt (%s, %s)" % (k, v, limit[k][0], limit[k][1]))
         
         if self.dry:
             for k, v in pos.iteritems():

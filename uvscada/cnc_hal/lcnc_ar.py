@@ -30,7 +30,7 @@ class LcncPyHalAr(LcncPyHal):
     
     # Machine configuration directory is '/home/machinekit/machinekit/configs/ARM.BeagleBone.CRAMPS'
     # Machine configuration file is 'simplified-rsh.ini'
-    def _init(self, host, local_ini=None, remote_ini=None, log=None, dry=False):
+    def _init(self, host, local_ini=None, remote_ini=None, log=None, dry=False, username='machinekit'):
         self.running = True
         self.tunnel = None
         self.verbose = 0
@@ -38,8 +38,8 @@ class LcncPyHalAr(LcncPyHal):
         print 'Creating SSH connection'
         self.ssh = paramiko.SSHClient()
         self.ssh.load_system_host_keys()
-        self.ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
-        self.ssh.connect(hostname=host, port=22, username='machinekit', key_filename=None,
+        self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.ssh.connect(hostname=host, port=22, username=username, key_filename=None,
                        look_for_keys=True, password=None)
         
         remote_tmp = '/tmp/lcnc_ar'
