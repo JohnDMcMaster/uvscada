@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser.add_argument('outf', default='log.jl', nargs='?', help='output file')
     args = parser.parse_args()
     
-    pp = PPro()
+    pp = PPro(port=args.port)
     itr = 0
     fj = open(args.outf, 'w')
     while True:
