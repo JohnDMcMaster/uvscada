@@ -17,7 +17,8 @@ import struct
 import argparse
 
 PRINT_QUICK = 10
-STEP_T = 60.0
+STEP_T = 120.0
+ZMAX = 5.0
 
 class ALSASrc(object):
     def __init__(self):
@@ -96,31 +97,41 @@ def cap(hal, csv_fn):
     def mvz(z):
         hal.mv_abs({'z': z}, limit=False)
 
-    def gen():
+    def gen_exp():
         yield 0.000
         
         itr = 0
         zil = 0
         while True:
-            z = 0.001 * (1.5 ** itr)
-            if z > 1.0:
+            z = 0.001 * (1.2 ** itr)
+            if z > ZMAX:
                 break
+            
+            # skip if less than backlash
+            if z < 0.002:
+                itr += 1
+                continue
             
             '''
             zi = int(z * 1000)
             if zi == zil:
+                itr += 1
                 continue
             '''
             
             yield z
             itr += 1
+    
+    def gen_lin():
+        return [x / 1000. for x in xrange(0, int(ZMAX * 1000), int(0.2 * 1000))]
 
     fd = open(csv_fn, 'w')
     cw = csv.writer(fd)
     cw.writerow(['t', 'dt', 'z', 'n', 'pulses'])
     stepn = 0
 
-    for z in gen():
+    #for z in gen_exp():
+    for z in gen_lin():
         print
         stepn += 1
         print 'Pos %0.4f, n %d' % (z, stepn)
