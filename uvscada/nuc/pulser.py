@@ -74,16 +74,16 @@ Pulse height analyzer
 Identifies pulses
 '''
 class PHA(object):
-    def __init__(self):
+    def __init__(self, phi, plo):
         self.pulsing = False
         self.pulses = 0
         self.pulsesl = 0
 
         # Recognize a pulse at 75% saturation
-        self.phi = int(32767 * 0.75)
+        self.phi = phi
         # Pulse ends if we cross 25% saturation
         # (note: goes very (saturates) negative after pulse)
-        self.plo = int(32767 * 0.25)
+        self.plo = plo
         self.buff = []
 
     def next(self, sample):
@@ -96,7 +96,7 @@ class PHA(object):
         else:
             if sample >= self.phi:
                 self.pulsing = True
-                self.buff = []
+                self.buff = [sample]
                 self.pulses += 1
         return None
     

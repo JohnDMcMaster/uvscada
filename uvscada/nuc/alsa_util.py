@@ -29,7 +29,7 @@ class ALSASrc(object):
                 
             for i in xrange(0, len(data), self.sample_bytes):
                 samples = self.unpacker.unpack(data[i:i+self.sample_bytes])
-                #print [buffn, samplen, samples]
+                #print [self.buffn, samples]
                 sample = samples[-1]
                 
                 yield sample

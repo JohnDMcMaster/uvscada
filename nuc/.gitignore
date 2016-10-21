@@ -1,2 +1,2 @@
-out.csv
-out.jl
+*.csv
+*.jl

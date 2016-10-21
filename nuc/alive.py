@@ -198,7 +198,7 @@ def cap():
         # 16 bit little endian samples
         for i in xrange(0, len(data), sample_bytes):
             samples = unpacker.unpack(data[i:i+sample_bytes])
-            #print [buffn, samplen, samples]
+            print [buffn, samplen, samples]
             cw.writerow([buffn, samplen] + list(samples))
             sample = samples[-1]
 
