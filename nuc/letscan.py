@@ -11,88 +11,30 @@ from uvscada.cnc_hal import lcnc_ar
 
 import sys
 import time
-import alsaaudio
 import csv
-import struct
 import argparse
 
 PRINT_QUICK = 10
 STEP_T = 120.0
 ZMAX = 5.0
 
-class ALSASrc(object):
-    def __init__(self):
-        card = 'default'
-
-        self.pcm = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NONBLOCK, card)
-
-        nchans = 2
-        self.pcm.setchannels(nchans)
-        self.pcm.setrate(44100)
-        self.pcm.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-        self.sample_bytes = 2 * nchans
-        self.unpacker = struct.Struct('<' + ('h' * nchans))
-
-        self.pcm.setperiodsize(160)
-    
-        self.buffn = 0
-
-    def gen(self):
-        while True:
-            # Read data from device
-            l, data = self.pcm.read()
-          
-            if not l:
-                continue
-            self.buffn += 1
-                
-            for i in xrange(0, len(data), self.sample_bytes):
-                samples = self.unpacker.unpack(data[i:i+self.sample_bytes])
-                #print [buffn, samplen, samples]
-                sample = samples[-1]
-                
-                yield sample
-
-class Pulser(object):
-    def __init__(self):
-        self.pulsing = False
-        self.pulses = 0
-        self.pulsesl = 0
-
-        # Recognize a pulse at 75% saturation
-        self.phi = int(32767 * 0.75)
-        # Pulse ends if we cross 25% saturation
-        # (note: goes very (saturates) negative after pulse)
-        self.plo = int(32767 * 0.25)
-
-    def next(self, sample):
-        if self.pulsing:
-            if sample <= self.plo:
-                self.pulsing = False
-        else:
-            if sample >= self.phi:
-                self.pulsing = True
-                self.pulses += 1
-    def last(self):
-        ret = self.pulses - self.pulsesl
-        self.pulsesl = self.pulses
-        return ret
+from uvscada.nuc import pulser
+from uvscada.nuc import alsa_util
 
 def cap(hal, csv_fn):
     print 'Configuring ALSA'
-    asrc = ALSASrc()
+    asrc = alsa_util.ALSASrc()
     
     print 'looping'
     samplen = 0
     tlast = time.time()
-    pulser = Pulser()
-    tstart = time.time()
+    psr = pulser.Pulser()
     agen = asrc.gen()
-    
-    smin = float('+inf')
-    smax = float('-inf')
-    sminl = float('+inf')
-    smaxl = float('-inf')
+    # Count pulses at each step
+    stat_step = pulser.PulserStat()
+    stat_step.tprint = 0
+    # Periodically print info during each step
+    stat_mon = psr.PulserStat()
 
     def mvz(z):
         hal.mv_abs({'z': z}, limit=False)
@@ -139,32 +81,20 @@ def cap(hal, csv_fn):
         mvz(z)
         
         # Now collect pulses for a minute
-        t0 = time.time()
-        pulses_t0 = pulser.pulses
-        pulser.last()
-        tlast = time.time()
+        psr.last()
+        stat_step.rstl()
+        stat_mon.rstl()
         
         while True:
             sample = agen.next()
-            pulser.next(sample)
-            samplen += 1
+            pulse = psr.next(sample)
+            stat_step.next(sample, pulse)
+            stat_mon.next(sample, pulse)
 
-            smin = int(min(smin, sample))
-            smax = int(max(smax, sample))
-            sminl = int(min(sminl, sample))
-            smaxl = int(max(smaxl, sample))
-
-            if time.time() - tlast > PRINT_QUICK:
-                tlast = time.time()
-                print 'Min: %d (%d), max: %d (%d), pulses: %d (%d)' % (smin, sminl, smax, smaxl, pulser.pulses, pulser.last())
-                sminl = float('+inf')
-                smaxl = float('-inf')
-            
             t1 = time.time()
-            dt = t1 - t0
+            dt = t1 - stat_step.tlast
             if dt > STEP_T:
-                pulses = pulser.pulses - pulses_t0
-                row = ['%0.1f' % t0, '%0.1f' % dt , '%0.4f' % z, stepn, pulses]
+                row = ['%0.1f' % stat_step.tlast, '%0.1f' % dt , '%0.4f' % z, stepn, stat_step.pulsesl]
                 cw.writerow(row)
                 fd.flush()
                 print row
@@ -175,7 +105,6 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
     parser.add_argument('fn', nargs='?', default='out.csv', help='csv out')
     args = parser.parse_args()
-
 
     hal = None
     try:
@@ -189,4 +118,3 @@ if __name__ == '__main__':
         print 'Shutting down hal'
         if hal:
             hal.ar_stop()
-
