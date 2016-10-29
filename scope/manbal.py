@@ -181,7 +181,43 @@ class CNCGUI(QMainWindow):
         if self.gstWindowId:
             print "Starting gstreamer pipeline"
             self.player.set_state(gst.STATE_PLAYING)
+    
+    def awb(self):
+        # makes one step for now
         
+        # note
+        # rb is out of 1000
+        # actual is out of 1024
+
+        rv = int(self.r_val.text())
+        gv = int(self.g_val.text())
+        bv = int(self.b_val.text())
+        
+        rb = int(self.r_bal.text())
+        bb = int(self.b_bal.text())
+        
+        # Using hacked driver where these are set directly
+        setg = int(self.ctrls["Gain"].text())
+        setr = int(self.ctrls["Red Balance"].text())
+        setb = int(self.ctrls["Blue Balance"].text())
+        
+        
+        # make a linear guess based on the difference
+        # it might under or overshoot, but should converge in time
+        limit = lambda x: max(min(int(x), 1023), 0)
+        sf = 0.2
+        rb_new = limit(setr - rb * sf)
+        bb_new = limit(setb - bb * sf)
+        print 'Step'
+        print '  R: %d w/ %d => %d' % (setr, rb, rb_new)
+        print '  B: %d w/ %d => %d' % (setb, bb, bb_new)
+        
+        #ctrl_set(self.vid_fd, "Red Balance", rb_new)
+        self.ctrls["Red Balance"].setText(str(rb_new))
+        
+        #ctrl_set(self.vid_fd, "Blue Balance", bb_new)
+        self.ctrls["Blue Balance"].setText(str(bb_new))
+    
     def get_video_layout(self):
         # Overview
         def low_res_layout():
@@ -202,8 +238,12 @@ class CNCGUI(QMainWindow):
             
             return layout
         
+        self.awb_pb = QPushButton("AWG (G, E fixed)")
+        self.awb_pb.clicked.connect(self.awb)
+        
         layout = QHBoxLayout()
         layout.addLayout(low_res_layout())
+        layout.addWidget(self.awb_pb)
         return layout
 
     def get_ctrl_layout(self):
