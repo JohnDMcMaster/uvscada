@@ -34,9 +34,9 @@
 		"height": 2448,
 		"scalar": 0.5,
 		"v4l2": {
-            "Red Balance":  170,
+            "Red Balance":  114,
             "Gain":         165,
-            "Blue Balance": 325,
+            "Blue Balance": 420,
             "Exposure":     30
 		}
     },
