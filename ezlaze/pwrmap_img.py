@@ -8,7 +8,8 @@ import datetime
 import csv
 import numpy as np
 import math
-import statistics
+
+from uvscada import statistics
 
 # http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
 #def histeq(buff, nbr_bins=0x10000):
