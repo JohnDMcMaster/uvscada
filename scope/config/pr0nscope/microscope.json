@@ -33,10 +33,28 @@
 		"width": 3264,
 		"height": 2448,
 		"scalar": 0.5,
-		"v4l2": {
-            "Red Balance":  114,
+		"fair_v4l2": {
+            "Red Balance":  168,
             "Gain":         165,
-            "Blue Balance": 420,
+            "Blue Balance": 242,
+            "Exposure":     30
+		},
+		"pretty_v4l2": {
+            "Red Balance":  146,
+            "Gain":         165,
+            "Blue Balance": 351,
+            "Exposure":     30
+		},
+		"xpol_v4l2": {
+            "Red Balance":  146,
+            "Gain":         165,
+            "Blue Balance": 351,
+            "Exposure":     800
+		},
+		"v4l2": {
+            "Red Balance":  146,
+            "Gain":         165,
+            "Blue Balance": 351,
             "Exposure":     30
 		}
     },
