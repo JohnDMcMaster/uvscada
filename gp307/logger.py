@@ -5,6 +5,7 @@ from uvscada import bnbser
 from uvscada import statistics
 
 import argparse
+import os
 import time
 import math
 
@@ -17,7 +18,7 @@ def fmte(f):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='I leave all that I own to my cat guppy')
     parser.add_argument('--host', default=None, help='Serial port')
-    parser.add_argument('--port', default=5000, help='Serial port')
+    parser.add_argument('--port', default=None, help='Serial port')
     parser.add_argument('--diff', action='store_true', help='Print simple diff')
     parser.add_argument('--stat', action='store_true', help='log10 u + std over last min')
     # Every 5 seconds => stability over 1 minute
@@ -33,8 +34,11 @@ if __name__ == '__main__':
         f.write('t, IG, A, B\n')
         f.flush()
     
-    if args.host:
-        ser = bnbser.BNBRawT(host=args.host)
+    ser = None
+    host = args.host or os.getenv('GP307_HOST')
+    if host:
+        port = args.port or os.getenv('GP307_PORT')
+        ser = bnbser.BNBRawT(host)
     gp = gp307.GP307(args.dev, ser=ser)
     
     lasts = []

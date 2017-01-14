@@ -8,7 +8,9 @@ import select
 
 # Raw TCP socket serial port
 class BNBRawT(object):
-    def __init__(self, host, port=5000):
+    def __init__(self, host, port=None):
+        port = port or 5000
+        
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((host, port))
         self.timeout = 10.0

@@ -12,6 +12,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     wps = WPS7()
+    print 'Warm %d sec, fire %d sec' % (args.fil, args.hv)
     
     try:
         print 'Warming filament %d sec...' % args.fil
