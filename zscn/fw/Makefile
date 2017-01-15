@@ -22,6 +22,7 @@ BINARY = zscn
 V=1
 LDSCRIPT = stm32f4-discovery.ld
 OPENCM3_DIR ?= /home/mcmaster/doc/ext/libopencm3-examples/libopencm3
+TGT_CFLAGS = -Wall -Werror
 
 include Makefile.include
 

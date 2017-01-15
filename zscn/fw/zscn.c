@@ -24,6 +24,9 @@
 #include <libopencm3/usb/cdc.h>
 #include <libopencm3/cm3/scb.h>
 
+#include "ring.h"
+#include "ring.c"
+
 static const struct usb_device_descriptor dev = {
 	.bLength = USB_DT_DEVICE_SIZE,
 	.bDescriptorType = USB_DT_DEVICE,
@@ -194,16 +197,21 @@ static int cdcacm_control_request(usbd_device *usbd_dev,
 	return 0;
 }
 
+#define RX_BUFF_SZ  128
+struct ring rx_ring;
+uint8_t rx_ring_buff[RX_BUFF_SZ];
+
 static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep)
 {
+	char buf[64];
+	int len;
+	
 	(void)ep;
 
-	char buf[64];
-	int len = usbd_ep_read_packet(usbd_dev, 0x01, buf, 64);
+	len = usbd_ep_read_packet(usbd_dev, 0x01, buf, 64);
 
 	if (len) {
-		while (usbd_ep_write_packet(usbd_dev, 0x82, buf, len) == 0);
-		while (usbd_ep_write_packet(usbd_dev, 0x82, buf, len) == 0);
+        ring_writec(&rx_ring, buf, len);
 	}
 }
 
@@ -227,6 +235,8 @@ int main(void)
 {
 	usbd_device *usbd_dev;
 
+    ring_init(&rx_ring, rx_ring_buff, RX_BUFF_SZ);
+
 	rcc_clock_setup_hse_3v3(&rcc_hse_8mhz_3v3[RCC_CLOCK_3V3_120MHZ]);
 
 	rcc_periph_clock_enable(RCC_GPIOA);
@@ -244,5 +254,17 @@ int main(void)
 
 	while (1) {
 		usbd_poll(usbd_dev);
+		//usbd_ep_write_packet(usbd_dev, 0x82, "?", 1);
+
+        while (1) {
+            int32_t c = ring_read_ch(&rx_ring, NULL);
+            char cc;
+            if (c < 0) {
+                break;
+            }
+            cc = c + 1;
+            usbd_ep_write_packet(usbd_dev, 0x82, &cc, 1);
+        }
 	}
 }
+
