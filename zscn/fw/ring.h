@@ -24,6 +24,7 @@ int32_t ring_writec(struct ring *ring, const char *data, ring_size_t size);
 int32_t ring_write(struct ring *ring, const uint8_t *data, ring_size_t size);
 int32_t ring_read_ch(struct ring *ring, uint8_t *ch);
 int32_t ring_read(struct ring *ring, uint8_t *data, ring_size_t size);
+unsigned int ring_readu(struct ring *ring, uint8_t *data, ring_size_t size);
 
 inline int32_t ring_writec(struct ring *ring, const char *data, ring_size_t size) {
     return ring_write(ring, (uint8_t *)data, size);

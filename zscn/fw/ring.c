@@ -55,3 +55,15 @@ int32_t ring_read(struct ring *ring, uint8_t *data, ring_size_t size)
 	return -i;
 }
 
+unsigned int ring_readu(struct ring *ring, uint8_t *data, ring_size_t size)
+{
+	int32_t i;
+
+	for (i = 0; i < size; i++) {
+		if (ring_read_ch(ring, data + i) < 0)
+			return i;
+	}
+
+	return i;
+}
+
