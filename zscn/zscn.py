@@ -1,6 +1,6 @@
-from uvscada import zscnc
+from uvscada import zscn
 from uvscada.k2750 import K2750
-from uvscada.zscnc import floats
+from uvscada.zscn import floats
 
 import argparse
 import json
@@ -32,11 +32,11 @@ if __name__ == '__main__':
             raise Exception("Refusing to overwrite")
 
     k = K2750(port='/dev/ttyUSB0')
-    z = zscnc.ZscnSer(device='/dev/ttyACM1')
+    z = zscn.ZscnSer(device='/dev/ttyACM1')
     
     print 'Ready'
-    zscnc.rst_verify(z, k)
-    pins = zscnc.scan(z, k, pack=args.pack, verbose=True)
+    zscn.rst_verify(z, k)
+    pins = zscn.scan(z, k, pack=args.pack, verbose=True)
     if args.jout:
         save(pins, args.jout,
                 vendor=args.vendor, product=args.product, desc=args.desc, pack=args.pack)

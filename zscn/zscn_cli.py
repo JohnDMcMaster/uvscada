@@ -1,4 +1,4 @@
-from uvscada import zscnc
+from uvscada import zscn
 import cmd
 
 '''
@@ -46,7 +46,7 @@ class CLI(cmd.Cmd):
         return True
 
 if __name__ == '__main__':
-    z = zscnc.ZscnSer(device='/dev/ttyACM1')
+    z = zscn.ZscnSer(device='/dev/ttyACM1')
     print 'Ready'
     cli = CLI()
     cli.z = z

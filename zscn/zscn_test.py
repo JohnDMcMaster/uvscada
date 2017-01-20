@@ -1,12 +1,12 @@
-from uvscada import zscnc
+from uvscada import zscn
 from uvscada.k2750 import K2750
-from uvscada.zscnc import floats
+from uvscada.zscn import floats
 
 import time
 
 if __name__ == '__main__':
     k = K2750(port='/dev/ttyUSB0')
-    z = zscnc.ZscnSer(device='/dev/ttyACM1')
+    z = zscn.ZscnSer(device='/dev/ttyACM1')
     
     print 'Ready'
     z.rst()
@@ -84,5 +84,5 @@ if __name__ == '__main__':
             z.ch_off(i)
         z.led('o', 0)
     
-    #zscnc.scan_dip(z, k, npins=40, verbose=True)
-    #zscnc.scan_dip(z, k, npins=40, pins=xrange(30, 41, 1), verbose=True)
+    #zscn.scan_dip(z, k, npins=40, verbose=True)
+    #zscn.scan_dip(z, k, npins=40, pins=xrange(30, 41, 1), verbose=True)

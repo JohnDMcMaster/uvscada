@@ -3,109 +3,41 @@ import sys
 import time
 import struct
 import binascii
-from collections import namedtuple
+
+# 0.6 had some issues still
+# Do this right
+DWELL = 1.0
+
+CMD_0 =     0x00
+CMD_1 =     0x80
+
+CMD_LED_G = 0xFA & 0x7F
+CMD_LED_O = 0xFB & 0x7F
+CMD_LED_R = 0xFC & 0x7F
+CMD_LED_B = 0xFD & 0x7F
+CMD_RST =   0xFE
+CMD_NOP =   0xFF
+
+led_s2i = {
+    'g': CMD_LED_G,
+    'o': CMD_LED_O,
+    'r': CMD_LED_R,
+    'b': CMD_LED_B,
+}
+
+def floats(f):
+    if f == float('inf'):
+        return 'inf'
+    else:
+        if f < 1e3:
+            return '% 9.3f' % (f,)
+        elif f < 1e6:
+            return '% 9.3fk' % (f / 1e3,)
+        else:
+            return '% 9.3fM' % (f / 1e6,)
 
 class Timeout(Exception):
     pass
-
-class AckException(Exception):
-    pass
-    
-class BadChecksum(Exception):
-    pass
-
-# 0xC0 
-SLIP_END = chr(192)
-# 0xDB
-SLIP_ESC = chr(219)
-
-REG_NONE =      0x00
-REG_ACK =       0x01
-REG_NOP =       0x02
-
-'''
-uint8_t checksum;
-uint8_t seq;
-uint8_t opcode;
-uint32_t value;
-'''
-PACKET_FORMAT = '<BBBi'
-PACKET_SIZE = struct.calcsize(PACKET_FORMAT)
-Packet = namedtuple('zscnpkt', ('checksum', 'seq', 'opcode', 'value'))
-
-def checksum(data):
-    data = str(data)
-    return (~(sum([ord(c) for c in data]) % 0x100)) & 0xFF
-
-def slip(bytes):
-    ret = SLIP_END
-    for b in bytes:
-        if b == SLIP_END:
-            # If a data byte is the same code as END character, a two byte sequence of
-            # ESC and octal 334 (decimal 220) is sent instead.  
-            ret += SLIP_ESC + chr(220)
-        elif b == SLIP_ESC:
-            # If it the same as an ESC character, an two byte sequence of ESC and octal 335 (decimal
-            # 221) is sent instead
-            ret += SLIP_ESC + chr(221)
-        else:
-            ret += b
-    # When the last byte in the packet has been
-    # sent, an END character is then transmitted
-    return ret + SLIP_END
-
-def deslip(bytes):
-    '''Returns None if slip decoding failed'''
-    escape = False
-    rx = ''
-    i = 0
-    
-    def slip_dbg(s):
-        #print s
-        pass
-
-    while i < len(bytes):
-        c = chr(bytes[i])
-        i += 1
-        slip_dbg('')
-        slip_dbg('Processing: %02X' % ord(c))
-
-        if escape:
-            slip_dbg('Escape followed')
-            escape = False
-            
-            # If a data byte is the same code as END character, a two byte sequence of
-            # ESC and octal 334 (decimal 220) is sent instead.  
-            if c == chr(220):
-                rx += SLIP_END
-            # If it the same as an ESC character, an two byte sequence of ESC and octal 335 (decimal
-            # 221) is sent instead
-            elif c == chr(221):
-                rx += SLIP_ESC
-            else:
-                slip_dbg('Escape invalid')
-                del bytes[0:i]
-                rx = ''
-                i = 0
-                continue
-        elif c == SLIP_END:
-            del bytes[0:i]
-            # Not the right size? drop it
-            if len(rx) == PACKET_SIZE:
-                slip_dbg('Good packet')
-                return rx
-            slip_dbg('Dropping packet: bad size')
-            rx = ''
-            i = 0
-            continue
-        elif c == SLIP_ESC:
-            slip_dbg('Escape detected')
-            escape = True
-        # Ordinary character
-        else:
-            slip_dbg('Normal char')
-            rx += c
-    return None
 
 class ZscnSer:
     # wtf is acm
@@ -116,7 +48,7 @@ class ZscnSer:
         
         self.seq = 0
         if device is None:
-            for s in ("/dev/ttyACM0",):
+            for s in ("/dev/ttyACM1",):
                 try:
                     self.try_open(s)
                     print 'Opened %s okay' % s
@@ -135,106 +67,131 @@ class ZscnSer:
         self.serial.flushInput()
         
         # Send and make sure we get an ack
-        self.reg_write(REG_NOP, 0)
+        self.packet_write(CMD_NOP)
+        '''
+        if int(time.time()) % 2:
+            self.packet_write(CMD_1 | CMD_LED_B, wait_ack=False)
+            self.packet_write(CMD_1 | CMD_LED_R, wait_ack=False)
+        else:
+            self.packet_write(CMD_0 | CMD_LED_B, wait_ack=False)
+            self.packet_write(CMD_0 | CMD_LED_R, wait_ack=False)
+        '''
+        '''
+        while True:
+            self.packet_write(CMD_0 | CMD_LED_R, wait_ack=False)
+            time.sleep(1)
+            self.packet_write(CMD_1 | CMD_LED_R, wait_ack=False)
+            time.sleep(1)
+        '''
 
     def try_open(self, device):
         self.device = device
         self.serial = serial.Serial(port=self.device, baudrate=38400, timeout=1, writeTimeout=1)    
         if self.serial is None:
             raise IOError('Can not connect to serial')
-        
-    def reg_write(self, reg, value):
-        self.packet_write(0x80 | reg, value)
-        
-    def reg_read(self, reg, retries=3):
-        '''Return 32 bit register value'''
-        for i in xrange(retries):
-            try:
-                self.serial.flushInput()
-                self.packet_write(reg, 0)
-                
-                reply_packet = self.packet_read()
-                if reply_packet.opcode != reg:
-                    print "WARNING: Replied wrong reg.  Expected 0x%02X but got 0x%02X" % (reg, reply_packet.opcode)
-                    # try to flush out
-                    time.sleep(0.1)
-                    continue
-                return reply_packet.value
-            except BadChecksum as e:
-                if i == retries-1:
-                    raise e
-                print 'WARNING: bad checksum on read: %s' % (e,)
-            except Timeout as e:
-                if i == retries-1:
-                    raise e
-                print 'WARNING: timed out read'
-    
-    def debug_read(self):
-        print 'DEBUG IN: reading'
-        buff = self.serial.read(1024)
-        print 'DEBUG IN: %s' % buff
-        print 'DEBUG IN: %s' % binascii.hexlify(buff)
-        buff = self.serial.read(1024)
-        print 'DEBUG IN: %s' % buff
-        print 'DEBUG IN: %s' % binascii.hexlify(buff)
- 
-    def packet_write(self, reg, value, retries=3):
-        #print 'Packet write reg=0x%02X, value=0x%08X' % (reg, value)
-        packet = struct.pack('<BBi', self.seq, reg, value)
-        packet = chr(checksum(packet)) + packet
-        out = slip(packet)
-        self.seq = (self.seq + 1) % 0x100
 
-        print 'DEBUG OUT: %s' % packet
-        print 'DEBUG OUT: %s' % binascii.hexlify(packet)
+    def rst(self):
+        self.packet_write(CMD_RST)
 
-        if self.debug:
-            print 'DEBUG zscn: packet: %s, sending: %s' % (binascii.hexlify(packet), binascii.hexlify(out))
-            #if self.serial.inWaiting():
-            #    raise Exception('At send %d chars waiting' % self.serial.inWaiting())
+    def nop(self):
+        self.packet_write(CMD_NOP)
+
+    def led(self, which, state):
+        if state:
+            self.led_on(which)
+        else:
+            self.led_off(which)
+
+    def led_off(self, which):
+        self.packet_write(0x00 | led_s2i[which])
+
+    def led_on(self, which):
+        self.packet_write(0x80 | led_s2i[which])
+
+    def ch_off(self, ch):
+        self.packet_write(0x00 | ch)
+
+    def ch_on(self, ch):
+        self.packet_write(0x80 | ch)
+        
+    def packet_write(self, cmd, wait_ack=True, retries=3):
+        packet_out = chr(cmd)
+        #print 'out: %s' % binascii.hexlify(packet_out)
         for retry in xrange(retries):
             try:
                 self.serial.flushInput()
-                self.serial.write(out)
+                self.serial.write(packet_out)
                 self.serial.flush()
                 
-                self.debug_read()
-                
                 if self.wait_ack:
-                    try:
-                        _ack_packet = self.packet_read()
-                    except BadChecksum as e:
-                        print 'WARNING: bad rx checksum'
-                        continue
-                        
-                        # poorly assume if we get any response back that the write succeeded
-                        # since we are throwing the reply away anyway
-                return
+                    if self.packet_read() == packet_out:
+                        return
             except Timeout:
                 print 'WARNING: retry %s timed out' % retry
                 continue
         raise Timeout('Failed to write packet after %d retries' % retries)
         
     def packet_read(self):
-        # Now read response
-        # Go until we either get a packet or serial port times out
-        rx = bytearray()
-        while True:
-            while True:
-                c = self.serial.read(1)
-                if not c:
-                    raise Timeout('Failed to read serial port')
-                rx += c
-                #print 'Read %s' % binascii.hexlify(rx)
-                packet_raw = deslip(rx)
-                if packet_raw:
-                    break
-            #print 'Got packet of length %d' % len(packet_raw)
-            packet = Packet(*struct.unpack(PACKET_FORMAT, packet_raw))
-            checksum_computed = checksum(packet_raw[1:])
-            if packet.checksum != checksum_computed:
-                self.serial.flushOutput()
-                self.serial.flushInput()
-                raise BadChecksum("Expected 0x%02X but got 0x%02X" % (packet.checksum, checksum_computed))
-            return packet
-        
+        c = self.serial.read(1)
+        if not c:
+            raise Timeout('Failed to read serial port')
+        #print 'In: %s' % binascii.hexlify(c)
+        return c
+
+def scan(z, k, pack='dip40', pins=None, verbose=True, dwell=DWELL):
+    m = {}
+    
+    if pack == 'dip40':
+        npins = 40
+    elif pack == 'sdip64':
+        npins = 64
+    else:
+        raise Exception("Not supported")
+    
+    if pins is None:
+        pins = xrange(1, npins + 1, 1)
+
+    g = 0
+    z.led('o', 1)
+    z.led('r', 0)
+    try:
+        for pin in pins:
+            ch = pin - 1
+            z.led('g', g)
+            g = not g
+            z.ch_on(ch)
+            time.sleep(dwell)
+            res = k.res()
+            if verbose:
+                print '% 3u: %s' % (pin, floats(res))
+            z.ch_off(ch)
+            m[pin] = res
+    except:
+        z.led('r', 1)
+        raise
+    
+    time.sleep(dwell)
+    res = k.res()
+    if verbose:
+        print 'End: %s' % (floats(res),)
+    if res != float('inf'):
+        raise Exception("Expected inf, got %s" % floats(res))
+
+    z.led('o', 0)
+    z.led('g', 1)
+    return m
+
+def rst_verify(z, k, dwell=DWELL, verbose=True):
+    z.rst()
+
+    if 1:
+        print 'All off'
+        for i in xrange(64):
+            z.ch_off(i)
+
+    time.sleep(dwell)
+    res = k.res()
+    if verbose:
+        print 'Reset: %s' % (floats(res),)
+    if res != float('inf'):
+        raise Exception("Expected inf, got %s" % floats(res))
