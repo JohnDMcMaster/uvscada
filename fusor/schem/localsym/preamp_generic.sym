@@ -1,0 +1,63 @@
+v 20130925 2
+T 300 400 5 10 0 0 0 0 1
+device=RESISTOR
+T 0 0 8 10 0 1 0 0 1
+pins=2
+T 0 0 8 10 0 1 0 0 1
+class=DISCRETE
+B 700 100 1000 1200 3 0 0 0 -1 -1 0 -1 -1 -1 -1 -1
+P 100 700 700 700 1 0 0
+{
+T 605 745 5 8 0 1 0 6 1
+pinnumber=2
+T 700 650 5 8 0 0 180 0 1
+pinseq=2
+T 700 650 5 8 0 1 180 0 1
+pintype=pas
+T 155 795 5 8 1 1 0 0 1
+pinlabel=DET HV
+}
+P 2300 1000 1700 1000 1 0 0
+{
+T 1795 1045 5 8 0 1 0 0 1
+pinnumber=2
+T 1700 1050 5 8 0 0 0 0 1
+pinseq=2
+T 1700 1050 5 8 0 1 0 0 1
+pintype=pas
+T 2145 1095 5 8 1 1 0 6 1
+pinlabel=HV IN
+}
+P 2300 200 1700 200 1 0 0
+{
+T 1795 245 5 8 0 1 0 0 1
+pinnumber=2
+T 1700 250 5 8 0 0 0 0 1
+pinseq=2
+T 1700 250 5 8 0 1 0 0 1
+pintype=pas
+T 2145 295 5 8 1 1 0 6 1
+pinlabel=OUT
+}
+P 2300 600 1700 600 1 0 0
+{
+T 1795 645 5 8 0 1 0 0 1
+pinnumber=2
+T 1700 650 5 8 0 0 0 0 1
+pinseq=2
+T 1700 650 5 8 0 1 0 0 1
+pintype=pas
+T 2145 695 5 8 1 1 0 6 1
+pinlabel=LV IN
+}
+P 100 400 700 400 1 0 0
+{
+T 605 445 5 8 0 1 0 6 1
+pinnumber=2
+T 700 350 5 8 0 0 180 0 1
+pinseq=2
+T 700 350 5 8 0 1 180 0 1
+pintype=pas
+T 255 495 5 8 1 1 0 0 1
+pinlabel=GND
+}
