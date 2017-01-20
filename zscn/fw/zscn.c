@@ -110,14 +110,14 @@ chan_t chans[] = {
     {GPIOD, GPIO9}, //C45
     {GPIOD, GPIO10},
     {GPIOD, GPIO11},
-    {GPIOD, GPIO12},
-    {GPIOD, GPIO13},
-    {GPIOD, GPIO14},//C50
     {GPIOD, GPIO15},
+    {GPIOE, GPIO0},
+    {GPIOE, GPIO1},//C50
     {GPIOE, GPIO2},
     {GPIOE, GPIO3},
     {GPIOE, GPIO4},
-    {GPIOE, GPIO5}, //C55
+    {GPIOE, GPIO5},
+    {GPIOE, GPIO6}, //C55
     {GPIOE, GPIO7},
     {GPIOE, GPIO8},
     {GPIOE, GPIO9},
@@ -133,21 +133,25 @@ void gpio_init(void) {
 	rcc_clock_setup_hse_3v3(&rcc_hse_8mhz_3v3[RCC_CLOCK_3V3_120MHZ]);
 
 	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_GPIOB);
+	rcc_periph_clock_enable(RCC_GPIOC);
+	rcc_periph_clock_enable(RCC_GPIOD);
+	rcc_periph_clock_enable(RCC_GPIOE);
 	rcc_periph_clock_enable(RCC_OTGFS);
 
 	gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE,
 			GPIO9 | GPIO11 | GPIO12);
 	gpio_set_af(GPIOA, GPIO_AF10, GPIO9 | GPIO11 | GPIO12);
 
-	//rcc_periph_clock_enable(RCC_GPIOA);
-	//rcc_periph_clock_enable(RCC_GPIOB);
-	//rcc_periph_clock_enable(RCC_GPIOC);
-	rcc_periph_clock_enable(RCC_GPIOD);
+	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, LED_G_PIN);
+	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, LED_O_PIN);
+	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, LED_R_PIN);
+	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, LED_B_PIN);
 
-	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO12);
-	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO13);
-	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO14);
-	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO15);
+    for (int chani = 0; chani < CHANS; ++chani) {
+        chan_t *chan = &chans[chani];
+    	gpio_mode_setup(chan->port, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, chan->pin);
+    }
 }
 
 void led_cmd(int pin, uint8_t cmd);
@@ -157,6 +161,18 @@ void led_cmd(int pin, uint8_t cmd) {
     } else {
         gpio_clear(GPIOD, pin);
     }
+}
+
+void rst(void);
+void rst (void) {
+    for (int chani = 0; chani < CHANS; ++chani) {
+        chan_t *chan = &chans[chani];
+        gpio_clear(chan->port, chan->pin);
+    }
+    gpio_clear(GPIOD, LED_G_PIN);
+    gpio_clear(GPIOD, LED_O_PIN);
+    gpio_clear(GPIOD, LED_R_PIN);
+    gpio_clear(GPIOD, LED_B_PIN);
 }
 
 void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep)
@@ -179,14 +195,7 @@ void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep)
 	        //} else if (true) {
 	            //skip
 	        } else if (cmd == CMD_RST) {
-	            for (int chani = 0; chani < CHANS; ++chani) {
-	                chan_t *chan = &chans[chani];
-	                gpio_clear(chan->port, chan->pin);
-	            }
-                gpio_clear(GPIOD, LED_G_PIN);
-                gpio_clear(GPIOD, LED_O_PIN);
-                gpio_clear(GPIOD, LED_R_PIN);
-                gpio_clear(GPIOD, LED_B_PIN);
+	            rst();
 	        } else if (cmdm == CMD_LED_G) {
 	            led_cmd(LED_G_PIN, cmd);
 	        } else if (cmdm == CMD_LED_O) {

@@ -3,12 +3,19 @@ from uvscada.plx_usb import PUGpib
 import re
 import time
 
+# -1.25629986E-02VDC,+2319.404SECS,+10155RDNG#
+# -3.47094010E-06VDC,+4854.721SECS,+20115RDNG#
+volt_dc_re = re.compile("(.*)VDC,(.*)SECS,(.*)RDNG#")
+# -4.15096054E-07ADC,+5064.727SECS,+22239RDNG#
+curr_dc_re = re.compile("(.*)ADC,(.*)SECS,(.*)RDNG#")
+# +9.9E37,+201975.327SECS,+1846855RDNG#
+# +6.97856784E-01OHM,+201938.582SECS,+1846490RDNG#
+res_re = re.compile("(.*),(.*)SECS,(.*)RDNG#")
+
 class K2750(object):
     def __init__(self, port='/dev/ttyUSB0', clr=True):
         self.gpib = PUGpib(port=port, addr=16, clr=clr, eos=3, ser_timeout=1.0, gpib_timeout=0.9)
         self.func = None
-        self.volt_dc_re = None
-        self.curr_dc_re = None
 
     def tim_int(self):
         '''Query timer interval'''
@@ -46,13 +53,9 @@ class K2750(object):
             self.gpib.snd(":FUNC 'VOLT:DC'")
             time.sleep(0.20)
             self.func = 'VOLT:DC'
-        if self.volt_dc_re is None:
-            # -1.25629986E-02VDC,+2319.404SECS,+10155RDNG#
-            # -3.47094010E-06VDC,+4854.721SECS,+20115RDNG#
-            self.volt_dc_re = re.compile("(.*)VDC,(.*)SECS,(.*)RDNG#")
 
         raw = self.gpib.snd_rcv(":DATA?")
-        m = self.volt_dc_re.match(raw)
+        m = volt_dc_re.match(raw)
         if not m:
             raise Exception("Bad reading: %s" % (raw,))
         vdc = float(m.group(1))
@@ -70,12 +73,9 @@ class K2750(object):
             # had problems with 0.15
             time.sleep(0.20)
             self.func = 'CURR:DC'
-        if self.curr_dc_re is None:
-            # -4.15096054E-07ADC,+5064.727SECS,+22239RDNG#
-            self.curr_dc_re = re.compile("(.*)ADC,(.*)SECS,(.*)RDNG#")
 
         raw = self.gpib.snd_rcv(":DATA?")
-        m = self.curr_dc_re.match(raw)
+        m = curr_dc_re.match(raw)
         if not m:
             raise Exception("Bad reading: %s" % (raw,))
         adc = float(m.group(1))
@@ -86,3 +86,26 @@ class K2750(object):
     def curr_dc(self):
         return self.curr_dc_ex()["ADC"]
 
+    def res_ex(self):
+        if self.func != 'RES':
+            self.gpib.snd(":FUNC 'RES'")
+            # Seems to take at least 0.1 sec
+            # had problems with 0.15
+            time.sleep(0.20)
+            self.func = 'RES'
+
+        raw = self.gpib.snd_rcv(":DATA?")
+        m = res_re.match(raw)
+        if not m:
+            raise Exception("Bad reading: %s" % (raw,))
+        adc = m.group(1)
+        if adc.find('OHM') >= 0:
+            adc = float(adc.replace('OHM', ''))
+        else:
+            adc = float('inf')
+        secs = float(m.group(2))
+        rdngn = float(m.group(3))
+        return {"ADC": adc, "SECS": secs, "RDNG#": rdngn}
+
+    def res(self):
+        return self.res_ex()["ADC"]
