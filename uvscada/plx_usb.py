@@ -75,7 +75,7 @@ class PUGpib:
         self.send_str("++addr %d" % (self.addr,))
     
     def interface(self):
-        return "GPIB"
+        return "GPIB @ %s" % (self.port,)
     
     def bin_mode(self):
         self.bin = True

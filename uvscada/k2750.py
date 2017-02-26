@@ -13,9 +13,37 @@ curr_dc_re = re.compile("(.*)ADC,(.*)SECS,(.*)RDNG#")
 res_re = re.compile("(.*),(.*)SECS,(.*)RDNG#")
 
 class K2750(object):
-    def __init__(self, port='/dev/ttyUSB0', clr=True):
+    def __init__(self, port='/dev/ttyUSB0', clr=True, ident=True):
         self.gpib = PUGpib(port=port, addr=16, clr=clr, eos=3, ser_timeout=1.0, gpib_timeout=0.9)
         self.func = None
+        self.vendor = None
+        self.model = None
+        self.sn = None
+        if ident:
+            vendor, model = self.ident()
+            if (vendor, model) != ('KEITHLEY INSTRUMENTS INC.', 'MODEL 2750'):
+                raise ValueError('Bad instrument: %s, %s' % (vendor, model))
+
+    def ident(self):
+        # just vendor, model
+        return self.ident_ex()[0:2]
+        
+    def ident_ex(self):
+        '''
+        Returns the manufacturer, model number, serial
+        number, and firmware revision levels of the
+        unit.
+        ['KEITHLEY INSTRUMENTS INC.', 'MODEL 2750', '0967413', 'A07  /A01']
+        '''
+        ret = self.gpib.sendrecv_str("*IDN?").split(',')
+        self.vendor = ret[0]
+        self.model = ret[1]
+        sn = ret[2]
+        fw = ret[3]
+        return (self.vendor, self.model, sn, fw)
+
+    def card_sn(self):
+        return self.gpib.sendrecv_str("SYSTem:CARD1:SNUMber?")
 
     def tim_int(self):
         '''Query timer interval'''

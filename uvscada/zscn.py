@@ -3,6 +3,7 @@ import sys
 import time
 import struct
 import binascii
+from collections import OrderedDict
 
 # 0.6 had some issues still
 # Do this right
@@ -139,24 +140,38 @@ class ZscnSer:
         return c
 
 def scan(z, k, pack='dip40', pins=None, verbose=True, dwell=DWELL):
-    m = {}
+    # pin package2chan
+    # Note pins are 1 indexed, channels are 0 indexed
+    pin_p2c = None
     
-    if pack == 'dip40':
+    if pack == 'dip28':
+        npins = 28
+        # Designed for DIP40
+        # hack around: 40 - 28 = 12 skipped pins
+        # Ex: 28 => 40
+        pin_p2c = OrderedDict((x + 1, x) for x in xrange(14))
+        for i in xrange(15, 29):
+            pin_p2c[i] = i + 12 - 1
+    elif pack == 'dip40':
         npins = 40
+        pin_p2c = OrderedDict((x + 1, x) for x in xrange(40))
     elif pack == 'sdip64':
         npins = 64
+        pin_p2c = OrderedDict((x + 1, x) for x in xrange(64))
     else:
         raise Exception("Not supported")
     
     if pins is None:
         pins = xrange(1, npins + 1, 1)
 
+    m = {}
     g = 0
     z.led('o', 1)
     z.led('r', 0)
     try:
         for pin in pins:
-            ch = pin - 1
+            ch = pin_p2c[pin]
+            #print 'Pin %s @ ch %d' % (pin, ch)
             z.led('g', g)
             g = not g
             z.ch_on(ch)

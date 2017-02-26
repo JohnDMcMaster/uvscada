@@ -96,7 +96,7 @@ class E36:
         self.io = io
         # Make sure simple queries work
         if not self.version():
-            raise Exception("Failed init")
+            raise Exception("Failed init %s" % (io.interface()))
 
     '''
     *********************************8
@@ -108,13 +108,19 @@ class E36:
         return self.io.sendrecv_str("SYSTEM:VERSION?")
     
     def ident(self):
+        # just vendor, model
+        return self.ident_ex()[0:2]
+        
+    def ident_ex(self):
         '''
         PS ident: ['HEWLETT-PACKARD', 'E3632A', '0', '1.1-5.0-1.0']
         '''
         ret = self.io.sendrecv_str("*IDN?").split(',')
         self.vendor = ret[0]
         self.model = ret[1]
-        return (self.vendor, self.model)
+        sn = ret[2]
+        fw = ret[3]
+        return (self.vendor, self.model, sn, fw)
 
     def remote(self):
         '''Put into remote mode?  Required before running any commands'''
