@@ -9,6 +9,7 @@ https://siliconpr0n.org/nuc/doku.php?id=eberline:start
 import argparse
 import fdpexpect
 import serial
+import struct
 import time
 
 from uvscada.util import hexdump
@@ -136,7 +137,14 @@ if __name__ == '__main__':
 
     owire = BPSPI()
     rom = owire.r_all()
+    
+    mn = rom[6:16].replace('\x00', '')
+    print 'P/N: %s' % mn
+    sn = struct.unpack('>H', rom[3:5])[0]
+    print 'S/N: %s' % sn
+    
     if args.fn_out:
         open(args.fn_out, 'w').write(rom)
     else:
+        print
         hexdump(rom)
