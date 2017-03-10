@@ -28,7 +28,7 @@ def run(dmm, ps, f=None):
     '''
     450 V IIRC is recommended operating
     '''
-    for mvin in xrange(0, 6000, 100):
+    for mvin in xrange(2000, 9000, 100):
         vin = mvin / 1000.0
         ps.set_volt(vin, outp=2)
         time.sleep(0.6)

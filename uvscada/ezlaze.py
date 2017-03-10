@@ -94,7 +94,7 @@ class EzLaze(object):
                 xonxoff=False,
                 timeout=ser_timeout,
                 # Blocking writes
-                writeTimeout=None)
+                writeTimeout=0)
         self.ser.flushInput()
         self.ser.flushOutput()
         self.mode = None
