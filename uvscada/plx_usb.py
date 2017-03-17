@@ -122,6 +122,7 @@ class PUGpib:
             s = self.ser.read(l)
         else:
             s = self.ser.readline()
+
         if not s and not empty:
             raise Timeout('Failed recv any bytes')
         if self.bin and short and len(s) != l:
@@ -183,4 +184,14 @@ class PUGpib:
     
     def local(self):
         self.send_str('++loc')
+
+    '''
+    only works as device
+    really want below
+    def status(self):
+        return self.snd_rcv('++status')
+    '''
+    
+    def spoll(self):
+        return int(self.snd_rcv('++spoll'))
 
