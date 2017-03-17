@@ -223,12 +223,12 @@ class Ber225(object):
         if m:
             # raw in kV, mA
             # convert to V, A
-            return (1000 * float(m.group(1)), float(m.group(1)) / 1000.)
+            return (1000 * float(m.group(1)), float(m.group(2)) / 1000.)
 
         # T V0.0006K I0.0007M
         m = re.match(r'T V(.*)K I(.*)M', s)
         if m:
-            return (1000 * float(m.group(1)), float(m.group(1)) / 1000.)
+            return (1000 * float(m.group(1)), float(m.group(2)) / 1000.)
             
         raise Exception(s)
 

@@ -10,7 +10,7 @@ from uvscada import ber225
 import time
 import json
 
-def run(dmm, ps, f=None, tlimit=10.0, tsleep=1.0):
+def run(dmm, ps, f=None, tlimit=3.0, tsleep=1.0):
     print
     print 'Init DMM'
     dmm.curr_dc()
@@ -27,7 +27,7 @@ def run(dmm, ps, f=None, tlimit=10.0, tsleep=1.0):
     print
     print 'Ready'
     
-    for vset in xrange(200, 1000, 10):
+    for vset in xrange(0, 1000, 50):
         ps.set_volt(vset)
         ps.apply()
         time.sleep(tsleep)
@@ -43,7 +43,7 @@ def run(dmm, ps, f=None, tlimit=10.0, tsleep=1.0):
         # len(imeas), 1e6 * iavg
         
         ps_vmeas, ps_imeas = ps.t0()
-        print 'PS % 5d V out => % 5d V @ %0.3f mA.  DMM: %0.3f mA' % (vset, ps_vmeas, 1000. * ps_imeas, iavg)
+        print 'PS % 5d V out => % 5d V @ %0.3f mA.  DMM: %0.3f mA' % (vset, ps_vmeas, 1000. * ps_imeas, iavg * 1000)
         if f:
             j = {'type': 'meas', 'vset': vset, 'ps_vmeas': ps_vmeas, 'ps_imeas': ps_imeas, 'iavg': iavg, 'dt': dt, 'in': len(imeas), 'tsleep': tsleep}
             f.write(json.dumps(j) + '\n')
