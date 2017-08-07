@@ -2,6 +2,7 @@ import argparse
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import json
+import math
 
 def load_csv(f):
     f = open(f, 'r')
@@ -37,13 +38,23 @@ def load_jl(f):
         data = data2
 
     # normalize
+    # since 0 will mess up log plot
+    # smallest value is offset by smallest delta
     if 1:
-        imin = min([x[1] for x in data])
+        vals_sorted = sorted(x[1] for x in data)
+        ibase = vals_sorted[0] - abs(vals_sorted[1] - vals_sorted[0])
+        for i, (v, iavg) in enumerate(data):
+            inew = iavg - ibase
+            data[i] = (v, inew)
+            print '% 6d % 9.3f uA => % 9.3f uA' % (v, iavg, inew)
+    
+        '''
         if imin < 0:
             for i, (v, iavg) in enumerate(data):
                 data[i] = (v, iavg - imin)
             data = data[1:]
-    
+        '''
+
     return data
 
 if __name__ == '__main__':

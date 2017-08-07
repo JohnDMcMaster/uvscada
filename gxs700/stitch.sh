@@ -22,3 +22,6 @@ ln -s $PWD/png_maskg/out.pto pnge_maska/out.pto
 pushd png_maskg
 stitch "$@"
 popd
+
+
+

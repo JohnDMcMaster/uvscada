@@ -20,6 +20,9 @@ import time
 SW_HV = 1
 SW_FIL = 2
 
+store_bin = False
+store_png = True
+
 class DryCheckpoint(Exception):
     pass
 
@@ -108,8 +111,10 @@ def take_picture(fn_base):
     planner.hal.settle()
     img_dec = planner.imager.get()
     if not planner.dry:
-        open(fn_base + '.bin', 'w').write(img_dec.raw)
-        img_dec.save(fn_base + '.png')
+        if store_bin:
+            open(fn_base + '.bin', 'w').write(img_dec.raw)
+        if store_png:
+            img_dec.save(fn_base + '.png')
     planner.all_imgs += 1
 
 if __name__ == "__main__":
@@ -118,9 +123,14 @@ if __name__ == "__main__":
     parser.add_argument('--port', default=22617, type=int, help='Host port')
     parser.add_argument('--overwrite', action='store_true')
     add_bool_arg(parser, '--dry', default=True, help='Due to health hazard, default is True')
+    add_bool_arg(parser, '--bin', default=False, help='Store raw .bin')
+    add_bool_arg(parser, '--png', default=True, help='Store 16 bit .png')
     parser.add_argument('scan_json', nargs='?', default='scan.json', help='Scan parameters JSON')
     parser.add_argument('out', nargs='?', default='out/default', help='Output directory')
     args = parser.parse_args()
+
+    store_bin = args.bin
+    store_png = args.png
 
     if os.path.exists(args.out):
         if not args.overwrite:

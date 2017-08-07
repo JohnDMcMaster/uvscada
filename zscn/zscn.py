@@ -31,7 +31,7 @@ if __name__ == '__main__':
         if os.path.exists(args.jout) and not args.overwrite:
             raise Exception("Refusing to overwrite")
 
-    k = K2750(port='/dev/ttyUSB0')
+    k = K2750(port='/dev/ttyUSB2')
     z = zscn.ZscnSer(device='/dev/ttyACM1')
     
     print 'Ready'

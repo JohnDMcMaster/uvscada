@@ -66,6 +66,11 @@ class LcncPyHalAr(LcncPyHal):
         elif self.remote_port_up(RSH_PORT):
             print 'linuxcnc: already running'
         else:
+            print 'linuxcnc: launching'
+            # In practice I never want this anymore
+            # Complain loudly if I trigger this code path
+            raise Exception("FIXME")
+
             if local_ini:
                 remote_ini = os.path.join(remote_tmp, 'config', os.path.basename(local_ini))
                 if sftp is None:
@@ -74,7 +79,6 @@ class LcncPyHalAr(LcncPyHal):
             elif remote_ini is None:
                 remote_ini = '/home/machinekit/machinekit/configs/default/default.ini'
             
-            print 'linuxcnc: launching'
             transport = self.ssh.get_transport()
             self.linuxcnc_channel = transport.open_session()
             # http://stackoverflow.com/questions/7734679/paramiko-and-exec-command-killing-remote-process
@@ -92,11 +96,15 @@ class LcncPyHalAr(LcncPyHal):
             # note: if you are using axis gui this will freeze
             # need to poke around and see how we can do better
             self.wait_remote_port(RSH_PORT)
-        
+
         if port_up:
             print 'Remote agent: appears to be already running'
         else:
             print 'Remote agent: launching '
+            # In practice I never want this anymore
+            # Complain loudly if I trigger this code path
+            raise Exception("FIXME")
+
             transport = self.ssh.get_transport()
             self.server_channel = transport.open_session()
             # http://stackoverflow.com/questions/7734679/paramiko-and-exec-command-killing-remote-process

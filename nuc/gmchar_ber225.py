@@ -9,8 +9,10 @@ from uvscada import ber225
 
 import time
 import json
+import os
 
-def run(dmm, ps, f=None, tlimit=3.0, tsleep=1.0):
+def run(dmm, ps, f=None, tlimit=5.0, tsleep=1.0,
+        vmin=0, vmax=1000, vstep=20):
     print
     print 'Init DMM'
     dmm.curr_dc()
@@ -27,7 +29,7 @@ def run(dmm, ps, f=None, tlimit=3.0, tsleep=1.0):
     print
     print 'Ready'
     
-    for vset in xrange(0, 1000, 50):
+    for vset in xrange(vmin, vmax + vstep, vstep):
         ps.set_volt(vset)
         ps.apply()
         time.sleep(tsleep)
@@ -43,7 +45,7 @@ def run(dmm, ps, f=None, tlimit=3.0, tsleep=1.0):
         # len(imeas), 1e6 * iavg
         
         ps_vmeas, ps_imeas = ps.t0()
-        print 'PS % 5d V out => % 5d V @ %0.3f mA.  DMM: %0.3f mA' % (vset, ps_vmeas, 1000. * ps_imeas, iavg * 1000)
+        print 'PS % 5d V out => % 5d V @ %0.3f mA.  DMM: %0.6f mA' % (vset, ps_vmeas, 1000. * ps_imeas, iavg * 1000)
         if f:
             j = {'type': 'meas', 'vset': vset, 'ps_vmeas': ps_vmeas, 'ps_imeas': ps_imeas, 'iavg': iavg, 'dt': dt, 'in': len(imeas), 'tsleep': tsleep}
             f.write(json.dumps(j) + '\n')
@@ -62,6 +64,9 @@ if __name__ == '__main__':
     parser.add_argument('--ps', default='/dev/serial/by-id/usb-Prologix_Prologix_GPIB-USB_Controller_PXGEN79T-if00-port0', help='K2750 serial port')
     parser.add_argument('fn', nargs='?', default='out.csv', help='csv out')
     args = parser.parse_args()
+
+    if args.fn and os.path.exists(args.fn):
+        raise Exception("Refusing to overwrite")
 
     if 1:
         print

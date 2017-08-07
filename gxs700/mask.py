@@ -40,13 +40,19 @@ if __name__ == "__main__":
     #mask = Image.open('mask.png').convert('L')
     
     if not args.dir_out:
-        args.dir_out = args.dir_in + '_mask'
-    
-    if os.path.exists(args.dir_out):
+        if os.path.basename(args.dir_in):
+            dir_out = os.path.dirname(args.dir_in) + '/' + os.path.basename(args.dir_in) + '_mask'
+        else:
+            dir_out = os.path.dirname(args.dir_in) + '_mask'
+    else:
+        dir_out = args.dir_out
+    print dir_out
+
+    if os.path.exists(dir_out):
         if not args.overwrite:
             raise Exception("Refusing to overwrite output")
     else:
-        os.mkdir(args.dir_out)
+        os.mkdir(dir_out)
     
     def im_i2l(im):
         # lame
@@ -75,12 +81,26 @@ if __name__ == "__main__":
         draw = ImageDraw.Draw(mask)
         #draw.rectangle((50,80,100,200), fill=0)
         # opened in image editor to get approx coords
+        '''
+        Original sensor?
+        '''
         polym = {
                         0:(285, 10),            1:(1570, 10),
                  7: (5, 280),                           2: (1845, 240),
                  6: (5, 1060),                          3: (1845, 1100),
                         5: (285, 1335),        4: (1570, 1335),
                     }
+
+        '''
+        Newer sensor
+        '''
+        polym = {
+                        0:(300, 13),            1:(1417, 13),
+                 7: (10, 300),                           2: (1693, 244),
+                 6: (10, 1045),                          3: (1693, 1100),
+                        5: (300, 1330),        4: (1408, 1330),
+                    }
+
         draw.polygon(polym.values(), fill=255)
         if args.gray:
             print 'MASK: gray'
@@ -94,7 +114,7 @@ if __name__ == "__main__":
             #print [iml.getpixel((i, i)) for i in xrange(0, 600, 50)]
             imo = iml
         
-        fn_out = os.path.join(args.dir_out, os.path.basename(fn))
+        fn_out = os.path.join(dir_out, os.path.basename(fn))
         if args.jpg:
             imo.save(fn_out.replace('.png', '.jpg'), quality=90)
         else:
