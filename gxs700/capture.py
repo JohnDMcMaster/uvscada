@@ -1,5 +1,6 @@
 from uvscada import gxs700
 from uvscada import gxs700_util
+from uvscada import util
 
 import argparse
 import glob
@@ -27,9 +28,10 @@ def run(force):
             print 'Writing %s' % fn
             img.save(fn)
 
-        save(os.path.join(args.dir, 'capture_%03d.png' % imagen[0]), eq=False)
-        if args.hist_eq:
-            save(os.path.join(args.dir, 'capture_%03de.png' % imagen[0]), eq=True)
+        if args.png:
+            save(os.path.join(args.dir, 'capture_%03d.png' % imagen[0]), eq=False)
+            if args.hist_eq:
+                save(os.path.join(args.dir, 'capture_%03de.png' % imagen[0]), eq=True)
 
         imagen[0] += 1
 
@@ -53,6 +55,7 @@ if __name__ == "__main__":
     parser.add_argument('--dir', default='out', help='Output dir')
     parser.add_argument('--force', '-f', action='store_true', help='Force trigger')
     parser.add_argument('--number', '-n', type=int, default=1, help='number to take')
+    util.add_bool_arg(parser, '--png', default=True)
     args = parser.parse_args()
 
     run(force=args.force)
