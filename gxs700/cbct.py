@@ -1,4 +1,7 @@
 '''
+Cone Beam Computed Tomography (CBCT) toy
+Was used to create: https://www.youtube.com/watch?v=pYvjq0rDXzI
+
 Three major dependencies:
 -x-ray sensor
 -indexer controller
@@ -21,6 +24,7 @@ import time
 from uvscada.gxs700_util import open_dev, IOTimestamp, IOLog
 from uvscada.pr0ndexer import Indexer
 from uvscada import gxs700
+from uvscada import gxs700_util
 
 SW_HV = 1
 SW_FIL = 2
@@ -42,9 +46,7 @@ if __name__ == "__main__":
     if os.getenv('WPS7_PASS', None) is None:
         raise Exception("Requires WPS7 password")
 
-    usbcontext = usb1.USBContext()
-    dev = open_dev(usbcontext)
-    gxs = gxs700.GXS700(usbcontext, dev, verbose=args.verbose)
+    usbcontext, dev, gxs = gxs700_util.ez_open_ex(verbose=args.verbose)
     
     fn = ''
 
