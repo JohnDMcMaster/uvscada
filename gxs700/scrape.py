@@ -12,9 +12,10 @@ prefix = ' ' * 8
 indent = ''
 resets = 0
 reset_filters = [0]
+RESET_FILTER = 2
 def line(s):
     # Don't print until firmware loaded (2 stage)
-    if resets < 2:
+    if resets < RESET_FILTER:
         reset_filters[0] += 1
         return
     #if s == '# None (0xB0)':
@@ -131,35 +132,39 @@ def dump(fin):
 
     while pi < len(ps):
         p = ps[pi]
-        run_xlate(p)
-
-        data = None
-        if 'data' in p:
-            data = binascii.unhexlify(p['data'])
-
-        if p['type'] == 'comment':
-            line('# %s' % p['v'])
-            pass
-        elif p['type'] == 'controlRead':
-            line('buff = controlRead(0x%02X, 0x%02X, 0x%04X, 0x%04X, %d)' % (
-                    p['reqt'], p['req'], p['val'], p['ind'], p['len']))
-            line('# Req: %d, got: %d' % (p['len'], len(data)))
-            line('validate_read(%s, buff, "packet %s/%s")' % (
-                    str2hex(data, prefix=prefix), p['packn'][0], p['packn'][1]))
-        elif p['type'] == 'controlWrite':
-            line('buff = controlWrite(0x%02X, 0x%02X, 0x%04X, 0x%04X, %s)' % (
-                    p['reqt'], p['req'], p['val'], p['ind'], str2hex(data, prefix=prefix)))
-        elif p['type'] == 'bulkRead':
-            pass
-        elif p['type'] == 'bulkWrite':
-            pass
-        else:
-            raise Exception("Unknown type: %s" % p['type'])
-        if is_rst_release(p):
-            resets += 1
-            if resets == 2:
-                line('# Filtered %d FW load packets' % reset_filters[0])
-        pi += 1
+        try:
+            run_xlate(p)
+    
+            data = None
+            if 'data' in p:
+                data = binascii.unhexlify(p['data'])
+    
+            if p['type'] == 'comment':
+                line('# %s' % p['v'])
+                pass
+            elif p['type'] == 'controlRead':
+                line('buff = controlRead(0x%02X, 0x%02X, 0x%04X, 0x%04X, %d)' % (
+                        p['reqt'], p['req'], p['val'], p['ind'], p['len']))
+                line('# Req: %d, got: %d' % (p['len'], len(data)))
+                line('validate_read(%s, buff, "packet %s/%s")' % (
+                        str2hex(data, prefix=prefix), p['packn'][0], p['packn'][1]))
+            elif p['type'] == 'controlWrite':
+                line('buff = controlWrite(0x%02X, 0x%02X, 0x%04X, 0x%04X, %s)' % (
+                        p['reqt'], p['req'], p['val'], p['ind'], str2hex(data, prefix=prefix)))
+            elif p['type'] == 'bulkRead':
+                pass
+            elif p['type'] == 'bulkWrite':
+                pass
+            else:
+                raise Exception("Unknown type: %s" % p['type'])
+            if is_rst_release(p):
+                resets += 1
+                if resets == 2:
+                    line('# Filtered %d FW load packets' % reset_filters[0])
+            pi += 1
+        except:
+            print 'Error on packet %s' % (p['packn'],)
+            raise
 
     indentN()
 
@@ -169,18 +174,27 @@ if __name__ == "__main__":
     import argparse 
     
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--usbrply', default='')
+    parser.add_argument('--usbrply', default='usbrply')
+    # Original capture was per USB port, making sense to count resets and assume all packets are for device
+    # New set is full system, so instead filter by device ID
+    # maybe they used a hub
+    parser.add_argument('--device', type=int, default=None, help='Only keep packets for given device')
     parser.add_argument('fin')
     args = parser.parse_args()
     args.big_thresh = 256
 
-    if args.fin.find('.cap') >= 0 or args.fin.find('.pcapng') >= 0:
-        fin = '/tmp/scrape.json'
+    if args.fin.find('.cap') >= 0 or args.fin.find('.pcap') >= 0 or args.fin.find('.pcapng') >= 0:
+        fin_j = '/tmp/scrape.json'
         #print 'Generating json'
-        cmd = 'usbrply --no-packet-numbers --no-setup --comment --fx2 %s -j %s >%s' % (args.usbrply, args.fin, fin)
+        device_arg = ''
+        if args.device:
+            device_arg = '--device %s' % args.device
+            # since we are throwing away firmware load, don't filter
+            RESET_FILTER = 0
+        cmd = '%s --packet-numbers --no-setup --comment --fx2 -j %s %s >%s' % (args.usbrply, device_arg, args.fin, fin_j)
         print cmd
         subprocess.check_call(cmd, shell=True)
     else:
-        fin = args.fin
+        fin_j = args.fin
     
-    dump(fin)
+    dump(fin_j)

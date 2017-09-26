@@ -41,6 +41,10 @@ WH_LG = (1344, 1850)
 SZ_SM = 2 * WH_SM[0] * WH_SM[1]
 SZ_LG = 2 * WH_LG[0] * WH_LG[1]
 
+# enum
+SIZE_SM = 1
+SIZE_LG = 2
+
 def sz_wh(sz):
     if sz == SZ_LG:
         return WH_LG
@@ -384,6 +388,14 @@ class GXS700:
     ***************************************************************************
     '''
 
+    def chk_wh(self):
+        v = self.img_wh()
+        if v != self.WH:
+            if 1:
+                print 'got wh', v
+                return
+            raise Exception("Unexpected w/h: %s" % (v,))
+
     def _init(self):
         #self.rst()
 
@@ -405,8 +417,7 @@ class GXS700:
 
         self.set_act_sec(0x0000)
 
-        if self.img_wh() != self.WH:
-            raise Exception("Unexpected w/h")
+        self.chk_wh()
 
         v = self.fpga_r(0x2002)
         if v != 0x0000 and self.verbose:
@@ -439,9 +450,7 @@ class GXS700:
 
         self.set_act_sec(0x0000)
 
-        v = self.img_wh()
-        if v != self.WH:
-            raise Exception("Unexpected w/h: %s" % (v,))
+        self.chk_wh()
 
         v = self.state()
         if v != 1:
@@ -465,9 +474,7 @@ class GXS700:
         self.set_act_sec(0x0000)
 
 
-        v = self.img_wh()
-        if v != self.WH:
-            raise Exception("Unexpected w/h: %s" % (v,))
+        self.chk_wh()
 
 
         v = self.state()
@@ -518,16 +525,33 @@ class GXS700:
         if len(all_dat) != self.FRAME_SZ:
             raise Exception("Unexpected buffer size")
         return all_dat
+    
+    def _cap_frame_inter(self):
+        '''
+        Used on small sensors
+        '''
+        all_dat = bytearray()
+        while len(all_dat) < self.FRAME_SZ:
+            print 'packet, buff len %d' % len(all_dat)
+            #all_dat += self.dev.interruptRead(2, 2080, timeout=1000)
+            #all_dat += self.dev.interruptRead(2, self.FRAME_SZ, timeout=5000)
+            all_dat += self.dev.interruptRead(2, 512, timeout=5000)
+
+        all_dat = str(all_dat[0:self.FRAME_SZ])
+        if len(all_dat) != self.FRAME_SZ:
+            raise Exception("Unexpected buffer size")
+        return all_dat
 
     def _cap_bin(self, scan_cb=lambda itr: None):
         '''Capture a raw binary frame, waiting for trigger'''
         self.wait_trig_cb()
 
+        state_last = self.state()
         i = 0
         while True:
             scan_cb(i)
             if i % 1000 == 0:
-                print 'scan %d' % (i,)
+                print 'scan %d (state %s)' % (i, state_last)
 
             # Generated from packet 861/862
             #buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
@@ -535,6 +559,8 @@ class GXS700:
             #    print 'r1: %s' % binascii.hexlify(buff)
             #state = ord(buff)
             state = self.state()
+            if state != state_last:
+                print 'scan %d (new state %s)' % (i, state_last)
 
             '''
             Observed states
@@ -542,12 +568,24 @@ class GXS700:
             -0x02: short lived
             -0x04: longer lived than 2
             -0x08: read right before capture
+            
+            Note: small sensor doesn't go through 8
             '''
             if state != 0x01:
-                #print 'Non-1 state: 0x%02X' % state
-                if state == 0x08:
-                    #print 'Go go go'
+                # Large
+                if self.size == SIZE_LG and state == 0x08:
+                    print 'Go go go 8'
                     break
+                # Small
+                elif self.size == SIZE_SM and state == 0x08:
+                    print 'Go go go 4'
+                    break
+                # Intermediate states
+                # Ex: 2 during acq
+                else:
+                    # raise Exception('Unexpected state: 0x%02X' % state)
+                    pass
+
 
             # Generated from packet 863/864
             #buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
@@ -558,6 +596,7 @@ class GXS700:
                 raise Exception('Unexpected error')
 
             i = i + 1
+            state_last = state
 
 
         # Generated from packet 783/784
@@ -591,7 +630,9 @@ class GXS700:
         if self.fpga_rsig() != 0x1234:
             raise Exception("Invalid FPGA signature")
 
+        # FIXME
         return self._cap_frame_bulk()
+        #return self._cap_frame_inter()
 
     def cap_binv(self, n, cap_cb, loop_cb=lambda: None, scan_cb=lambda itr: None):
         self._cap_setup()
@@ -965,8 +1006,7 @@ class GXS700:
 
         self.set_act_sec(0x0000)
 
-        if self.img_wh() != self.WH:
-            raise Exception("Unexpected w/h")
+        self.chk_wh()
 
         if self.state() != 1:
             raise Exception('Unexpected state')
@@ -1010,8 +1050,7 @@ class GXS700:
 
         self.img_wh_w(*self.WH)
         self.set_act_sec(0x0000)
-        if self.img_wh() != self.WH:
-            raise Exception("Unexpected w/h")
+        self.chk_wh()
 
         if self.state() != 1:
             raise Exception('Unexpected state')

@@ -8,11 +8,19 @@ ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="5328", ATTR{idProduct}=="2009"
 ACTION=="add", SUBSYSTEM=="usb_device", SYSFS{idVendor}=="5328", SYSFS{idProduct}=="2010", MODE="0666"
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="5328", ATTR{idProduct}=="2010", MODE="0666"
 
-# Gendex GX700
+# Gendex GX700 (large)
 # Pre renumeration
 ACTION=="add", SUBSYSTEM=="usb_device", SYSFS{idVendor}=="5328", SYSFS{idProduct}=="202F", MODE="0666"
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="5328", ATTR{idProduct}=="202F", MODE="0666"
 # Post renumeration
 ACTION=="add", SUBSYSTEM=="usb_device", SYSFS{idVendor}=="5328", SYSFS{idProduct}=="2030", MODE="0666"
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="5328", ATTR{idProduct}=="2030", MODE="0666"
+
+# Gendex GX700 (small)
+# Pre renumeration
+ACTION=="add", SUBSYSTEM=="usb_device", SYSFS{idVendor}=="5328", SYSFS{idProduct}=="201F", MODE="0666"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="5328", ATTR{idProduct}=="201F", MODE="0666"
+# Post renumeration
+ACTION=="add", SUBSYSTEM=="usb_device", SYSFS{idVendor}=="5328", SYSFS{idProduct}=="2020", MODE="0666"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="5328", ATTR{idProduct}=="2020", MODE="0666"
 EOF

@@ -11,6 +11,20 @@ def run(force):
         if force and itr == 0:
             print 'Forcing trigger'
             gxs.sw_trig()
+            '''
+            if 0:
+                for i in xrange(256):
+                    try:
+                        gxs.dev.controlWrite(0x40, 0xB0, i, 0, '\x00', timeout=0.01)
+                    except:
+                        pass
+            for i in xrange(256):
+                print i
+                try:
+                    gxs.dev.controlWrite(0x40, 0xB0, 0x2B, i, '\x00', timeout=100)
+                except:
+                    pass
+            '''
 
     def cb(imgb):
         if args.bin:
