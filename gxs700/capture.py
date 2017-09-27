@@ -25,13 +25,13 @@ def run(force):
                 tstart = time.time()
                 buff = gxs700_util.histeq(imgb)
                 tend = time.time()
-                print '  Hist eq in %0.1f' % (tend - tstart,)
+                print '  Hist eq in %0.1f sec' % (tend - tstart,)
             else:
                 buff = imgb
             tstart = time.time()
             img = gxs700.GXS700.decode(buff)
             tend = time.time()
-            print '  Decode in %0.1f' % (tend - tstart,)
+            print '  Decode in %0.1f sec' % (tend - tstart,)
             print '  Writing %s' % fn
             img.save(fn)
 
