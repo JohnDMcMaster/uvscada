@@ -1,17 +1,7 @@
-# https://github.com/vpelletier/python-libusb1
-# Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
-import usb1
-# Bare ctype wrapper, inspired from library C header file.
-import libusb1
 import struct
-import binascii
 from PIL import Image
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
-
 import sys
+import time
 
 import gxs700_fpga
 
@@ -183,7 +173,6 @@ class GXS700:
         #if addr + len(buff) > FLASH_SZ:
         #    raise ValueError("Address out of range: 0x%04X > 0x%04X" % (addr + len(buff), EEPROM_PGS))
         self._controlWrite_mem(0x0F, 0x100, addr, buff)
-        #self._controlWrite_mem(0x0F, 0x10, addr, buff)
 
     def fpga_r(self, addr):
         '''Read FPGA register'''
@@ -376,6 +365,8 @@ class GXS700:
         -0x08: read right before capture
 
         index, length ignored
+
+        Note: small sensor doesn't go through 8, stopping at 4 instead
         '''
         return ord(self.dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1))
 
@@ -398,26 +389,33 @@ class GXS700:
                 return
             raise Exception("Unexpected w/h: %s" % (v,))
 
+    def chk_fpga_rsig(self):
+        v = self.fpga_rsig()
+        if v != 0x1234:
+            raise Exception("Invalid FPGA signature: 0x%04X" % v)
+
+    def chk_state(self):
+        v = self.state()
+        if v != 1:
+            raise Exception('unexpected state %s' % v,)
+
+    def chk_error(self):
+        e = self.error()
+        if e:
+            raise Exception('Unexpected error: %d' % (e,))
+
+    def capture_ready(self, state):
+        return self.size == SIZE_LG and state == 0x08 or self.size == SIZE_SM and state == 0x04
+
     def _init(self):
-        #self.rst()
-
-        '''
-        already config 1
-        if self.size == 1:
-            print 'set config'
-            print 'before: %s' % self.dev.getConfiguration()
-            self.dev.setConfiguration(1)
-            print 'after: %s' % self.dev.getConfiguration()
-        '''
-
         # If a capture was still in progress init will have problems without this
         self.hw_trig_disarm()
 
         state = self.state()
         print 'Init state: %d' % state
-        if state == 0x08:
+        if self.capture_ready(state):
             print 'Flusing stale capture'
-            self._cap_frame_bulk()
+            self._cap_frame()
         elif state != 0x01:
             raise Exception('Not idle, refusing to setup')
 
@@ -425,28 +423,19 @@ class GXS700:
         # (32769, 1)
         #print self.img_wh()
         self.img_wh_w(*self.WH)
-
         self.set_act_sec(0x0000)
-
         self.chk_wh()
 
         v = self.fpga_r(0x2002)
         if v != 0x0000 and self.verbose:
             print "WARNING: bad FPGA read: 0x%04X" % v
+        self.chk_fpga_rsig()
 
-        v = self.fpga_rsig()
-        if v != 0x1234:
-            raise Exception("Invalid FPGA signature: 0x%04X" % v)
-
-        #{1: gxs700_fpga.setup_fpga1_sm,
         {1: gxs700_fpga.setup_fpga1_sm,
          2: gxs700_fpga.setup_fpga1_lg}[self.size](self)
 
-        v = self.fpga_rsig()
-        if v != 0x1234:
-            raise Exception("Invalid FPGA signature: 0x%04X" % v)
+        self.chk_fpga_rsig()
 
-        #{1: gxs700_fpga.setup_fpga2_sm,
         {1: gxs700_fpga.setup_fpga2_sm,
          2: gxs700_fpga.setup_fpga2_lg}[self.size](self)
 
@@ -454,53 +443,37 @@ class GXS700:
         v = self.fpga_r(0x2002)
         if v != 0x0001:
             raise Exception("Bad FPGA read: 0x%04X" % v)
-        
+
         if self.size == 1:
             self.fpga_rv(0x2002, 1)
 
         # XXX: why did the integration time change?
         self.int_t_w(0x0064)
-
-        if self.state() != 1:
-            print 'WARNING: unexpected state'
-
+        self.chk_state()
         self.set_act_sec(0x0000)
-
         self.chk_wh()
-
-        v = self.state()
-        if v != 1:
-            print 'WARNING: unexpected state %s' % (v,)
-
+        self.chk_state()
         self.img_wh_w(*self.WH)
-
         self.set_act_sec(0x0000)
-
-
-        v = self.img_wh()
-        if v != self.WH:
-            raise Exception("Unexpected w/h: %s" % (v,))
-
-        v = self.state()
-        if v != 1:
-            print 'WARNING: unexpected state %s' % (v,)
-
-        self.img_wh_w(*self.WH)
-
-        self.set_act_sec(0x0000)
-
-
         self.chk_wh()
-
-
-        v = self.state()
-        if v != 1:
-            print 'WARNING: unexpected state %s' % (v,)
-
+        self.chk_state()
+        self.img_wh_w(*self.WH)
+        self.set_act_sec(0x0000)
+        self.chk_wh()
+        self.chk_state()
         # This may depend on cal files
         self.int_t_w(0x02BC)
         self.cap_mode_w(0)
-        #self.hw_trig_arm()
+
+    def _cap_frame(self):
+        tstart = time.time()
+        if self.size == SIZE_SM:
+            ret = self._cap_frame_inter()
+        else:
+            ret = self._cap_frame_bulk()
+        tend = time.time()
+        print 'Transfer frame in %0.1f sec' % (tend - tstart,)
+        return ret
 
     def _cap_frame_bulk(self):
         '''
@@ -554,120 +527,90 @@ class GXS700:
         self.dev.claimInterface(0)
         # Packet 10620
         self.dev.setInterfaceAltSetting(0, 1)
-        all_dat = self.dev.interruptRead(2, self.FRAME_SZ, timeout=5000)
+        all_dat = bytearray()
+        while len(all_dat) < self.FRAME_SZ:
+            all_dat += self.dev.interruptRead(2, self.FRAME_SZ, timeout=5000)
         # Packet 12961
         self.dev.setInterfaceAltSetting(0, 0)
 
         all_dat = str(all_dat[0:self.FRAME_SZ])
         if len(all_dat) != self.FRAME_SZ:
-            raise Exception("Unexpected buffer size")
+            raise Exception("Unexpected buffer size. Want %d, got %d" % (self.FRAME_SZ, len(all_dat)))
         return all_dat
 
     def _cap_bin(self, scan_cb=lambda itr: None):
         '''Capture a raw binary frame, waiting for trigger'''
+        # For firing x-ray
         self.wait_trig_cb()
 
         state_last = self.state()
         i = 0
         while True:
             scan_cb(i)
-            if i % 1000 == 0:
-                print 'scan %d (state %s)' % (i, state_last)
 
-            # Generated from packet 861/862
-            #buff = dev.controlRead(0xC0, 0xB0, 0x0020, 0x0000, 1)
-            #if args.verbose:
-            #    print 'r1: %s' % binascii.hexlify(buff)
-            #state = ord(buff)
             state = self.state()
             if state != state_last:
-                print 'scan %d (new state %s)' % (i, state_last)
+                print 'New state %s (scan %d)' % (state, i)
 
-            '''
-            Observed states
-            -0x01: no activity
-            -0x02: short lived
-            -0x04: longer lived than 2
-            -0x08: read right before capture
-            
-            Note: small sensor doesn't go through 8
-            '''
-            if state != 0x01:
-                # Large
-                if self.size == SIZE_LG and state == 0x08:
-                    print 'Go go go 8'
-                    break
-                # Small
-                elif self.size == SIZE_SM and state == 0x04:
-                    print 'Go go go 4'
-                    break
-                # Intermediate states
-                # Ex: 2 during acq
-                else:
-                    # raise Exception('Unexpected state: 0x%02X' % state)
-                    pass
+            if i % 1000 == 0:
+                print 'scan %d (state %s)' % (i, state)
 
+            # See state() for comments on state values
+            # Large
+            if self.capture_ready(state):
+                print 'Ready (state %d)' % state
+                break
+            # Intermediate states
+            # Ex: 2 during acq
+            elif state != 0x01:
+                # print 'Transient state %s' % state
+                pass
 
-            # Generated from packet 863/864
-            #buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
-            #if args.verbose:
-            #    print 'r2: %s' % binascii.hexlify(buff)
-            #validate_read("\x00", buff, "packet 863/864")
-            if self.error():
-                raise Exception('Unexpected error')
+            self.chk_error()
 
             i = i + 1
             state_last = state
 
-
-        # Generated from packet 783/784
-        #buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
-        # NOTE:: req max 128 but got 8
-        #validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 783/784", True)
-        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
-
-        # Generated from packet 785/786
-        #buff = dev.controlRead(0xC0, 0xB0, 0x0040, 0x0000, 128)
-        # NOTE:: req max 128 but got 8
-        #validate_read("\x8E\x00\x00\x00\x58\x00\x00\x00", buff, "packet 785/786", True)
-        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
-
-        # Generated from packet 787/788
-        #buff = dev.controlRead(0xC0, 0xB0, 0x0080, 0x0000, 1)
-        #validate_read("\x00", buff, "packet 787/788")
-        e = self.error()
-        if e:
-            raise Exception('Unexpected error %s' % (e,))
-
-        # Generated from packet 789/790
-        #buff = self.dev.controlRead(0xC0, 0xB0, 0x0051, 0x0000, 28)
-        # NOTE:: req max 28 but got 12
-        #validate_read("\x00\x05\x00\x0A\x00\x03\x00\x06\x00\x04\x00\x05", buff, "packet 789/790")
-        #self.versions()
-
-        # Generated from packet 791/792
-        #buff = dev.controlRead(0xC0, 0xB0, 0x0004, 0x0000, 2)
-        #validate_read("\x12\x34", buff, "packet 791/792")
-        if self.fpga_rsig() != 0x1234:
-            raise Exception("Invalid FPGA signature")
-
-        if self.size == SIZE_SM:
-            return self._cap_frame_inter()
-        else:
-            return self._cap_frame_bulk()
+        self.chk_error()
+        return self._cap_frame()
 
     def cap_binv(self, n, cap_cb, loop_cb=lambda: None, scan_cb=lambda itr: None):
-        self._cap_setup()
+        self.hw_trig_arm()
+        self.chk_state()
+        self.chk_error()
+
+        self.img_wh_w(*self.WH)
+        self.set_act_sec(0x0000)
+        self.chk_wh()
+        self.chk_state()
 
         taken = 0
         while taken < n:
+            tstart = time.time()
             imgb = self._cap_bin(scan_cb=scan_cb)
+            tend = time.time()
+            print 'Frame captured in %0.1f sec' % (tend - tstart,)
             rc = cap_cb(imgb)
             # hack: consider doing something else
             if rc:
                 n += 1
             taken += 1
-            self.cap_cleanup()
+    
+            self.chk_state()
+            self.chk_error()
+    
+            self.int_t_w(0x02BC)
+            self.cap_mode_w(0)
+            self.hw_trig_arm()
+            self.chk_state()
+            self.chk_error()
+    
+            self.img_wh_w(*self.WH)
+            self.set_act_sec(0x0000)
+            self.chk_wh()
+            self.chk_state()
+            self.chk_error()
+
             loop_cb()
 
         self.hw_trig_disarm()
@@ -690,93 +633,3 @@ class GXS700:
     @staticmethod
     def decode(buff):
         return decode(buff)
-
-    def cap_cleanup(self):
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        if self.error():
-            raise Exception('Unexpected error')
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        if self.error():
-            raise Exception('Unexpected error')
-
-        self.eeprom_w(0x0020, "2015/03/19-21:44:43:087")
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        if self.error():
-            raise Exception('Unexpected error')
-
-        self.int_t_w(0x02BC)
-        self.cap_mode_w(0)
-        self.hw_trig_arm()
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        if self.error():
-            raise Exception('Unexpected error')
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        self.img_wh_w(*self.WH)
-
-        self.set_act_sec(0x0000)
-
-        self.chk_wh()
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        if self.error():
-            raise Exception('Unexpected error')
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-    def _cap_setup(self):
-        '''Setup done right before taking an image'''
-
-        self.hw_trig_arm()
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        if self.error():
-            raise Exception('Unexpected error')
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-
-        #print 'Img ctr: %s' % binascii.hexlify(self.img_ctr_r(128))
-
-        if self.error():
-            raise Exception('Unexpected error')
-
-        #self.versions()
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-        if self.error():
-            raise Exception('Unexpected error')
-
-        self.img_wh_w(*self.WH)
-        self.set_act_sec(0x0000)
-        self.chk_wh()
-
-        if self.state() != 1:
-            raise Exception('Unexpected state')
-

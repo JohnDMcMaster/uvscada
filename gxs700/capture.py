@@ -5,26 +5,13 @@ from uvscada import util
 import argparse
 import glob
 import os
+import time
 
 def run(force):
     def scan_cb(itr):
         if force and itr == 0:
             print 'Forcing trigger'
             gxs.sw_trig()
-            '''
-            if 0:
-                for i in xrange(256):
-                    try:
-                        gxs.dev.controlWrite(0x40, 0xB0, i, 0, '\x00', timeout=0.01)
-                    except:
-                        pass
-            for i in xrange(256):
-                print i
-                try:
-                    gxs.dev.controlWrite(0x40, 0xB0, 0x2B, i, '\x00', timeout=100)
-                except:
-                    pass
-            '''
 
     def cb(imgb):
         if args.bin:
@@ -35,11 +22,17 @@ def run(force):
         def save(fn, eq):
             print 'Decoding %s' % fn
             if eq:
+                tstart = time.time()
                 buff = gxs700_util.histeq(imgb)
+                tend = time.time()
+                print '  Hist eq in %0.1f' % (tend - tstart,)
             else:
                 buff = imgb
+            tstart = time.time()
             img = gxs700.GXS700.decode(buff)
-            print 'Writing %s' % fn
+            tend = time.time()
+            print '  Decode in %0.1f' % (tend - tstart,)
+            print '  Writing %s' % fn
             img.save(fn)
 
         if args.png:
