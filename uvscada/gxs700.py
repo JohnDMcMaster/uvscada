@@ -1,5 +1,6 @@
 import struct
 from PIL import Image
+import PIL.ImageOps
 import sys
 import time
 
@@ -38,7 +39,8 @@ SIZE_SM = 1
 SIZE_LG = 2
 
 def sz_wh(sz):
-    if sz == SZ_LG:
+    # Was bug capturing too much data, just below two frames
+    if sz == SZ_LG or sz == 9937152:
         return WH_LG
     elif sz == SZ_SM:
         return WH_SM
@@ -46,32 +48,19 @@ def sz_wh(sz):
         print SZ_SM, SZ_LG
         raise ValueError("Bad buffer size %s" % sz)
 
+def get_bufF_sz(sz):
+    return {1: SZ_SM, 2:SZ_LG}[sz]
+
 def decode(buff, wh=None):
     '''Given bin return PIL image object'''
-    # FIXME: hack to make widthwise so it fits on screen better
-    depth = 2
     width, height = wh or sz_wh(len(buff))
-    buff = bytearray(buff)
+    buff = str(buff[0:2 * width * height])
 
-    # no need to reallocate each loop
-    img = Image.new("I", (height, width), "White")
-
-    for y in range(height):
-        line0 = buff[y * width * depth:(y + 1) * width * depth]
-        for x in range(width):
-            b0 = line0[2*x + 0]
-            b1 = line0[2*x + 1]
-
-            G = (b1 << 8) + b0
-            # optional 16-bit pixel truncation to turn into 8-bit PNG
-            # G = b1
-
-            # In most x-rays white is the part that blocks the x-rays
-            # however, the camera reports brightness (unimpeded x-rays)
-            # compliment to give in conventional form per above
-            G = 0xFFFF - G
-
-            img.putpixel((y, x), G)
+    # http://pillow.readthedocs.io/en/3.1.x/handbook/writing-your-own-file-decoder.html
+    # http://svn.effbot.org/public/tags/pil-1.1.4/libImaging/Unpack.c
+    img = Image.frombytes('L', (width, height), buff, "raw", "L;16", 0, -1)
+    img =  PIL.ImageOps.invert(img)
+    img = img.transpose(PIL.Image.ROTATE_270)
     return img
 
 class GXS700:
