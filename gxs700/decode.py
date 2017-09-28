@@ -1,26 +1,19 @@
 #!/usr/bin/env python
-import argparse
-import os
-import glob
-import time
 
 from uvscada import gxs700
 from uvscada import gxs700_util
 
+import argparse
+import os
+import glob
+import PIL.ImageOps
+
 def process_bin(fin, fout, hist_eq=False):
     print 'Reading %s...' % fin
     buff = open(fin, 'r').read()
-    if hist_eq:
-        print 'Equalizing histogram...'
-        tstart = time.time()
-        buff = gxs700_util.histeq(buff)
-        tend = time.time()
-        print '  Hist eq in %0.1f sec' % (tend - tstart,)
-    print 'Decoding image...'
-    tstart = time.time()
     img = gxs700.GXS700.decode(buff)
-    tend = time.time()
-    print '  Decode in %0.1f sec' % (tend - tstart,)
+    if hist_eq:
+        img = PIL.ImageOps.equalize(img)
     print 'Saving %s...' % fout
     img.save(fout)
 

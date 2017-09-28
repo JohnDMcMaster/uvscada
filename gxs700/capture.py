@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from uvscada import gxs700
 from uvscada import gxs700_util
 from uvscada import util
@@ -5,7 +7,7 @@ from uvscada import util
 import argparse
 import glob
 import os
-import time
+import PIL.ImageOps
 
 def run(force):
     def scan_cb(itr):
@@ -14,31 +16,22 @@ def run(force):
             gxs.sw_trig()
 
     def cb(imgb):
+        base = os.path.join(args.dir, 'capture_%03d.' % imagen[0])
         if args.bin:
-            fn = os.path.join(args.dir, 'capture_%03d.bin' % imagen[0])
+            fn = base + '.bin'
             print 'Writing %s' % fn
             open(fn, 'w').write(imgb)
 
-        def save(fn, eq):
-            print 'Decoding %s' % fn
-            if eq:
-                tstart = time.time()
-                buff = gxs700_util.histeq(imgb)
-                tend = time.time()
-                print '  Hist eq in %0.1f sec' % (tend - tstart,)
-            else:
-                buff = imgb
-            tstart = time.time()
-            img = gxs700.GXS700.decode(buff)
-            tend = time.time()
-            print '  Decode in %0.1f sec' % (tend - tstart,)
-            print '  Writing %s' % fn
-            img.save(fn)
-
         if args.png:
-            save(os.path.join(args.dir, 'capture_%03d.png' % imagen[0]), eq=False)
+            img = gxs700.GXS700.decode(imgb)
+            fn = base + '.png'
+            print 'Writing %s' % fn
+            img.save(fn)
             if args.hist_eq:
-                save(os.path.join(args.dir, 'capture_%03de.png' % imagen[0]), eq=True)
+                img = PIL.ImageOps.equalize(img)
+                fn = base + 'e.png'
+                print 'Writing %s' % fn
+                img.save(fn)
 
         imagen[0] += 1
 
