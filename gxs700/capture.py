@@ -9,14 +9,18 @@ import glob
 import os
 import PIL.ImageOps
 
-def run(force):
+def run(force,
+        cap_mode=None, int_t=None,
+        ctr_thresh=None, bin_thresh=None,
+        ):
+
     def scan_cb(itr):
         if force and itr == 0:
             print 'Forcing trigger'
             gxs.sw_trig()
 
     def cb(imgb):
-        base = os.path.join(args.dir, 'capture_%03d.' % imagen[0])
+        base = os.path.join(args.dir, 'capture_%03d' % imagen[0])
         if args.bin:
             fn = base + '.bin'
             print 'Writing %s' % fn
@@ -35,7 +39,17 @@ def run(force):
 
         imagen[0] += 1
 
-    _usbcontext, _dev, gxs = gxs700_util.ez_open_ex(verbose=args.verbose)
+    _usbcontext, _dev, gxs = gxs700_util.ez_open_ex(verbose=args.verbose, init=True)
+
+    if 0:
+        if cap_mode:
+            gxs.cap_mode = cap_mode
+        if int_t:
+            gxs.int_t = int_t
+        if ctr_thresh or bin_thresh:
+            gxs.trig_param_w(pix_clust_ctr_thresh=ctr_thresh, bin_thresh=bin_thresh)
+        gxs._init()
+        #gxs.fpga_off()
 
     if not os.path.exists(args.dir):
         os.mkdir(args.dir)
@@ -55,7 +69,13 @@ if __name__ == "__main__":
     parser.add_argument('--dir', default='out', help='Output dir')
     parser.add_argument('--force', '-f', action='store_true', help='Force trigger')
     parser.add_argument('--number', '-n', type=int, default=1, help='number to take')
+    # Most users should not touch these
+    parser.add_argument('--int-t', type=int, default=None, help='Integration time in ms (default: 700)')
+    parser.add_argument('--ctr-thresh', type=int, default=None, help='Advanced')
+    parser.add_argument('--bin-thresh', type=int, default=None, help='Advanced')
+    parser.add_argument('--cap-mode', default=None, help='Advanced: norm (default), hblock, vblock, vbar')
     util.add_bool_arg(parser, '--png', default=True)
     args = parser.parse_args()
 
-    run(force=args.force)
+    run(force=args.force, cap_mode=args.cap_mode, int_t=args.int_t,
+            ctr_thresh=args.ctr_thresh, bin_thresh=args.bin_thresh)

@@ -60,7 +60,7 @@ def open_dev(usbcontext=None, verbose=None):
     dev = udev.open()
     return dev
 
-def ez_open_ex(verbose=False):
+def ez_open_ex(verbose=False, init=True):
     usbcontext = usb1.USBContext()
     dev = open_dev(usbcontext, verbose=verbose)
 
@@ -69,7 +69,7 @@ def ez_open_ex(verbose=False):
     pid = dev.getDevice().getProductID()
     _desc, size = gxs700_fw.pidvid2name_post[(vid, pid)]
 
-    return usbcontext, dev, gxs700.GXS700(usbcontext, dev, verbose=verbose, size=size)
+    return usbcontext, dev, gxs700.GXS700(usbcontext, dev, verbose=verbose, size=size, init=init)
 
 def ez_open(verbose=False):
     _usbcontext, _dev, gxs700 = ez_open_ex(verbose)

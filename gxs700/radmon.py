@@ -60,7 +60,8 @@ class RadMon(object):
         f.flush()
 
         def scan_cb(itr):
-            if not self.triggered and time.time() - self.tstart >= self.tmin:
+            #if not self.triggered and time.time() - self.tstart >= self.tmin:
+            if not self.triggered:
                 print 'Forcing trigger'
                 self.gxs.sw_trig()
                 self.triggered = True
@@ -68,8 +69,9 @@ class RadMon(object):
         while True:
             self.tstart = time.time()
             self.triggered = False
+            self.gxs.int_t_w(20000)
             buff = self.gxs.cap_bin(scan_cb=scan_cb)
-            print len(buff)
+            #print len(buff)
             last = bufavg(buff)
             print 'Avg: %10.3f' % last
 

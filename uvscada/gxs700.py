@@ -38,6 +38,21 @@ SZ_LG = 2 * WH_LG[0] * WH_LG[1]
 SIZE_SM = 1
 SIZE_LG = 2
 
+# Capture modes
+CM_NORM =   0
+CM_HBLOCK = 1
+CM_VBLOCK = 3
+CM_VBAR =   5
+cm_s2i = {
+    'norm':     CM_NORM,
+    'hblock':   CM_HBLOCK,
+    'vblock':   CM_VBLOCK,
+    'vbar':     CM_VBAR,
+    }
+cm_i2s = {}
+for s, i in cm_s2i.iteritems():
+    cm_i2s[i] = s
+
 def sz_wh(sz):
     # Was bug capturing too much data, just below two frames
     if sz == SZ_LG or sz == 9937152:
@@ -68,15 +83,25 @@ class GXS700:
     Size 1: small
     Size 2: large
     '''
-    def __init__(self, usbcontext=None, dev=None, verbose=False, init=True, size=2):
+    def __init__(self, usbcontext=None, dev=None, verbose=False, init=True, size=2, do_printm=True,
+                cap_mode=None, int_t=None,
+                 ):
         self.verbose = verbose
         self.usbcontext = usbcontext
         self.dev = dev
         self.timeout = 0
         self.wait_trig_cb = lambda: None
         self.set_size(size)
+        self.do_printm = do_printm
+        self.cap_mode = 'norm' if cap_mode is None else cap_mode
+        # 0x2BC => 700 ms
+        self.int_t = 700 if int_t is None else int_t
         if init:
             self._init()
+
+    def printm(self, msg):
+        if self.do_printm:
+            print msg
 
     def set_size(self, size):
         self.size = size
@@ -202,11 +227,6 @@ class GXS700:
                 vs,
                 timeout=self.timeout)
 
-    def trig_param_r(self):
-        '''Read trigger parameter'''
-        # index, len ignored
-        return self.dev.controlRead(0xC0, 0xB0, 0x25, 0, 6, timeout=self.timeout)
-
     def i2c_r(self, addr, n):
         '''Read I2C bus'''
         return self.dev.controlRead(0xC0, 0xB0, 0x0A, addr, n, timeout=self.timeout)
@@ -300,11 +320,11 @@ class GXS700:
         self.dev.controlWrite(0x40, 0xB0, 0x22, 0, struct.pack('>HH', w, h), timeout=self.timeout)
 
     def int_t_w(self, t):
-        '''Set integration time'''
+        '''Set integration time in ms'''
         self.dev.controlWrite(0x40, 0xB0, 0x2C, 0, struct.pack('>H', t), timeout=self.timeout)
 
     def int_time(self):
-        '''Get integration time (in ms?)'''
+        '''Get integration time in ms)'''
         buff = self.dev.controlRead(0xC0, 0xB0, 0x2D, 0, 4, timeout=self.timeout)
         return struct.unpack('>H', buff)[0]
 
@@ -323,19 +343,49 @@ class GXS700:
         self.dev.controlWrite(0x40, 0xB0, 0x0E, sec, '')
 
     def cap_mode_w(self, mode):
-        if not mode in (0, 5):
-            raise Exception('Invalid mode')
-        self.dev.controlWrite(0x40, 0xB0, 0x21, mode, '\x00')
+        '''
+        Tested on small sensor
+
+        0: normal
+        1: horizontal blocks
+        2: LIBUSB_ERROR_PIPE
+        3: vertical blocks (coarser than 5)
+        4: LIBUSB_ERROR_PIPE
+        5: vertical bars (constant across y)
+        
+        See https://siliconpr0n.org/nuc/doku.php?id=gendex:gxs700#pattern_generator
+        '''
+        #if not mode in (0, 5):
+        if type(mode) in (str, unicode):
+            modei = cm_s2i[mode]
+        else:
+            modei = mode
+        if not modei in cm_i2s:
+            raise Exception('Invalid mode: %d' % modei)
+        self.dev.controlWrite(0x40, 0xB0, 0x21, modei, '\x00')
+
+    def trig_param_r(self):
+        '''Read trigger parameter'''
+        # index, len ignored
+        # 000301f4
+        return self.dev.controlRead(0xC0, 0xB0, 0x25, 0, 6, timeout=self.timeout)
 
     def trig_param_w(self, pix_clust_ctr_thresh, bin_thresh):
         '''Set trigger parameters?'''
-        # FIXME: looks like I messed something up here
-        # bin_thresh is unused
+
+        if not (0 <= pix_clust_ctr_thresh <= 0xFFFF):
+            raise ValueError()
+        if not (0 <= bin_thresh <= 0xFFFFFF):
+            raise ValueError()
+
         buff = bytearray()
+        # BE 16
         buff.append((pix_clust_ctr_thresh >> 8) & 0xFF)
         buff.append((pix_clust_ctr_thresh >> 0) & 0xFF)
+        # WTF? Did I mess this up?
         buff.append((bin_thresh >> 8) & 0xFF)
         buff.append((bin_thresh >> 0) & 0xFF)
+        # read ignores this I guess?
         buff.append((bin_thresh >> 24) & 0xFF)
         buff.append((bin_thresh >> 16) & 0xFF)
         self.dev.controlWrite(0x40, 0xB0, 0x24, 0, buff)
@@ -373,9 +423,7 @@ class GXS700:
     def chk_wh(self):
         v = self.img_wh()
         if v != self.WH:
-            if 1:
-                print 'got wh', v
-                return
+            return
             raise Exception("Unexpected w/h: %s" % (v,))
 
     def chk_fpga_rsig(self):
@@ -401,9 +449,9 @@ class GXS700:
         self.hw_trig_disarm()
 
         state = self.state()
-        print 'Init state: %d' % state
+        self.printm('Init state: %d' % state)
         if self.capture_ready(state):
-            print 'Flusing stale capture'
+            self.printm('Flusing stale capture')
             self._cap_frame()
         elif state != 0x01:
             raise Exception('Not idle, refusing to setup')
@@ -451,8 +499,8 @@ class GXS700:
         self.chk_wh()
         self.chk_state()
         # This may depend on cal files
-        self.int_t_w(0x02BC)
-        self.cap_mode_w(0)
+        self.int_t_w(self.int_t)
+        self.cap_mode_w(self.cap_mode)
 
     def _cap_frame(self):
         tstart = time.time()
@@ -461,7 +509,7 @@ class GXS700:
         else:
             ret = self._cap_frame_bulk()
         tend = time.time()
-        print 'Transfer frame in %0.1f sec' % (tend - tstart,)
+        self.printm('Transfer frame in %0.1f sec' % (tend - tstart,))
         return ret
 
     def _cap_frame_bulk(self):
@@ -539,15 +587,15 @@ class GXS700:
 
             state = self.state()
             if state != state_last:
-                print 'New state %s (scan %d)' % (state, i)
+                self.printm('New state %s (scan %d)' % (state, i))
 
             if i % 1000 == 0:
-                print 'scan %d (state %s)' % (i, state)
+                self.printm('scan %d (state %s)' % (i, state))
 
             # See state() for comments on state values
             # Large
             if self.capture_ready(state):
-                print 'Ready (state %d)' % state
+                self.printm('Ready (state %d)' % state)
                 break
             # Intermediate states
             # Ex: 2 during acq
@@ -578,7 +626,7 @@ class GXS700:
             tstart = time.time()
             imgb = self._cap_bin(scan_cb=scan_cb)
             tend = time.time()
-            print 'Frame captured in %0.1f sec' % (tend - tstart,)
+            self.printm('Frame captured in %0.1f sec' % (tend - tstart,))
             rc = cap_cb(imgb)
             # hack: consider doing something else
             if rc:
@@ -587,9 +635,9 @@ class GXS700:
     
             self.chk_state()
             self.chk_error()
-    
-            self.int_t_w(0x02BC)
-            self.cap_mode_w(0)
+
+            self.int_t_w(self.int_t)
+            self.cap_mode_w(self.cap_mode)
             self.hw_trig_arm()
             self.chk_state()
             self.chk_error()
@@ -604,11 +652,11 @@ class GXS700:
 
         self.hw_trig_disarm()
 
-    def cap_bin(self):
+    def cap_bin(self, scan_cb=lambda itr: None):
         ret = []
         def cb(buff):
             ret.append(buff)
-        self.cap_binv(1, cb)
+        self.cap_binv(1, cb, scan_cb=scan_cb)
         return ret[0]
 
     def cap_img(self):
