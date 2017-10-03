@@ -325,30 +325,60 @@ class CNCGUI(QMainWindow):
         im_h_pix = int(self.uconfig['imager']['height'])
         im_w_um = self.obj_config["x_view"]
         im_h_um = im_w_um * im_h_pix / im_w_pix
-        self.obj_x_view.setText('X view (um): %0.3f' % im_w_um)
-        self.obj_y_view.setText('Y view (um): %0.3f' % im_h_um)
+        self.obj_view.setText('View : %0.3fx %0.3fy' % (im_w_um, im_h_um))
     
+    def update_v4l_config(self):
+        pass
+    
+    def v4l_updated(self):
+        for k, v in self.v4ls.iteritems():
+            try:
+                val = int(str(v.text()))
+            except ValueError:
+                continue
+            if k == 'E':
+                val = min(val, 800)
+            else:
+                val = min(val, 1023)
+            ctrl_set(self.vid_fd, k, val)
+
+
     def get_config_layout(self):
         cl = QGridLayout()
         
         row = 0
         l = QLabel("Objective")
         cl.addWidget(l, row, 0)
+
         self.obj_cb = QComboBox()
         cl.addWidget(self.obj_cb, row, 1)
         self.obj_cb.currentIndexChanged.connect(self.update_obj_config)
         row += 1
+        
         self.obj_mag = QLabel("")
         cl.addWidget(self.obj_mag, row, 1)
-        self.obj_x_view = QLabel("")
+        self.obj_view = QLabel("")
         row += 1
-        cl.addWidget(self.obj_x_view, row, 1)
-        self.obj_y_view = QLabel("")
-        cl.addWidget(self.obj_y_view, row, 2)
+
+        cl.addWidget(self.obj_view, row, 1)
         row += 1
         # seed it
         self.reload_obj_cb()
         self.update_obj_config()
+
+        self.v4l_cb = QComboBox()
+        cl.addWidget(self.v4l_cb, row, 1)
+        self.v4l_cb.currentIndexChanged.connect(self.update_v4l_config)
+        row += 1
+        
+        self.v4ls = {}
+        for k in ("Red Balance", "Blue Balance", "Gain", "Exposure"):
+            cl.addWidget(QLabel(k), row, 0)
+            le = QLineEdit('')
+            self.v4ls[k] = le
+            cl.addWidget(le, row, 1)
+            le.textChanged.connect(self.v4l_updated)
+            row += 1
         
         return cl
     
@@ -479,7 +509,9 @@ class CNCGUI(QMainWindow):
             if self.vid_fd >= 0:
                 print 'Initializing V4L controls'
                 for k, v in uconfig["imager"].get("v4l2", {}).iteritems():
-                    ctrl_set(self.vid_fd, k, v)
+                    #ctrl_set(self.vid_fd, k, v)
+                    if k in self.v4ls:
+                        self.v4ls[k].setText(str(v))
         
         if t == gst.MESSAGE_EOS:
             self.player.set_state(gst.STATE_NULL)
@@ -653,6 +685,8 @@ class CNCGUI(QMainWindow):
         if self.uconfig['cnc']['startup_run_exit']:
             print 'Planner debug break on completion'
             os._exit(1)
+        # Prevent accidental start after done
+        self.dry_cb.setChecked(True)
     
     def stop(self):
         '''Stop operations after the next operation'''
