@@ -5,8 +5,6 @@ import gxs700
 # Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
 import usb1
 # Bare ctype wrapper, inspired from library C header file.
-import libusb1
-import sys
 import numpy as np
 import struct
 import os

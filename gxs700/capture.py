@@ -39,17 +39,16 @@ def run(force,
 
         imagen[0] += 1
 
-    _usbcontext, _dev, gxs = gxs700_util.ez_open_ex(verbose=args.verbose, init=True)
+    _usbcontext, _dev, gxs = gxs700_util.ez_open_ex(verbose=args.verbose, init=False)
 
-    if 0:
-        if cap_mode:
-            gxs.cap_mode = cap_mode
-        if int_t:
-            gxs.int_t = int_t
-        if ctr_thresh or bin_thresh:
-            gxs.trig_param_w(pix_clust_ctr_thresh=ctr_thresh, bin_thresh=bin_thresh)
-        gxs._init()
-        #gxs.fpga_off()
+    if cap_mode:
+        gxs.cap_mode = cap_mode
+    if int_t:
+        gxs.int_t = int_t
+    if ctr_thresh or bin_thresh:
+        gxs.trig_param_w(pix_clust_ctr_thresh=ctr_thresh, bin_thresh=bin_thresh)
+    gxs._init()
+    #gxs.fpga_off()
 
     if not os.path.exists(args.dir):
         os.mkdir(args.dir)

@@ -21,31 +21,29 @@ eeprom2
     write: controlWrite(0x40, 0xB0, 0x000C
 '''
 
-# https://github.com/vpelletier/python-libusb1
-# Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
-import usb1
-# Bare ctype wrapper, inspired from library C header file.
-import libusb1
-import binascii
-import sys
-import argparse
-from util import hexdump
-from util import open_dev
+from uvscada import gxs700
+from uvscada import gxs700_util
+from uvscada import util
 
 if __name__ == "__main__":
+    import argparse
+
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
     parser.add_argument('--all', '-a', action='store_true', help='prog entire EEPROM (8k)')
-    parser.add_argument('--fn2', '-F', help='write bin to filename')
+    parser.add_argument('fn_in', help='read data from filename')
     args = parser.parse_args()
 
-    usbcontext = usb1.USBContext()
-    dev = open_dev(usbcontext)
+    # Don't init
+    # With corrupted EEPROM bad w/h
+    # and its just not necessary since all we really need is the FX2
+    # heck, we don't even need to load FW really
+    _usbcontext, _dev, gxs = gxs700_util.ez_open_ex(verbose=args.verbose, init=False)
 
     # matches this
     # buff = dump_loop(0x0B, 0x80, 0x0000, dump_len, do_hexdump=(not (args.fn2 or args.all)))
     buf = bytearray('\xAB' * 0x2000)
-    r = open(args.fn2, 'r').read()
+    r = open(args.fn_in, 'r').read()
     buf[0:len(r)] = r
     if args.all:
         size = 0x2000
@@ -58,7 +56,6 @@ if __name__ == "__main__":
             # a bit screwed up...but w/e
             dat = str(buf[i:i+0x20])
             dat = dat[0x10:] + dat[0x00:0x10]
-            dev.controlWrite(0x40, 0xB0, 0x000C, 0x0010, dat)
+            gxs.dev.controlWrite(0x40, 0xB0, 0x000C, 0x0010, dat)
         else:
-            dev.controlWrite(0x40, 0xB0, 0x000C, prog_addr, str(buf[i:i+0x20]))
-
+            gxs.dev.controlWrite(0x40, 0xB0, 0x000C, prog_addr, str(buf[i:i+0x20]))

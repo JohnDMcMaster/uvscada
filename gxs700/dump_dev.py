@@ -3,7 +3,6 @@ from uvscada import util
 
 import argparse
 import binascii
-import datetime
 import os
 
 if __name__ == "__main__":
@@ -18,7 +17,10 @@ if __name__ == "__main__":
     usbcontext, dev, gxs = gxs700_util.ez_open_ex(verbose=args.verbose)
 
     sn_flash = gxs700_util.sn_flash_r(gxs)
-    sn_eeprom = gxs700_util.sn_eeprom_r(gxs)
+    try:
+        sn_eeprom = gxs700_util.sn_eeprom_r(gxs)
+    except:
+        sn_eeprom = None
     print 'S/N (flash): %s' % sn_flash
     print 'S/N (EEPROM): %s' % sn_eeprom
     if sn_flash != sn_eeprom:

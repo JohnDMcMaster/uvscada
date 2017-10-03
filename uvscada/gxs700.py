@@ -227,6 +227,12 @@ class GXS700:
                 vs,
                 timeout=self.timeout)
 
+    '''
+    WARNING WARNING WARNING
+    This function is known to corrupt EEPROM
+    Despite values not getting returned
+    Maybe I did something wrong?
+    '''
     def i2c_r(self, addr, n):
         '''Read I2C bus'''
         return self.dev.controlRead(0xC0, 0xB0, 0x0A, addr, n, timeout=self.timeout)
@@ -266,7 +272,11 @@ class GXS700:
                 timeout=self.timeout)
 
     def fpga_off(self):
-        '''Turn FPGA power off'''
+        '''
+        Turn FPGA power off?
+        Doesn't seem to do anyhting
+        Maybe something else turns it on
+        '''
         self.i2c_w(0x82, '\x03\x00')
         self.i2c_w(0x82, '\x01\x0E')
 
@@ -423,7 +433,6 @@ class GXS700:
     def chk_wh(self):
         v = self.img_wh()
         if v != self.WH:
-            return
             raise Exception("Unexpected w/h: %s" % (v,))
 
     def chk_fpga_rsig(self):
