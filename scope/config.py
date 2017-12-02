@@ -1,5 +1,6 @@
 import json
 import os
+from collections import OrderedDict
 
 '''
 A few general assumptions:
@@ -34,7 +35,7 @@ defaults = {
 }
     
 def get_config(fn='microscope.json'):
-    j = json.load(open('microscope.json'))
+    j = json.load(open('microscope.json'), object_pairs_hook=OrderedDict)
     def default(rootj, rootd):
         for k, v in rootd.iteritems():
             if not k in rootj:

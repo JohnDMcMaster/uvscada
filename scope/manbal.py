@@ -46,11 +46,11 @@ class CaptureSink(gst.Element):
         self.sinkpad.set_event_function(self.eventfunc)
 
         self.img_cb = lambda buffer: None
-    
+
     '''
     gstreamer plugin core methods
     '''
-    
+
     def chainfunc(self, pad, buffer):
         #print 'Capture sink buffer in'
         try:
@@ -58,35 +58,35 @@ class CaptureSink(gst.Element):
         except:
             traceback.print_exc()
             os._exit(1)
-        
+
         return gst.FLOW_OK
 
     def eventfunc(self, pad, event):
         return True
-    
+
 gobject.type_register(CaptureSink)
 # Register the element into this process' registry.
 gst.element_register (CaptureSink, 'capturesink', gst.RANK_MARGINAL)
 
 class ImageProcessor(QThread):
     n_frames = pyqtSignal(int) # Number of images
-    
+
     r_val = pyqtSignal(int) # calc red value
     g_val = pyqtSignal(int) # calc green value
     b_val = pyqtSignal(int) # calc blue value
-    
+
     r_bal = pyqtSignal(int) # calc red bal (r/g)
     b_bal = pyqtSignal(int) # calc blue bal (b/g)
-    
+
     def __init__(self):
         QThread.__init__(self)
-        
+
         self.running = threading.Event()
 
         self.image_requested = threading.Event()
         self.q = Queue.Queue()
         self._n_frames = 0
-    
+
     def run(self):
         self.running.set()
         self.image_requested.set()
@@ -96,7 +96,7 @@ class ImageProcessor(QThread):
             except Queue.Empty:
                 continue
             img = Image.open(StringIO.StringIO(img))
-            
+
             rval = 0
             gval = 0
             bval = 0
@@ -116,12 +116,12 @@ class ImageProcessor(QThread):
             self.r_val.emit(int(rval * 1000.0 / sz))
             self.g_val.emit(int(gval * 1000.0 / sz))
             self.b_val.emit(int(bval * 1000.0 / sz))
-            
+
             self.r_bal.emit(int((rbal - 1) * 1000.0))
             self.b_bal.emit(int((bbal - 1) * 1000.0))
-            
+
             self.image_requested.set()
-    
+
     def stop(self):
         self.running.clear()
 
@@ -142,7 +142,7 @@ class ImageProcessor(QThread):
             self.q.put(buffer.data)
             # Clear before emitting signal so that it can be re-requested in response
             self.image_requested.clear()
-    
+
 
 class CNCGUI(QMainWindow):
     def __init__(self):
@@ -152,21 +152,23 @@ class CNCGUI(QMainWindow):
         self.initUI()
 
         self.vid_fd = None
-        
+
         # Must not be initialized until after layout is set
         self.gstWindowId = None
         engine_config = 'gstreamer'
+        #engine_config = 'gstreamer-testsrc'
         if engine_config == 'gstreamer':
             self.source = gst.element_factory_make("v4l2src", "vsource")
             self.source.set_property("device", "/dev/video0")
             self.vid_fd = -1
             self.setupGst()
         elif engine_config == 'gstreamer-testsrc':
+            print 'WARNING: using test source'
             self.source = gst.element_factory_make("videotestsrc", "video-source")
             self.setupGst()
         else:
             raise Exception('Unknown engine %s' % (engine_config,))
-        
+
         self.processor = ImageProcessor()
         self.processor.n_frames.connect(self.n_frames.setNum)
         self.processor.r_val.connect(self.r_val.setNum)
@@ -175,16 +177,16 @@ class CNCGUI(QMainWindow):
         self.processor.r_bal.connect(self.r_bal.setNum)
         self.processor.b_bal.connect(self.b_bal.setNum)
         self.capture_sink.img_cb = self.processor.img_cb
-        
+
         self.processor.start()
-        
+
         if self.gstWindowId:
             print "Starting gstreamer pipeline"
             self.player.set_state(gst.STATE_PLAYING)
-    
+
     def awb(self):
         # makes one step for now
-        
+
         # note
         # rb is out of 1000
         # actual is out of 1024
@@ -192,16 +194,16 @@ class CNCGUI(QMainWindow):
         rv = int(self.r_val.text())
         gv = int(self.g_val.text())
         bv = int(self.b_val.text())
-        
+
         rb = int(self.r_bal.text())
         bb = int(self.b_bal.text())
-        
+
         # Using hacked driver where these are set directly
         setg = int(self.ctrls["Gain"].text())
         setr = int(self.ctrls["Red Balance"].text())
         setb = int(self.ctrls["Blue Balance"].text())
-        
-        
+
+
         # make a linear guess based on the difference
         # it might under or overshoot, but should converge in time
         limit = lambda x: max(min(int(x), 1023), 0)
@@ -211,19 +213,19 @@ class CNCGUI(QMainWindow):
         print 'Step'
         print '  R: %d w/ %d => %d' % (setr, rb, rb_new)
         print '  B: %d w/ %d => %d' % (setb, bb, bb_new)
-        
+
         #ctrl_set(self.vid_fd, "Red Balance", rb_new)
         self.ctrls["Red Balance"].setText(str(rb_new))
-        
+
         #ctrl_set(self.vid_fd, "Blue Balance", bb_new)
         self.ctrls["Blue Balance"].setText(str(bb_new))
-    
+
     def get_video_layout(self):
         # Overview
         def low_res_layout():
             layout = QVBoxLayout()
             layout.addWidget(QLabel("Overview"))
-            
+
             # Raw X-windows canvas
             self.video_container = QWidget()
             # Allows for convenient keyboard control by clicking on the video
@@ -233,14 +235,14 @@ class CNCGUI(QMainWindow):
             self.video_container.resize(w, h)
             policy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             self.video_container.setSizePolicy(policy)
-            
+
             layout.addWidget(self.video_container)
-            
+
             return layout
-        
+
         self.awb_pb = QPushButton("AWG (G, E fixed)")
         self.awb_pb.clicked.connect(self.awb)
-        
+
         layout = QHBoxLayout()
         layout.addLayout(low_res_layout())
         layout.addWidget(self.awb_pb)
@@ -250,7 +252,7 @@ class CNCGUI(QMainWindow):
 
         layout = QGridLayout()
         row = 0
-        
+
         self.ctrls = {}
         for name in ("Red Balance", "Gain", "Blue Balance", "Exposure"):
             def textChanged(name):
@@ -264,21 +266,21 @@ class CNCGUI(QMainWindow):
                             print '%s changed => %d' % (name, val)
                             ctrl_set(self.vid_fd, name, val)
                 return f
-        
+
             layout.addWidget(QLabel(name), row, 0)
             ctrl = QLineEdit('0')
             ctrl.textChanged.connect(textChanged(name))
             self.ctrls[name] = ctrl
             layout.addWidget(ctrl, row, 1)
             row += 1
-        
+
         return layout
-    
+
     def get_rgb_layout(self):
 
         layout = QGridLayout()
         row = 0
-        
+
         layout.addWidget(QLabel('N'), row, 0)
         self.n_frames = QLabel('0')
         layout.addWidget(self.n_frames, row, 1)
@@ -298,7 +300,7 @@ class CNCGUI(QMainWindow):
         self.b_val = QLabel('0')
         layout.addWidget(self.b_val, row, 1)
         row += 1
-        
+
         layout.addWidget(QLabel('R_B'), row, 0)
         self.r_bal = QLabel('0')
         layout.addWidget(self.r_bal, row, 1)
@@ -308,9 +310,9 @@ class CNCGUI(QMainWindow):
         self.b_bal = QLabel('0')
         layout.addWidget(self.b_bal, row, 1)
         row += 1
-        
+
         return layout
-    
+
     def setupGst(self):
         print "Setting up gstreamer pipeline"
         self.gstWindowId = self.video_container.winId()
@@ -328,10 +330,10 @@ class CNCGUI(QMainWindow):
         # Video render stream
         self.player.add(      self.source, self.tee)
         gst.element_link_many(self.source, self.tee)
-        
+
         self.player.add(fcs,                 self.resizer, sinkx)
         gst.element_link_many(self.tee, fcs, self.resizer, sinkx)
-        
+
         self.player.add(                self.capture_sink_queue, self.capture_enc, self.capture_sink)
         gst.element_link_many(self.tee, self.capture_sink_queue, self.capture_enc, self.capture_sink)
 
@@ -340,20 +342,16 @@ class CNCGUI(QMainWindow):
         bus.enable_sync_message_emission()
         bus.connect("message", self.on_message)
         bus.connect("sync-message::element", self.on_sync_message)
-    
+
     def on_message(self, bus, message):
         t = message.type
-        
+
         if self.vid_fd is not None and self.vid_fd < 0:
             self.vid_fd = self.source.get_property("device-fd")
             if self.vid_fd >= 0:
                 print 'Initializing V4L controls'
-                for k, v in uconfig["imager"].get("v4l2", {}).iteritems():
-                    if k in self.ctrls:
-                        self.ctrls[k].setText(str(v))
-                    else:
-                        ctrl_set(self.vid_fd, k, v)
-        
+                self.v4l_load()
+
         if t == gst.MESSAGE_EOS:
             self.player.set_state(gst.STATE_NULL)
             print "End of stream"
@@ -362,6 +360,22 @@ class CNCGUI(QMainWindow):
             print "Error: %s" % err, debug
             self.player.set_state(gst.STATE_NULL)
             ''
+
+    def v4l_load(self):
+        vconfig = uconfig["imager"].get("v4l2", None)
+        if not vconfig:
+            return
+        for configk, configv in vconfig.iteritems():
+            break
+        #if type(configv) != dict or '"Gain"' not in configv:
+        #    raise Exception("Bad v4l default config (old style?)")
+
+        print 'Selected config %s' % configk
+        for k, v in configv.iteritems():
+            if k in self.ctrls:
+                self.ctrls[k].setText(str(v))
+            else:
+                ctrl_set(self.vid_fd, k, v)
 
     def on_sync_message(self, bus, message):
         if message.structure is None:
@@ -373,27 +387,27 @@ class CNCGUI(QMainWindow):
                 win_id = self.gstWindowId
             else:
                 raise Exception('oh noes')
-            
+
             assert win_id
             imagesink = message.src
             imagesink.set_xwindow_id(win_id)
-    
+
     def initUI(self):
         self.setGeometry(300, 300, 250, 150)
-        self.setWindowTitle('pyv4l test')    
-        
+        self.setWindowTitle('pyv4l test')
+
         # top layout
         layout = QHBoxLayout()
-        
+
         layout.addLayout(self.get_ctrl_layout())
         layout.addLayout(self.get_rgb_layout())
         layout.addLayout(self.get_video_layout())
-        
+
         w = QWidget()
         w.setLayout(layout)
         self.setCentralWidget(w)
         self.show()
-        
+
 def excepthook(excType, excValue, tracebackobj):
     print '%s: %s' % (excType, excValue)
     traceback.print_tb(tracebackobj)
@@ -408,7 +422,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     gobject.threads_init()
-    
+
     app = QApplication(sys.argv)
     _gui = CNCGUI()
     # XXX: what about the gstreamer message bus?

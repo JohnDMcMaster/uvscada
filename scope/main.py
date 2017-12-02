@@ -342,7 +342,6 @@ class CNCGUI(QMainWindow):
                 val = min(val, 1023)
             ctrl_set(self.vid_fd, k, val)
 
-
     def get_config_layout(self):
         cl = QGridLayout()
         
@@ -508,10 +507,16 @@ class CNCGUI(QMainWindow):
             self.vid_fd = self.source.get_property("device-fd")
             if self.vid_fd >= 0:
                 print 'Initializing V4L controls'
-                for k, v in uconfig["imager"].get("v4l2", {}).iteritems():
-                    #ctrl_set(self.vid_fd, k, v)
-                    if k in self.v4ls:
-                        self.v4ls[k].setText(str(v))
+                vconfig = uconfig["imager"].get("v4l2", None)
+                if vconfig:
+                    for configk, configv in vconfig.iteritems():
+                        break
+                    print 'Selected config %s' % configk
+
+                    for k, v in configv.iteritems():
+                        #ctrl_set(self.vid_fd, k, v)
+                        if k in self.v4ls:
+                            self.v4ls[k].setText(str(v))
         
         if t == gst.MESSAGE_EOS:
             self.player.set_state(gst.STATE_NULL)
@@ -825,9 +830,9 @@ class CNCGUI(QMainWindow):
             self.snapshot_serial += 1
             fn_base = '%s%03u' % (prefix, self.snapshot_serial)
             fn_full = os.path.join(self.uconfig['imager']['snapshot_dir'], fn_base + str(self.snapshot_suffix_le.text()))
-            print 'check %s' % fn_full
+            #print 'check %s' % fn_full
             if os.path.exists(fn_full):
-                dbg('Snapshot %s already exists, skipping' % fn_full)
+                #dbg('Snapshot %s already exists, skipping' % fn_full)
                 continue
             # Omit base to make GUI easier to read
             self.snapshot_fn_le.setText(fn_base)
