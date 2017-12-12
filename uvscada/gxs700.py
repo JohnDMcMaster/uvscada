@@ -575,7 +575,7 @@ class GXS700:
         self.dev.setInterfaceAltSetting(0, 1)
         all_dat = bytearray()
         while len(all_dat) < self.FRAME_SZ:
-            all_dat += self.dev.interruptRead(2, self.FRAME_SZ, timeout=5000)
+            all_dat += self.dev.interruptRead(2, 1024, timeout=5000)
         # Packet 12961
         self.dev.setInterfaceAltSetting(0, 0)
 
