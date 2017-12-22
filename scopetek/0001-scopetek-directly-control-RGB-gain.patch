@@ -1,0 +1,36 @@
+From 494dc12da18eda77ce192d931ecccefd812e01fe Mon Sep 17 00:00:00 2001
+From: John McMaster <johndmcmaster@gmail.com>
+Date: Tue, 23 Dec 2014 23:16:43 -0800
+Subject: [PATCH] scopetek: directly control RGB gain
+
+---
+ drivers/media/usb/gspca/touptek.c |    6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/usb/gspca/touptek.c b/drivers/media/usb/gspca/touptek.c
+index 7bac6bc..c3f367819 100644
+--- a/drivers/media/usb/gspca/touptek.c
++++ b/drivers/media/usb/gspca/touptek.c
+@@ -306,7 +306,8 @@ static void setbgain(struct gspca_dev *gspca_dev,
+ 			 GAIN_MAX, normalized);
+ 		normalized = GAIN_MAX;
+ 	}
+-	normalized = gainify(normalized);
++	//normalized = gainify(normalized);
++	normalized = gainify(gain);
+ 	PDEBUG(D_STREAM, "gain B (0x%04X): 0x%04X w/ source 0x%04X\n",
+ 		 REG_BLUE_GAIN, normalized, gain);
+ 
+@@ -325,7 +326,8 @@ static void setrgain(struct gspca_dev *gspca_dev,
+ 			 GAIN_MAX, normalized);
+ 		normalized = GAIN_MAX;
+ 	}
+-	normalized = gainify(normalized);
++	//normalized = gainify(normalized);
++	normalized = gainify(gain);
+ 	PDEBUG(D_STREAM, "gain R (0x%04X): 0x%04X w / source 0x%04X\n",
+ 		 REG_RED_GAIN, normalized, gain);
+ 
+-- 
+1.7.9.5
+
