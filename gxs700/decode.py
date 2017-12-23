@@ -6,18 +6,24 @@ from uvscada import gxs700_util
 import argparse
 import os
 import glob
-import PIL.ImageOps
 
 def process_bin(fin, fout, hist_eq=False):
     print 'Reading %s...' % fin
     buff = open(fin, 'r').read()
-    img = gxs700.GXS700.decode(buff)
     if hist_eq:
-        img = PIL.ImageOps.equalize(img)
+        print 'Equalizing histogram...'
+        buff = gxs700_util.histeq(buff)
+    print 'Decoding image...'
+    img = gxs700.GXS700.decode(buff)
     print 'Saving %s...' % fout
     img.save(fout)
 
 def process_png(fin, fout, hist_eq=False):
+    # ? Does this code even make sense?
+    # Isn't this suppose to be for histogram equalizing an existing image?
+    # These must be opened using PIL, not as raw binary
+    raise Exception("FIXME")
+
     print 'Reading %s...' % fin
     buff = open(fin, 'r').read()
     if args.hist_eq:

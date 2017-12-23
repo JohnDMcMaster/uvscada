@@ -73,6 +73,11 @@ def ez_open(verbose=False):
     _usbcontext, _dev, gxs700 = ez_open_ex(verbose)
     return gxs700
 
+# Tried to do
+# import PIL.ImageOps
+# img = PIL.ImageOps.equalize(img)
+# But got swept up in 16 => 8 bit thing
+# TODO: revisit
 # http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
 def histeq(buff, nbr_bins=256):
     depth = 2

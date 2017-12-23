@@ -66,7 +66,9 @@ def sz_wh(sz):
 def get_bufF_sz(sz):
     return {1: SZ_SM, 2:SZ_LG}[sz]
 
-def decode(buff, wh=None):
+# This sort of works, but gives an 8 bit image
+# Can I get it to work with mode I somehow instead?
+def decode_l8(buff, wh=None):
     '''Given bin return PIL image object'''
     width, height = wh or sz_wh(len(buff))
     buff = str(buff[0:2 * width * height])
@@ -76,6 +78,35 @@ def decode(buff, wh=None):
     img = Image.frombytes('L', (width, height), buff, "raw", "L;16", 0, -1)
     img =  PIL.ImageOps.invert(img)
     img = img.transpose(PIL.Image.ROTATE_270)
+    print img.mode
+    return img
+
+def decode(buff, wh=None):
+    '''Given bin return PIL image object'''
+    # FIXME: hack to make widthwise so it fits on screen better
+    depth = 2
+    width, height = wh or sz_wh(len(buff))
+    buff = bytearray(buff)
+
+    # no need to reallocate each loop
+    img = Image.new("I", (height, width), "White")
+
+    for y in range(height):
+        line0 = buff[y * width * depth:(y + 1) * width * depth]
+        for x in range(width):
+            b0 = line0[2*x + 0]
+            b1 = line0[2*x + 1]
+
+            G = (b1 << 8) + b0
+            # optional 16-bit pixel truncation to turn into 8-bit PNG
+            # G = b1
+
+            # In most x-rays white is the part that blocks the x-rays
+            # however, the camera reports brightness (unimpeded x-rays)
+            # compliment to give in conventional form per above
+            G = 0xFFFF - G
+
+            img.putpixel((y, x), G)
     return img
 
 class GXS700:
