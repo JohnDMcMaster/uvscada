@@ -26,16 +26,16 @@ def run(force,
             print 'Writing %s' % fn
             open(fn, 'w').write(imgb)
 
+        if args.hist_eq:
+            print 'Equalizing histogram...'
+            imgb = gxs700_util.histeq(imgb)
+
         if args.png:
+            print 'Decoding image...'
             img = gxs700.GXS700.decode(imgb)
             fn = base + '.png'
-            print 'Writing %s' % fn
+            print 'Writing %s...' % fn
             img.save(fn)
-            if args.hist_eq:
-                img = PIL.ImageOps.equalize(img)
-                fn = base + 'e.png'
-                print 'Writing %s' % fn
-                img.save(fn)
 
         imagen[0] += 1
 
