@@ -7,14 +7,36 @@ from uvscada import util
 import argparse
 import glob
 import os
-import PIL.ImageOps
+import binascii
+import json
+
+kvp_user = None
+ma_user = None
+
+def meta(gxs):
+    sn_flash = gxs700_util.sn_flash_r(gxs)
+    try:
+        sn_eeprom = gxs700_util.sn_eeprom_r(gxs)
+    except:
+        sn_eeprom = None
+
+    return {
+        'size': gxs.size,
+        'sn_flash': sn_flash,
+        'sn_eeprom': sn_eeprom,
+        'int_time': gxs.int_time(),
+        'trig_params': binascii.hexlify(gxs.trig_param_r()),
+        'mode': gxs700.cap_mode2s(gxs.cap_mode)
+        }
 
 def run(force,
         cap_mode=None, int_t=None,
         ctr_thresh=None, bin_thresh=None,
         ):
 
+    itrs = [None]
     def scan_cb(itr):
+        itrs[0] = itr
         if force and itr == 0:
             print 'Forcing trigger'
             gxs.sw_trig()
@@ -26,16 +48,35 @@ def run(force,
             print 'Writing %s' % fn
             open(fn, 'w').write(imgb)
 
-        if args.hist_eq:
-            print 'Equalizing histogram...'
-            imgb = gxs700_util.histeq(imgb)
-
         if args.png:
+            pngfn = base + '.png'
             print 'Decoding image...'
             img = gxs700.GXS700.decode(imgb)
-            fn = base + '.png'
-            print 'Writing %s...' % fn
-            img.save(fn)
+            print 'Writing %s...' % pngfn
+            img.save(pngfn)
+
+        if args.hist_eq:
+            pngfn = base + 'e.png'
+            print 'Equalizing histogram...'
+            imgb = gxs700_util.histeq(imgb)
+            print 'Decoding image...'
+            img = gxs700.GXS700.decode(imgb)
+            print 'Writing %s...' % pngfn
+            img.save(pngfn)
+
+        if args.meta:
+            print 'Saving meta...'
+            fn = base + '.json'
+            j = {
+                    'sensor': meta(gxs),
+                    'x-ray': {
+                        'kvp_user': kvp_user,
+                        'ma_user': ma_user,
+                    },
+                    'force': force,
+                    'itr': itrs[0],
+                 }
+            json.dump(j, open(fn, 'w'), indent=4, sort_keys=True)
 
         imagen[0] += 1
 
@@ -63,8 +104,6 @@ def run(force,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
-    parser.add_argument('--bin', '-b', action='store_true', help='Store .bin in addition to .png')
-    parser.add_argument('--hist-eq', '-e', action='store_true', help='Equalize histogram')
     parser.add_argument('--dir', default='out', help='Output dir')
     parser.add_argument('--force', '-f', action='store_true', help='Force trigger')
     parser.add_argument('--number', '-n', type=int, default=1, help='number to take')
@@ -73,8 +112,17 @@ if __name__ == "__main__":
     parser.add_argument('--ctr-thresh', type=int, default=None, help='Advanced')
     parser.add_argument('--bin-thresh', type=int, default=None, help='Advanced')
     parser.add_argument('--cap-mode', default=None, help='Advanced: norm (default), hblock, vblock, vbar')
-    util.add_bool_arg(parser, '--png', default=True)
+    parser.add_argument('--bin', '-b', action='store_true', help='Write .bin raw data capture')
+    util.add_bool_arg(parser, '--png', default=True, help='Write normal .png image file')
+    parser.add_argument('--hist-eq', '-e', action='store_true', help='Write histogram equalized .png image file')
+    util.add_bool_arg(parser, '--meta', default=True, help='Write metadata .json file')
+    parser.add_argument('--kvp', default=None, help='Metadata kVp comment')
+    parser.add_argument('--ma', default=None, help='Metadata mA comment')
+
     args = parser.parse_args()
+
+    kvp_user = args.kvp
+    ma_user = args.ma
 
     run(force=args.force, cap_mode=args.cap_mode, int_t=args.int_t,
             ctr_thresh=args.ctr_thresh, bin_thresh=args.bin_thresh)

@@ -66,6 +66,19 @@ def sz_wh(sz):
 def get_bufF_sz(sz):
     return {1: SZ_SM, 2:SZ_LG}[sz]
 
+def cap_mode2i(mode):
+    if type(mode) in (str, unicode):
+        modei = cm_s2i[mode]
+    else:
+        modei = mode
+    if not modei in cm_i2s:
+        raise Exception('Invalid mode: %d' % modei)
+    return modei
+
+def cap_mode2s(mode):
+    '''Return string representation of an arbitrary user supplided string or int mode'''
+    return cm_i2s[cap_mode2i(mode)]
+
 # This sort of works, but gives an 8 bit image
 # Can I get it to work with mode I somehow instead?
 def decode_l8(buff, wh=None):
@@ -396,14 +409,7 @@ class GXS700:
         
         See https://siliconpr0n.org/nuc/doku.php?id=gendex:gxs700#pattern_generator
         '''
-        #if not mode in (0, 5):
-        if type(mode) in (str, unicode):
-            modei = cm_s2i[mode]
-        else:
-            modei = mode
-        if not modei in cm_i2s:
-            raise Exception('Invalid mode: %d' % modei)
-        self.dev.controlWrite(0x40, 0xB0, 0x21, modei, '\x00')
+        self.dev.controlWrite(0x40, 0xB0, 0x21, cap_mode2i(mode), '\x00')
 
     def trig_param_r(self):
         '''Read trigger parameter'''

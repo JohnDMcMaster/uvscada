@@ -28,9 +28,13 @@ if __name__ == "__main__":
     sn = sn_flash
 
     if 0 < sn < 1000000000:
-        print '  S/N guess: black Dexis'
-    elif 2000000000 < sn < 3000000000:
-        print '  S/N guess: blue Gendex'
+        print '  S/N guess: black Dexis (size 2)'
+    elif 1000000000 <= sn < 2000000000:
+        print '  S/N guess: blue Gendex (size 1)'
+    elif 2000000000 <= sn < 3000000000:
+        print '  S/N guess: blue Gendex (size 2)'
+    else:
+        print '  S/N guess: unknown'
 
     if not args.hexdump:
         #today_str = datetime.datetime.now().isoformat()[0:10]
