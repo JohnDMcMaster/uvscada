@@ -28,9 +28,13 @@ if __name__ == "__main__":
     mins = np.minimum(np_df2, np_ff2)
     maxs = np.maximum(np_df2, np_ff2)
 
-    for fn_in in glob.glob(args.din + '/.png'):
-        im_ref = Image.open(fn_in)
-        np_ref2 = np.array(im_ref)
-        np_scaled = 0xFFFF * (np_ref2 - mins) / (maxs - mins)
+    if not os.path.exists(args.dout):
+        os.mkdir(args.dout)
+
+    for fn_in in glob.glob(args.din + '/*.png'):
+        print 'Processing %s' % fn_in
+        im_in = Image.open(fn_in)
+        np_in2 = np.array(im_in)
+        np_scaled = 0xFFFF * (np_in2 - mins) / (maxs - mins)
         imc = Image.fromarray(np_scaled).convert("I")
         imc.save(os.path.join(args.dout, os.path.basename(fn_in)))
