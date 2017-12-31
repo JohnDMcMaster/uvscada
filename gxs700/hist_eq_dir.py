@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import Image
 import numpy as np
 import glob

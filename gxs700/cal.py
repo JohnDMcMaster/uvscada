@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import Image
 import PIL.ImageOps
 import numpy as np
@@ -28,6 +29,15 @@ if __name__ == "__main__":
     mins = np.minimum(np_df2, np_ff2)
     maxs = np.maximum(np_df2, np_ff2)
 
+    u16_mins = np.full(mins.shape, 0x0000, dtype=np.dtype('float'))
+    u16_ones = np.full(mins.shape, 0x0001, dtype=np.dtype('float'))
+    u16_maxs = np.full(mins.shape, 0xFFFF, dtype=np.dtype('float'))
+
+    cal_det = maxs - mins
+    # Prevent div 0 on bad pixels
+    cal_det = np.maximum(cal_det, u16_ones)
+    cal_scalar = 0xFFFF / cal_det
+
     if not os.path.exists(args.dout):
         os.mkdir(args.dout)
 
@@ -35,6 +45,9 @@ if __name__ == "__main__":
         print 'Processing %s' % fn_in
         im_in = Image.open(fn_in)
         np_in2 = np.array(im_in)
-        np_scaled = 0xFFFF * (np_in2 - mins) / (maxs - mins)
+        np_scaled = (np_in2 - mins) * cal_scalar
+        # If it clipped, squish to good values
+        np_scaled = np.minimum(np_scaled, u16_maxs)
+        np_scaled = np.maximum(np_scaled, u16_mins)
         imc = Image.fromarray(np_scaled).convert("I")
         imc.save(os.path.join(args.dout, os.path.basename(fn_in)))

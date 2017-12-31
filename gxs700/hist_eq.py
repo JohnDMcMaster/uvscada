@@ -2,16 +2,17 @@
 import argparse
 import os
 import glob
+import Image
 
-from uvscada import gxs700
+from uvscada import gxs700_util
 
 def process_png(fin, fout, hist_eq=False):
     print 'Reading %s...' % fin
-    buff = open(fin, 'r').read()
-    print 'Decoding image...'
-    img = gxs700.GXS700.decode(buff)
+    im = Image.open(fin)
+    print 'Equalizing image...'
+    ime = gxs700_util.histeq_im(im)
     print 'Saving %s...' % fout
-    img.save(fout)
+    ime.save(fout)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Equalize 16 bit GXS700 image histogram')
