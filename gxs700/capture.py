@@ -56,7 +56,7 @@ def run(force,
             img.save(pngfn)
 
         if args.hist_eq:
-            pngfn = base + 'e.png'
+            pngfn = base + '_e.png'
             print 'Equalizing histogram...'
             imgb = gxs700_util.histeq(imgb)
             print 'Decoding image...'

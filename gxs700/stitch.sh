@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# FIXME
+# Switch rows
+
 # Organize scan products
 mkdir bin png
 mv *.bin bin/

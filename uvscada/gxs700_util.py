@@ -1,6 +1,9 @@
 import gxs700_fw
 import gxs700
 
+from PIL import Image
+import PIL.ImageOps
+
 # https://github.com/vpelletier/python-libusb1
 # Python-ish (classes, exceptions, ...) wrapper around libusb1.py . See docstrings (pydoc recommended) for usage.
 import usb1
@@ -73,18 +76,13 @@ def ez_open(verbose=False):
     _usbcontext, _dev, gxs700 = ez_open_ex(verbose)
     return gxs700
 
-# Tried to do
-# import PIL.ImageOps
-# img = PIL.ImageOps.equalize(img)
-# But got swept up in 16 => 8 bit thing
-# TODO: revisit
-# http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
-def histeq(buff, nbr_bins=256):
+def raw2npim1(buff):
+    '''Given raw string, return 1d array of 16 bit unpacked values'''
     depth = 2
     width, height = gxs700.sz_wh(len(buff))
 
     buff = bytearray(buff)
-    im =  np.zeros(width * height)
+    imnp =  np.zeros(width * height)
     i = 0
     for y in range(height):
         line0 = buff[y * width * depth:(y + 1) * width * depth]
@@ -92,26 +90,75 @@ def histeq(buff, nbr_bins=256):
             b0 = line0[2*x + 0]
             b1 = line0[2*x + 1]
 
-            # FIXME: 16 bit pixel truncation to fit into png
-            im[i] = (b1 << 8) + b0
+            imnp[i] = (b1 << 8) + b0
             i += 1
+    return imnp
 
+def histeq_np(npim, nbr_bins=256):
+    '''
+    Given a numpy nD array (ie image), return a histogram equalized numpy nD array of pixels
+    That is, return 2D if given 2D, or 1D if 1D
+    '''
 
-    #get image histogram
-    imhist,bins = np.histogram(im.flatten(),nbr_bins,normed=True)
+    # get image histogram
+    imhist,bins = np.histogram(npim.flatten(), nbr_bins, normed=True)
     cdf = imhist.cumsum() #cumulative distribution function
-    cdf = 255 * cdf / cdf[-1] #normalize
+    cdf = 0xFFFF * cdf / cdf[-1] #normalize
 
-    #use linear interpolation of cdf to find new pixel values
-    im2 = np.interp(im.flatten(),bins[:-1],cdf)
+    # use linear interpolation of cdf to find new pixel values
+    ret1d = np.interp(npim.flatten(), bins[:-1], cdf)
+    return ret1d.reshape(npim.shape)
 
-    #return im2.reshape(im.shape), cdf
-    rs = im2.reshape(im.shape)
-
+def npim12raw(rs):
+    '''
+    Given a numpy 1D array of pixels, return a string as if a raw capture
+    '''
     ret = bytearray()
     for i in xrange(len(rs)):
         ret += struct.pack('>H', int(rs[i]))
     return str(ret)
+
+# Tried misc other things but this was only thing I could make work
+def im_inv16_slow(im):
+    '''Invert 16 bit image pixels'''
+    im32_2d = np.array(im)
+    im32_1d = im32_2d.flatten()
+    for i, p in enumerate(im32_1d):
+        im32_1d[i] = 0xFFFF - p
+    ret = Image.fromarray(im32_1d.reshape(im32_2d.shape))
+    return ret
+
+def decode_i16(buff, wh=None):
+    '''
+    Given raw bin return PIL image object
+    '''
+    width, height = wh or gxs700.sz_wh(len(buff))
+    buff = str(buff[0:2 * width * height])
+
+    im = Image.frombytes('I', (width, height), buff, "raw", "I;16", 0, -1)
+    # IOError: not supported for this image mode
+    # im =  PIL.ImageOps.invert(im)
+    im = im_inv16_slow(im)
+    im = im.transpose(PIL.Image.ROTATE_270)
+    return im
+
+# Tried to do
+# import PIL.ImageOps
+# img = PIL.ImageOps.equalize(img)
+# but
+# IOError: not supported for this image mode
+# http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
+def histeq(buff, nbr_bins=256):
+    '''Histogram equalize raw buffer, returning a raw buffer'''
+    npim1 = raw2npim1(buff)
+    npim1_eq = histeq_np(npim1, nbr_bins)
+    return npim12raw(npim1_eq)
+
+def histeq_im(im, nbr_bins=256):
+    imnp2 = np.array(im)
+    imnp2_eq = histeq_np(imnp2, nbr_bins=nbr_bins)
+    imf = Image.fromarray(imnp2_eq)
+    return imf.convert("I")
 
 def ram_r(dev, addr, datal):
     bs = 16

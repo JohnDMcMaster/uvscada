@@ -1,51 +1,36 @@
-'''
-cal file bytes
-4576404
-
-height = 1850
-width = 1344
-depth = 2
-1850 * 1344 * 2 = 4972800
-
-cal file 4576404
-Sensor:  4972800
-
-1346 x 1700
-1346 * 1700 * 2
-4576400
-give it a try...
-'''
-
-from PIL import Image
-import binascii
-from uvscada.gxs700_util import histeq
-
-MAGIC = '\x42\x05\xa4\x06'
+import Image
+import PIL.ImageOps
+import numpy as np
+import glob
+import os
 
 if __name__ == "__main__":
-    import argparse 
-    
-    parser = argparse.ArgumentParser(description='Replay captured USB packets')
-    parser.add_argument('--hist-eq', '-e', action='store_true', help='Equalize histogram')
-    parser.add_argument('fin', help='File name in')
-    parser.add_argument('fout', default=None, nargs='?', help='File name out')
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Correct images against darkfield and flat field capture')
+    parser.add_argument('--verbose', '-v', action='store_true', help='verbose')
+    parser.add_argument('df_png', help='Dark field .png ("force capture")')
+    parser.add_argument('ff_png', help='Flat field .png ("no sample")')
+    parser.add_argument('din', help='Input directory or file')
+    parser.add_argument('dout', help='Output directory or file')
+
     args = parser.parse_args()
 
-    buff = open(args.fin).read()
-    magic = buff[0:4]
-    # 2/2 sensors, both flat and dark have this value
-    if magic != MAGIC:
-        raise ValueError('Bad magic: expect %s but got %s' % (binascii.hexlify(MAGIC), binascii.hexlify(magic)))
+    im_df = Image.open(args.df_png)
+    im_ff = Image.open(args.ff_png)
     
-    raw = buff[4:]
-    if args.hist_eq:
-        print 'Equalizing histogram...'
-        raw = histeq(raw, width=1346, height=1700)
-    # http://effbot.org/imagingbook/decoder.htm
-    im = Image.frombytes(
-            "F", (1346, 1700), raw, "raw", "F;16")
-            
-    if args.fout:
-        im2 = im.convert('I').save(args.fout)
-    else:
-        im.show()
+    # Take the min and max from the two sets to use as our low and high scalars
+    np_df2 = np.array(im_df)
+    np_ff2 = np.array(im_ff)
+
+    # ff *should* be brighter than df
+    # (due to .png pixel value inversion convention)
+    mins = np.minimum(np_df2, np_ff2)
+    maxs = np.maximum(np_df2, np_ff2)
+
+    for fn_in in glob.glob(args.din + '/.png'):
+        im_ref = Image.open(fn_in)
+        np_ref2 = np.array(im_ref)
+        np_scaled = 0xFFFF * (np_ref2 - mins) / (maxs - mins)
+        imc = Image.fromarray(np_scaled).convert("I")
+        imc.save(os.path.join(args.dout, os.path.basename(fn_in)))

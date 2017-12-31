@@ -6,6 +6,7 @@ from uvscada import gxs700_util
 import argparse
 import os
 import glob
+import Image
 
 def process_bin(fin, fout, hist_eq=False):
     print 'Reading %s...' % fin
@@ -19,20 +20,15 @@ def process_bin(fin, fout, hist_eq=False):
     img.save(fout)
 
 def process_png(fin, fout, hist_eq=False):
-    # ? Does this code even make sense?
-    # Isn't this suppose to be for histogram equalizing an existing image?
-    # These must be opened using PIL, not as raw binary
-    raise Exception("FIXME")
-
     print 'Reading %s...' % fin
-    buff = open(fin, 'r').read()
+    im = Image.open(fin)
+    # Sort of pointless to run without this
+    # Maybe should throw error if not specified?
     if args.hist_eq:
         print 'Equalizing histogram...'
-        buff = gxs700_util.histeq(buff)
-    print 'Decoding image...'
-    img = gxs700.GXS700.decode(buff)
+        im = gxs700_util.histeq_im(im)
     print 'Saving %s...' % fout
-    img.save(fout)
+    im.save(fout)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Replay captured USB packets')

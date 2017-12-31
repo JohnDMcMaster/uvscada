@@ -96,7 +96,6 @@ def decode_l8(buff, wh=None):
 
 def decode(buff, wh=None):
     '''Given bin return PIL image object'''
-    # FIXME: hack to make widthwise so it fits on screen better
     depth = 2
     width, height = wh or sz_wh(len(buff))
     buff = bytearray(buff)
