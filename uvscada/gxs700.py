@@ -121,6 +121,27 @@ def decode(buff, wh=None):
             img.putpixel((y, x), G)
     return img
 
+def im2bin(im):
+    '''Given PIL image object return bin'''
+    depth = 2
+    height, width = im.size
+    ret = bytearray()
+
+    for y in range(height):
+        #line0 = buff[y * width * depth:(y + 1) * width * depth]
+        line0 = bytearray(width * depth)
+        for x in range(width):
+            g = im.getpixel((y, x))
+            g = 0xFFFF - g
+
+            b0 = g & 0xFF
+            b1 = (g >> 8) & 0xFF
+
+            line0[2*x + 0] = b0
+            line0[2*x + 1] = b1
+        ret += line0
+    return ret
+
 class GXS700:
     '''
     Size 1: small

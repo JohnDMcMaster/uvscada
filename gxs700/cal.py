@@ -5,6 +5,12 @@ import numpy as np
 import glob
 import os
 
+def dir2np(d):
+    np_df2s = []
+    for fn in glob.glob(d + '/*.png'):
+        np_df2s.append(np.array(Image.open(fn)))
+    return np.average(np_df2s)
+
 if __name__ == "__main__":
     import argparse
 
@@ -17,12 +23,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    im_df = Image.open(args.df_png)
-    im_ff = Image.open(args.ff_png)
-    
-    # Take the min and max from the two sets to use as our low and high scalars
-    np_df2 = np.array(im_df)
-    np_ff2 = np.array(im_ff)
+    if os.path.isdir(args.df_png):
+        np_df2 = dir2np(args.df_png)
+    else:
+        np_df2 = np.array(Image.open(args.df_png))
+
+    if os.path.isdir(args.ff_png):
+        np_ff2 = dir2np(args.ff_png)
+    else:
+        np_ff2 = np.array(Image.open(args.ff_png))
 
     # ff *should* be brighter than df
     # (due to .png pixel value inversion convention)
