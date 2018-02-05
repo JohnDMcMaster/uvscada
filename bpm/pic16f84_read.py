@@ -1,6 +1,6 @@
 from uvscada.bpm import startup, cmd
 from uvscada.util import hexdump, add_bool_arg
-from uvscada.bpm.pic16f84.read import replay
+from uvscada.bpm.i87c51.read import replay
 
 if __name__ == "__main__":
     import argparse 

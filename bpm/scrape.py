@@ -1,16 +1,23 @@
 from uvscada.util import str2hex
 
-import re
-import sys
-import ast
 import json
 import binascii
 import subprocess
 
 from uvscada.bpm.cmd import led_i2s
 from uvscada.util import hexdump
-from uvscada.bpm.i87c51.read_fw import p_p2n as p_p2n_r
-from uvscada.bpm.i87c51.write_fw import p_p2n  as p_p2n_w
+
+fw_mods = {}
+if 0:
+    import uvscada.bpm.i87c51.read_fw
+    fw_mods['uvscada.bpm.i87c51.read_fw'] = uvscada.bpm.i87c51.read_fw.p_p2n
+    import uvscada.bpm.i87c51.write_fw
+    fw_mods['uvscada.bpm.i87c51.write_fw'] = uvscada.bpm.i87c51.write_fw.p_p2n
+if 1:
+    import uvscada.bpm.pic16f84.read_fw
+    fw_mods['uvscada.bpm.pic16f84.read_fw'] = uvscada.bpm.pic16f84.read_fw.p_p2n
+    import uvscada.bpm.pic16f84.write_fw
+    fw_mods['uvscada.bpm.pic16f84.write_fw'] = uvscada.bpm.pic16f84.write_fw.p_p2n
 
 prefix = ' ' * 8
 indent = ''
@@ -26,19 +33,21 @@ def indentN():
 # args.big_thresh
 big_pkt = {}
 def fmt_terse(data, pktn=None):
-    if data in p_p2n_r:
-        return 'i87c51_read_fw.%s' % p_p2n_r[data]
-    if data in p_p2n_w:
-        return 'i87c51_write_fw.%s' % p_p2n_w[data]
+    for modname, packets in fw_mods.iteritems():
+        if data in packets:
+            return '%s.%s' % (modname, packets[data])
     '''
     if pktn and data in big_pkt:
-        return 'i87c51_write_fw.%s' % big_pkt[data]
+        return 'my_fw.%s' % big_pkt[data]
     '''
-    
+
     if args.big_thresh and pktn and len(data) > args.big_thresh:
-        big_pkt[data] = 'p' + str(pktn)
-        return 'i87c51_write_fw.%s' % big_pkt[data]
-    
+        big_pkt[data] = 'p%d' % pktn
+        return 'my_fw.%s' % big_pkt[data]
+
+    return dump_packet(data)
+
+def dump_packet(data):
     ret = str2hex(data, prefix=prefix)
     if len(data) > 16:
         ret += '\n%s' % prefix
@@ -106,10 +115,10 @@ def dump(fin):
 
     line('# Generated from scrape.py')
     line('from uvscada.bpm.startup import bulk2, bulk86')
-    line('import i87c51_read_fw')
-    line('import i87c51_write_fw')
+    for module in fw_mods:
+        line('import %s' % module)
     line('')
-    
+
     # remove all comments to make processing easier
     # we'll add our own anyway
     # ps = filter(lambda p: p['type'] != 'comment', ps)
@@ -336,10 +345,6 @@ def dump(fin):
 
     indentN()
 
-    print
-    for pkt, name in big_pkt.iteritems():
-        print '%s = %s' % (name, fmt_terse(pkt))
-
     print '''
 def open_dev(usbcontext=None):
     if usbcontext is None:
@@ -373,6 +378,14 @@ if __name__ == "__main__":
     dev.resetDevice()
     replay(dev)
 '''
+
+    print
+    print
+    print
+    print '# my_fw.py'
+    for pkt, name in big_pkt.iteritems():
+        print '%s = \\%s' % (name, dump_packet(pkt))
+
 
 if __name__ == "__main__":
     import argparse 
