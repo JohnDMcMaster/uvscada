@@ -1,4 +1,3 @@
-import libusb1
 import binascii
 
 from util import hexdump, str2hex

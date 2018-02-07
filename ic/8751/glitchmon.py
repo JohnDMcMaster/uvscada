@@ -1,3 +1,10 @@
+'''
+Uses Minipro to monitor 8751 readout
+Read a baseline state
+Then every time a key is pressed look for a different response
+Report if something changes
+'''
+
 from uvscada.minipro import Minipro
 from uvscada.util import hexdump, add_bool_arg
 import os
