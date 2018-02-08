@@ -11,7 +11,7 @@
         "out_dir":"out",
         "overwrite":0,
         "lcnc": {
-            "host": "mk"
+            "host": "mk"    
         },
         "axes": {
             "x": {
@@ -34,52 +34,54 @@
 		"height": 2448,
 		"scalar": 0.5,
 		"v4l2": {
-		    "mit20x_xpol_2017-11-05": {
-                "Red Balance":  157,
-                "Gain":         165,
-                "Blue Balance": 298,
-                "Exposure":     800
+		    "vmax_ns20x_pol-n_backside_nd_2017-12-31": {
+                "Red Balance":  90,
+                "Gain":         100,
+                "Blue Balance": 207,
+                "Exposure":     50
 		    },
-		    "mit20x_norm_2017-11-05": {
-                "Red Balance":  135,
+		    "vmax_ns20x_pol-n_backside_exp-10_2017-12-31": {
+                "Red Balance":  44,
+                "Gain":         50,
+                "Blue Balance": 103,
+                "Exposure":     10
+		    },
+		    "vmax_ns100x_pol-n_backside_2017-12-31": {
+                "Red Balance":  47,
+                "Gain":         50,
+                "Blue Balance": 95,
+                "Exposure":     10
+		    },
+		    "vmax_ns20x_pol-y_backside_2017-12-31": {
+                "Red Balance":  256,
+                "Gain":         250,
+                "Blue Balance": 958,
+                "Exposure":     800
+		    }
+	    },
+		"v4l2_old": {
+		    "8v_ns20x_pol-no_backside_exp-60_2017-12-31": {
+                "Red Balance":  125,
                 "Gain":         165,
-                "Blue Balance": 351,
+                "Blue Balance": 387,
                 "Exposure":     60
 		    },
-		    "reg_norm": {
-                "Red Balance":  111,
+		    "10v_ns20x_pol-no_backside_exp-60_2017-12-31": {
+                "Red Balance":  138,
                 "Gain":         165,
-                "Blue Balance": 409,
+                "Blue Balance": 359,
                 "Exposure":     60
 		    },
-		    "pol_norm": {
-                "Red Balance":  146,
+		    "10v_ns100x_pol-no_backside_exp-60_2017-12-31": {
+                "Red Balance":  148,
                 "Gain":         165,
-                "Blue Balance": 351,
+                "Blue Balance": 326,
                 "Exposure":     60
 		    },
-		    "ns20x_xpol": {
-                "Red Balance":  132,
+		    "12v_ns100x_pol-no_backside_exp-60_2017-12-31": {
+                "Red Balance":  158,
                 "Gain":         165,
-                "Blue Balance": 351,
-                "Exposure":     800
-		    },
-		    "pol_xpol": {
-                "Red Balance":  146,
-                "Gain":         165,
-                "Blue Balance": 351,
-                "Exposure":     800
-		    },
-		    "fair_archive": {
-                "Red Balance":  168,
-                "Gain":         165,
-                "Blue Balance": 242,
-                "Exposure":     30
-		    },
-		    "pretty_archive": {
-                "Red Balance":  146,
-                "Gain":         165,
-                "Blue Balance": 351,
+                "Blue Balance": 304,
                 "Exposure":     60
 		    }
 	    }
