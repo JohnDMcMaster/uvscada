@@ -43,7 +43,7 @@ class ELT(threading.thread):
             self.el.fire()
             self.idle.set()
 
-def main(hal, prog, el, elt):
+def run(hal, prog, el, elt, fout, dry=False, square=False):
     # 50x max ap size
     # Very approx
     #SPOT = 0.06
@@ -51,7 +51,7 @@ def main(hal, prog, el, elt):
     if 0:
         # 10x
         SPOT = 0.3
-        el.shut_square(args.square)
+        el.shut_square(square)
     if 1:
         # 10x reduced
         SPOT = 0.05
@@ -60,8 +60,8 @@ def main(hal, prog, el, elt):
     
     hal.mv_abs({'x': -SPOT, 'y': -SPOT})
     
-    if not args.dry:
-        jf = open(args.fout, 'wb')
+    if not dry:
+        jf = open(fout, 'wb')
     
     cols = int(4.6 / SPOT)
     rows = int(3.8 / SPOT)
@@ -79,7 +79,7 @@ def main(hal, prog, el, elt):
             posi += 1
             x = col * SPOT
             hal.mv_abs({'x': x})
-            if args.dry:
+            if dry:
                 continue
             print '%s taking %d / %d @ %dc, %dr' % (datetime.datetime.utcnow(), posi, npic, col, row)
             # Hit it a bunch of times in case we got unlucky
@@ -105,11 +105,10 @@ def main(hal, prog, el, elt):
     tend = time.time()
     print 'Took %s' % time_str(tend - tstart)
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='Use ezlaze to fuzz dice')
-    parser.add_argument('--prog', default='/dev/ttyUSB0', help='minipro serial port')
-    parser.add_argument('--prog-dev', default='87C51FA', help='minipro device')
-    parser.add_argument('--ezlaze', default='/dev/ttyUSB1', help='ezlaze serial port')
+    #parser.add_argument('--prog', default='/dev/ttyUSB0', help='minipro serial port')
+    parser.add_argument('--prog-dev', default='pic16f84', help='microchip device')
     parser.add_argument('--cnc', default='mk-bs', help='LinuxCNC host')
     parser.add_argument('--dry', action='store_true', help='Dry run')
     parser.add_argument('fout', nargs='?', default='pwrmap.csv', help='Store data to')
@@ -145,7 +144,7 @@ if __name__ == "__main__":
 
         print
         print 'Running'
-        main(hal, prog, el, elt)
+        run(hal, prog, el, elt, fout=args.fout, dry=args.dry)
     finally:
         print 'Shutting down laser thread'
         if elt:
@@ -154,3 +153,6 @@ if __name__ == "__main__":
         print 'Shutting down hal'
         if hal:
             hal.ar_stop()
+
+if __name__ == "__main__":
+    main()

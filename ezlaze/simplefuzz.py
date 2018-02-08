@@ -10,8 +10,10 @@ Dumbed down version of "ezfuzz"
 
 from uvscada.cnc_hal import lcnc_ar
 from uvscada.benchmark import time_str
-import bpmicro.startup
-import bpmicro.pic16f84.read
+
+from bpmicro import startup
+from bpmicro import cmd
+from bpmicro import devices
 
 import argparse
 import time
@@ -22,9 +24,10 @@ import base64
 import md5
 import binascii
 
-def do_run(hal, bp, width, height, dry, fout, samples=1):
+def do_run(hal, bp, width, height, dry, fout, samples=1, cont=True):
     # Use focus to adjust
     SPOT = 0.05
+    verbose = False
 
     hal.mv_abs({'x': -1, 'y': -1})
 
@@ -36,18 +39,35 @@ def do_run(hal, bp, width, height, dry, fout, samples=1):
     rows = int(ystep)
     tstart = time.time()
 
+    device = devices.get(bp, 'pic16f84', verbose=verbose)
+
     def read_fw():
-        # There are some occasional glitches even with a good device
-        # Try a few times
-        # Although might get overcurrents or stuff like that...will have to figure that out
-        for atry in xrange(3):
-            return bpmicro.pic16f84.read.replay(bp.dev, cont=True)
-        else:
-            return None
+        devcfg = None
+        e = None
+        try:
+            devcfg = device.read({'cont': cont})
+        except cmd.BusError as e:
+            print 'WARNING: bus error'
+        except cmd.Overcurrent as e:
+            print 'WARNING: overcurrent'
+        except cmd.ContFail as e:
+            print 'WARNING: continuity fail'
+        except Exception as e:
+            raise
+            print 'WARNING: unknown error: %s' % str(e)
+        return devcfg, e
+
+    def my_md5(devcfg):
+        data_md5 = binascii.hexlify(md5.new(devcfg['data']).digest())
+        code_md5 = binascii.hexlify(md5.new(devcfg['code']).digest())
+        config_md5 = binascii.hexlify(md5.new(str(devcfg['config'])).digest())
+        return data_md5, code_md5, config_md5
 
     print 'Dummy firmware read'
     trstart = time.time()
-    _buff = read_fw()
+    devcfg, e = read_fw()
+    base_data_md5, base_code_md5, base_config_md5 = my_md5(devcfg)
+    print 'Baseline: %s %s %s' % (base_data_md5[0:8], base_code_md5[0:8], base_config_md5[0:8])
     trend = time.time()
     tread = trend - trstart
     print 'Read time: %0.1f' % tread
@@ -70,15 +90,36 @@ def do_run(hal, bp, width, height, dry, fout, samples=1):
             print '%s taking %d / %d @ %dc, %dr' % (datetime.datetime.utcnow(), posi, nsamples, col, row)
             # Hit it a bunch of times in case we got unlucky
             for dumpi in xrange(samples):
-                if dry:
-                    fw = ''
-                else:
-                    fw = read_fw()
-                # Some crude monitoring
-                # Top histogram counts would be better though
-                print '  %d: %s' % (dumpi, binascii.hexlify(md5.new(fw).digest()))
+                j = {
+                    'row': row, 'col': col,
+                    'x': x, 'y': y,
+                    'dumpi': dumpi,
+                    }
 
-                j = {'row': row, 'col': col, 'x': x, 'y': y, 'dumpi': dumpi, 'bin': base64.b64encode(fw)}
+                if dry:
+                    devcfg, e = None, None
+                else:
+                    devcfg, e = read_fw()
+
+                if devcfg:
+                    # Some crude monitoring
+                    # Top histogram counts would be better though
+                    data_md5, code_md5, config_md5 = my_md5(devcfg)
+                    print '  %d %s %s %s' % (dumpi, data_md5[0:8], code_md5[0:8], config_md5[0:8])
+                    if code_md5 != base_code_md5:
+                        print '    code...: %s' % binascii.hexlify(devcfg['code'][0:16])
+                    if data_md5 != base_data_md5:
+                        print '    data...: %s' % binascii.hexlify(devcfg['data'][0:16])
+                    if config_md5 != base_config_md5:
+                        print '    config: %s' % str(devcfg['config'],)
+                    j['devfg'] = {
+                        'data': base64.b64encode(devcfg['data']),
+                        'code': base64.b64encode(devcfg['code']),
+                        'config': devcfg['config'],
+                        }
+                if e:
+                    j['e'] = str(e),
+
                 if jf:
                     jf.write(json.dumps(j) + '\n')
                     jf.flush()
@@ -105,7 +146,7 @@ def run(cnc_host, dry, width, height, fnout, samples=1, force=False):
 
         print
         print 'Initializing programmer'
-        bp = bpmicro.startup.get()
+        bp = startup.get()
 
         print
         print 'Running'
