@@ -24,28 +24,14 @@ import base64
 import md5
 import binascii
 
-def do_run(hal, bp, width, height, dry, fout, samples=1, cont=True):
-    # Use focus to adjust
-    SPOT = 0.05
-    verbose = False
-
-    hal.mv_abs({'x': -1, 'y': -1})
-
-    jf = fout
-
-    xstep = width / SPOT / 2.0
-    ystep = height / SPOT / 2.0
-    cols = int(xstep)
-    rows = int(ystep)
-    tstart = time.time()
-
-    device = devices.get(bp, 'pic16f84', verbose=verbose)
-
-    def read_fw():
-        devcfg = None
-        e = None
+def read_fw(device, cont):
+    devcfg = None
+    e = None
+    # Try a few times to get a valid read
+    for i in xrange(1):
         try:
             devcfg = device.read({'cont': cont})
+            break
         except cmd.BusError as e:
             print 'WARNING: bus error'
         except cmd.Overcurrent as e:
@@ -53,9 +39,31 @@ def do_run(hal, bp, width, height, dry, fout, samples=1, cont=True):
         except cmd.ContFail as e:
             print 'WARNING: continuity fail'
         except Exception as e:
-            raise
+            # Sometimes still get weird errors
+            #raise
             print 'WARNING: unknown error: %s' % str(e)
-        return devcfg, e
+    return devcfg, e
+
+
+def do_run(hal, bp, width, height, dry, fout, xstep, ystep, samples=1, cont=True):
+    # Use focus to adjust
+    verbose = False
+    x0 = 0.0
+    y0 = 0.0
+    if 0:
+        x0 = 2.0
+        y0 = 2.0
+
+    backlash = 0.1
+    hal.mv_abs({'x': x0 - backlash, 'y': y0 - backlash})
+
+    jf = fout
+
+    cols = int(width / xstep)
+    rows = int(height / ystep)
+    tstart = time.time()
+
+    device = devices.get(bp, 'pic16f84', verbose=verbose)
 
     def my_md5(devcfg):
         data_md5 = binascii.hexlify(md5.new(devcfg['data']).digest())
@@ -65,9 +73,14 @@ def do_run(hal, bp, width, height, dry, fout, samples=1, cont=True):
 
     print 'Dummy firmware read'
     trstart = time.time()
-    devcfg, e = read_fw()
-    base_data_md5, base_code_md5, base_config_md5 = my_md5(devcfg)
-    print 'Baseline: %s %s %s' % (base_data_md5[0:8], base_code_md5[0:8], base_config_md5[0:8])
+    devcfg, e = read_fw(device, cont)
+    if not devcfg:
+        #raise Exception("Failed to get baseline!")
+        print 'WARNING: failed to get baseline!'
+        base_data_md5, base_code_md5, base_config_md5 = None, None, None
+    else:
+        base_data_md5, base_code_md5, base_config_md5 = my_md5(devcfg)
+        print 'Baseline: %s %s %s' % (base_data_md5[0:8], base_code_md5[0:8], base_config_md5[0:8])
     trend = time.time()
     tread = trend - trstart
     print 'Read time: %0.1f' % tread
@@ -79,18 +92,42 @@ def do_run(hal, bp, width, height, dry, fout, samples=1, cont=True):
     nsamples = cols * rows
     print 'Taking %dc x %dr x %ds => %d net samples => ETA %s' % (cols, rows, samples, nsamples, time_str(tsample * nsamples))
 
+    if jf:
+        j = {
+            'type': 'params',
+            'x0': x0,
+            'y0': y0,
+            'ystep': ystep,
+            'ystep': ystep,
+            'cols': cols,
+            'rows': rows,
+            'samples': samples,
+            'nsamples': nsamples,
+        }
+        jf.write(json.dumps(j) + '\n')
+        jf.flush()
+
     posi = 0
     for row in xrange(rows):
-        y = row * SPOT
-        hal.mv_abs({'x': -1, 'y': y})
+        y = y0 + row * ystep
+        hal.mv_abs({'x': x0 - backlash, 'y': y})
         for col in xrange(cols):
             posi += 1
-            x = col * SPOT
+            x = x0 + col * xstep
             hal.mv_abs({'x': x})
-            print '%s taking %d / %d @ %dc, %dr' % (datetime.datetime.utcnow(), posi, nsamples, col, row)
+            print '%s taking %d / %d @ %dc, %dr (G0 X%0.1f Y%0.1f)' % (datetime.datetime.utcnow(), posi, nsamples, col, row, x, y)
             # Hit it a bunch of times in case we got unlucky
             for dumpi in xrange(samples):
+                # Some evidence suggests overcurrent isn't getting cleared, causing failed captured
+                # Try re-initializing
+                # TODO: figure out the proper check
+                # this slows things down, although its not too bad
+                # maybe 4.5 => 7 seconds per position
+                #if not dry:
+                #    startup.replay(bp.dev)
+
                 j = {
+                    'type': 'sample',
                     'row': row, 'col': col,
                     'x': x, 'y': y,
                     'dumpi': dumpi,
@@ -99,7 +136,7 @@ def do_run(hal, bp, width, height, dry, fout, samples=1, cont=True):
                 if dry:
                     devcfg, e = None, None
                 else:
-                    devcfg, e = read_fw()
+                    devcfg, e = read_fw(device, cont)
 
                 if devcfg:
                     # Some crude monitoring
@@ -118,26 +155,20 @@ def do_run(hal, bp, width, height, dry, fout, samples=1, cont=True):
                         'config': devcfg['config'],
                         }
                 if e:
-                    j['e'] = str(e),
+                    j['e'] = (str(type(e).__name__), str(e)),
 
                 if jf:
                     jf.write(json.dumps(j) + '\n')
                     jf.flush()
 
     print 'Ret home'
-    hal.mv_abs({'x': 0, 'y': 0})
+    hal.mv_abs({'x': x0, 'y': y0})
     print 'Movement done'
     tend = time.time()
     print 'Took %s' % time_str(tend - tstart)
 
-def run(cnc_host, dry, width, height, fnout, samples=1, force=False):
+def run(cnc_host, dry, width, height, fnout, step, samples=1, force=False):
     hal = None
-
-    fout = None
-    if not force and os.path.exists(fnout):
-        raise Exception("Refusing to overwrite")
-    if not dry:
-        fout = open(fnout, 'w')
 
     try:
         print
@@ -148,9 +179,15 @@ def run(cnc_host, dry, width, height, fnout, samples=1, force=False):
         print 'Initializing programmer'
         bp = startup.get()
 
+        fout = None
+        if not force and os.path.exists(fnout):
+            raise Exception("Refusing to overwrite")
+        if not dry:
+            fout = open(fnout, 'w')
+
         print
         print 'Running'
-        do_run(hal=hal, bp=bp, width=width, height=height, dry=dry, fout=fout, samples=samples)
+        do_run(hal=hal, bp=bp, width=width, height=height, dry=dry, fout=fout, xstep=step, ystep=step, samples=samples)
     finally:
         print 'Shutting down hal'
         if hal:
@@ -164,7 +201,8 @@ if __name__ == "__main__":
     parser.add_argument('--samples', type=int, default=1, help='Number of times to read each location')
     parser.add_argument('--width', type=float, default=1, help='X width (ie in mm)')
     parser.add_argument('--height', type=float, default=1, help='y height (ie in mm)')
+    parser.add_argument('--step', type=float, default=1.0, help='y height (ie in mm)')
     parser.add_argument('fout', nargs='?', default='scan.jl', help='Store data to, 1 JSON per line')
     args = parser.parse_args()
 
-    run(cnc_host=args.cnc, dry=args.dry, width=args.width, height=args.height, fnout=args.fout, samples=args.samples, force=args.force)
+    run(cnc_host=args.cnc, dry=args.dry, width=args.width, height=args.height, fnout=args.fout, step=args.step, samples=args.samples, force=args.force)
