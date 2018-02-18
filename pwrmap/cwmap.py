@@ -59,7 +59,7 @@ def main3(hal, dmm):
     print 'Took %s' % time_str(tend - tstart)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Use ezlaze with LinuxCNC to carve a bitmap')
+    parser = argparse.ArgumentParser(description='Scan chip, recording power (ie generated from CW laser)')
     parser.add_argument('--dmm', default='/dev/serial/by-id/usb-Prologix_Prologix_GPIB-USB_Controller_PX8ZBY4W-if00-port0', help='K2750 serial port')
     parser.add_argument('--laser', default='/dev/serial/by-id/usb-1a86_USB2.0-Ser_-if00-port0', help='ezlaze serial port')
     parser.add_argument('--host', default='mk', help='LinuxCNC host')
