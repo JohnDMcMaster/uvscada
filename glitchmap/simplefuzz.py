@@ -44,6 +44,8 @@ def read_fw(device, cont):
             print 'WARNING: unknown error: %s' % str(e)
     return devcfg, e
 
+def md5str(base_data_md5):
+    return base_data_md5[0:8] if base_data_md5 else 'None'
 
 def do_run(hal, bp, width, height, dry, fout, xstep, ystep, samples=1, cont=True):
     # Use focus to adjust
@@ -63,10 +65,12 @@ def do_run(hal, bp, width, height, dry, fout, xstep, ystep, samples=1, cont=True
     rows = int(height / ystep)
     tstart = time.time()
 
-    device = devices.get(bp, 'pic16f84', verbose=verbose)
+    device = devices.get(bp, args.device, verbose=verbose)
 
     def my_md5(devcfg):
-        data_md5 = binascii.hexlify(md5.new(devcfg['data']).digest())
+        data_md5 = None
+        if 'data' in devcfg:
+            data_md5 = binascii.hexlify(md5.new(devcfg['data']).digest())
         code_md5 = binascii.hexlify(md5.new(devcfg['code']).digest())
         config_md5 = binascii.hexlify(md5.new(str(devcfg['config'])).digest())
         return data_md5, code_md5, config_md5
@@ -80,7 +84,7 @@ def do_run(hal, bp, width, height, dry, fout, xstep, ystep, samples=1, cont=True
         base_data_md5, base_code_md5, base_config_md5 = None, None, None
     else:
         base_data_md5, base_code_md5, base_config_md5 = my_md5(devcfg)
-        print 'Baseline: %s %s %s' % (base_data_md5[0:8], base_code_md5[0:8], base_config_md5[0:8])
+        print 'Baseline: %s %s %s' % (md5str(base_data_md5), md5str(base_code_md5), md5str(base_config_md5))
     trend = time.time()
     tread = trend - trstart
     print 'Read time: %0.1f' % tread
@@ -142,18 +146,19 @@ def do_run(hal, bp, width, height, dry, fout, xstep, ystep, samples=1, cont=True
                     # Some crude monitoring
                     # Top histogram counts would be better though
                     data_md5, code_md5, config_md5 = my_md5(devcfg)
-                    print '  %d %s %s %s' % (dumpi, data_md5[0:8], code_md5[0:8], config_md5[0:8])
+                    print '  %d %s %s %s' % (dumpi, md5str(data_md5), md5str(code_md5), md5str(config_md5))
                     if code_md5 != base_code_md5:
                         print '    code...: %s' % binascii.hexlify(devcfg['code'][0:16])
-                    if data_md5 != base_data_md5:
+                    if data_md5 and data_md5 != base_data_md5:
                         print '    data...: %s' % binascii.hexlify(devcfg['data'][0:16])
                     if config_md5 != base_config_md5:
                         print '    config: %s' % str(devcfg['config'],)
                     j['devcfg'] = {
-                        'data': base64.b64encode(devcfg['data']),
                         'code': base64.b64encode(devcfg['code']),
                         'config': devcfg['config'],
                         }
+                    if 'data' in devcfg:
+                        j['data'] = base64.b64encode(devcfg['data'])
                 if e:
                     j['e'] = (str(type(e).__name__), str(e)),
 
@@ -201,7 +206,8 @@ if __name__ == "__main__":
     parser.add_argument('--samples', type=int, default=1, help='Number of times to read each location')
     parser.add_argument('--width', type=float, default=1, help='X width (ie in mm)')
     parser.add_argument('--height', type=float, default=1, help='y height (ie in mm)')
-    parser.add_argument('--step', type=float, default=1.0, help='y height (ie in mm)')
+    parser.add_argument('--step', type=float, default=1.0, help='Step size (ie in mm)')
+    parser.add_argument('--device', help='IC device type)')
     parser.add_argument('fout', nargs='?', default='scan.jl', help='Store data to, 1 JSON per line')
     args = parser.parse_args()
 
