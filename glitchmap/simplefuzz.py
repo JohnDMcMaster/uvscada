@@ -149,7 +149,7 @@ def do_run(hal, bp, width, height, dry, fout, xstep, ystep, samples=1, cont=True
                         print '    data...: %s' % binascii.hexlify(devcfg['data'][0:16])
                     if config_md5 != base_config_md5:
                         print '    config: %s' % str(devcfg['config'],)
-                    j['devfg'] = {
+                    j['devcfg'] = {
                         'data': base64.b64encode(devcfg['data']),
                         'code': base64.b64encode(devcfg['code']),
                         'config': devcfg['config'],

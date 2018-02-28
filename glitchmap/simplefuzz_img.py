@@ -57,13 +57,21 @@ if __name__ == "__main__":
     print 'Plotting...'
     im = Image.new("RGB", (cols, rows), "white")
     nlines = 0
+    allzeros = 0
+    allones = 0
+    matches = 0
+    others = 0
+    exceptions = 0
     for row in xrange(rows):
         for col in xrange(cols):
             for samplei in xrange(3):
                 j = json.loads(jlf.readline())
                 # {"devfg": {"config": {"secure": true, "user_id1": 16383, "user_id0": 16383, "user_id3": 16383, "user_id2": 16383, "conf_word": 3}, "code": "AAAAA...AAAAAAAAAAAA=", "data": "AA...AAAAAAAAAA="}, "dumpi": 1, "y": 0.0, "x": 0.0, "type": "sample", "col": 0, "row": 0}
                 def decode(k):
-                    return base64.b64decode(j['devcfg'][k])
+                    data = j['devcfg'].get(k)
+                    if data is None:
+                        return None
+                    return base64.b64decode(data)
             
                 code, data, config = (None, None, None)
                 if 'devcfg' in j:
@@ -75,7 +83,9 @@ if __name__ == "__main__":
                 # Exception, namely overcurrent
                 if 'e' in j:
                     e = j['e']
+                    #print e
                     c = (255, 0, 0)
+                    exceptions += 1
                 # Shoud have this if no error
                 elif code is not None:
                     # All 0's => protected
@@ -96,26 +106,36 @@ if __name__ == "__main__":
                                 return False
                         return True
                     if allzero():
+                        allzeros += 1
                         c = (64, 64, 64)
                     elif allone():
+                        allones += 1
                         c = (0, 0, 0)
                     elif ismatch():
+                        matches += 1
                         c = (0, 255, 0)
                     # Some other state
                     else:
+                        others += 1
                         c = (127, 127, 127)
                 else:
                     print j
-                    raise Exception()
+                    raise Exception('No code, no exception')
                     #c = (16, 16, 16)
 
                 im.putpixel((col, row), c)
                 nlines += 1
     
     print 'Have %d / %d points' % (nlines, rows * cols * 3)
+    print '  All 0:       %d' % allzeros
+    print '  All 1:       %d' % allones
+    print '  Matches:     %d' % matches
+    print '  Others:      %d' % others
+    print '  Exceptions:  %d' % exceptions
+
     fnout = args.fin.replace('.jl', '.png')
     if fnout == args.fin:
-        raise Exception()
+        raise Exception('Expecting .jl file')
     print 'Saving to %s...' % fnout
     im.save(fnout)
 
