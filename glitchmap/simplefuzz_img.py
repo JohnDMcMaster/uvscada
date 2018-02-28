@@ -5,6 +5,7 @@ from PIL import Image
 import numpy as np
 import json
 import base64
+import binascii
 
 # http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
 #def histeq(buff, nbr_bins=0x10000):
@@ -43,12 +44,14 @@ status2c = {
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Post process fuzzing')
-    parser.add_argument('fin', help='Input file')
+    parser.add_argument('fin', help='Input log file')
+    parser.add_argument('ref_fin', help='Input bin file')
     args = parser.parse_args()
 
     print 'Loading...'
     jlf = open(args.fin, 'r')
-    
+    ref = open(args.ref_fin, 'r').read()
+
     metaj = json.loads(jlf.readline())
 
     cols = metaj['cols']
@@ -61,7 +64,10 @@ if __name__ == "__main__":
     allones = 0
     matches = 0
     others = 0
+    baselines = 0
+    baseline = None
     exceptions = 0
+    freqs = {}
     for row in xrange(rows):
         for col in xrange(cols):
             for samplei in xrange(3):
@@ -79,6 +85,7 @@ if __name__ == "__main__":
                     data = decode('data')
                     config = j['devcfg']['config']
     
+                freqs[code] = freqs.get(code, 0) + 1
                 c = (0, 0, 255)
                 # Exception, namely overcurrent
                 if 'e' in j:
@@ -100,24 +107,39 @@ if __name__ == "__main__":
                                 return False
                         return True
                     def ismatch():
-                        ref = open('/home/mcmaster/doc/ext/uvscada/ic/pic/pic16f84_minipro-code_cnt16.bin', 'r').read()
-                        for refc, readc in zip(ref, code):
+                        # Most of the time this is due to metadata in bp format
+                        ref2 = ref[0:len(code)]
+                        if len(ref2) != len(code):
+                            raise Exception("Bad reference w/ ref size %d, got %d" % (len(ref), len(code)))
+                        for refc, readc in zip(ref2, code):
                             if refc != readc:
                                 return False
                         return True
-                    if allzero():
+
+                    if baseline is None:
+                        baseline = code
+
+                    if ismatch():
+                        matches += 1
+                        # green
+                        c = (0, 255, 0)
+                    elif allzero():
                         allzeros += 1
-                        c = (64, 64, 64)
+                        # black
+                        c = (0, 0, 0)
                     elif allone():
                         allones += 1
-                        c = (0, 0, 0)
-                    elif ismatch():
-                        matches += 1
-                        c = (0, 255, 0)
+                        # white
+                        c = (255, 255, 255)
+                    elif code == baseline:
+                        baselines += 1
+                        # gray
+                        c = (127, 127, 127)
                     # Some other state
                     else:
                         others += 1
-                        c = (127, 127, 127)
+                        # blue
+                        c = (0, 0, 255)
                 else:
                     print j
                     raise Exception('No code, no exception')
@@ -130,8 +152,17 @@ if __name__ == "__main__":
     print '  All 0:       %d' % allzeros
     print '  All 1:       %d' % allones
     print '  Matches:     %d' % matches
+    print '  Baseline:    %d' % baselines
     print '  Others:      %d' % others
     print '  Exceptions:  %d' % exceptions
+
+    print 'Raw frequency dist'
+    for code, freq in sorted(list(freqs.iteritems()), key=lambda x: (x[1], x[0])):
+        if code is None:
+            s = 'None'
+        else:
+            s = binascii.hexlify(code[0:16])
+        print '  %d w/ %s' % (freq, s)
 
     fnout = args.fin.replace('.jl', '.png')
     if fnout == args.fin:
