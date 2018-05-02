@@ -23,7 +23,12 @@ import gst
 import StringIO
 from PIL import Image
 
-uconfig = get_config()
+uconfig = {
+        "Red Balance":  90,
+        "Gain":         100,
+        "Blue Balance": 207,
+        "Exposure":     800
+    }
 
 '''
 Do not encode images in gstreamer context or it brings system to halt
@@ -92,6 +97,7 @@ class ImageProcessor(QThread):
             except Queue.Empty:
                 continue
             self.imgbuff.append(img)
+            print 'Loop: got image w/ cnt %d' % len(self.imgbuff)
 
             # Got two dark frames?
             if len(self.imgbuff) == 2:
@@ -99,10 +105,16 @@ class ImageProcessor(QThread):
                 _fw = prog.read()
             elif len(self.imgbuff) == 4:
                 # Verify we haven't overrun buffer
-                img_none = self.q.get(False)
-                if img_none:
+                while True:
+                    try:
+                        img_none = self.q.get(False)
+                    except Queue.Empty:
+                        break
+                    self.imgbuff.append(img_none)
+
+                if len(self.imgbuff) > 4:
                     #raise Exception("Image buffer overrun")
-                    print "Image buffer overrun"
+                    print "Image buffer overrun w/ %d images" % len(self.imgbuff)
                 else:
                     # First two frames are dark, second two are light
                     # 0.3 sec / frame => 1.2 sec per cycle
@@ -110,7 +122,7 @@ class ImageProcessor(QThread):
                     # overnight easily 10k+ frames => 250 GB of data?
                     # FIXME: get png not jpg
                     for i, img in enumerate(self.imgbuff):
-                        open('%s/cap_%05u-%u.jpg' % (self.ncap, i), 'w').write(img)
+                        open('%s/cap_%05u-%u.jpg' % (self.out_dir, self.ncap, i), 'w').write(img)
                 self.imgbuff = []
                 self.ncap += 1
             elif len(self.imgbuff) > 4:
@@ -120,6 +132,7 @@ class ImageProcessor(QThread):
         self.running.clear()
 
     def img_cb(self, buffer):
+        print 'got image'
         self.q.put(buffer.data)
 
 class GUI(QMainWindow):
@@ -135,7 +148,7 @@ class GUI(QMainWindow):
         # Must not be initialized until after layout is set
         self.gstWindowId = None
         engine_config = 'gstreamer'
-        engine_config = 'gstreamer-testsrc'
+        #engine_config = 'gstreamer-testsrc'
         if engine_config == 'gstreamer':
             self.source = gst.element_factory_make("v4l2src", "vsource")
             self.source.set_property("device", "/dev/video0")
@@ -230,14 +243,7 @@ class GUI(QMainWindow):
             ''
 
     def v4l_load(self):
-        vconfig = uconfig["imager"].get("v4l2", None)
-        if not vconfig:
-            return
-        for configk, configv in vconfig.iteritems():
-            break
-
-        print 'Selected config %s' % configk
-        for k, v in configv.iteritems():
+        for k, v in uconfig.iteritems():
             print '%s => %s' % (k, v)
             ctrl_set(self.vid_fd, k, v)
 
@@ -275,6 +281,9 @@ def excepthook(excType, excValue, tracebackobj):
     os._exit(1)
 
 if __name__ == '__main__':
+    from uvscada.util import IOTimestamp
+    _ts = IOTimestamp()
+
     prog = Minipro(device='PIC16C57')
 
     '''
