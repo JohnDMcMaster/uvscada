@@ -66,7 +66,8 @@ def next_cmd(fin):
             clk_last = clk
             t, clk, dat = next_line()
             # Hack: ignore startup glitch
-            if t < 0.001:
+            #if 0 and t < 0.001:
+            if t < 0.35:
                 continue
             # falling edge?
             if clk_last == 1 and clk == 0:
@@ -102,6 +103,9 @@ def gen_cmds(fin):
             cmd = next_cmd(fin)
         except EOFError:
             break
+        except BadCommand as e:
+            print 'bad command', e
+            continue
         yield cmd
 
 def run(fin):
