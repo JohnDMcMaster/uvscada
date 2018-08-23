@@ -21,6 +21,23 @@ if __name__ == "__main__":
     print(ps.getAllUnitInfo())
     print()
 
+    '''
+    original settings
+    20 ms/div
+    100 Ms
+    ch1
+        +/- 1 V/div AC
+        current probe
+    ch3
+       pin 28?
+       shows clock like pattern
+       gaps move around
+       +/- 10V DC
+
+       clock reading about 4.7V
+       2.5 reasonable level
+    '''
+
     waveform_desired_duration = 50E-6
     obs_duration = 3 * waveform_desired_duration
     sampling_interval = obs_duration / 4096
@@ -32,15 +49,15 @@ if __name__ == "__main__":
     print("Maximum samples = %d" % maxSamples)
 
     # the setChannel command will chose the next largest amplitude
-    channelRange = ps.setChannel('A', 'DC', 2.0, 0.0, enabled=True,
+    channelRange = ps.setChannel('A', 'AC', 1.0, 0.0, enabled=True,
                                  BWLimited=False)
     print("Chosen channel range = %d" % channelRange)
 
-    ps.setSimpleTrigger('A', 1.0, 'Falling', timeout_ms=100, enabled=True)
+    ps.setChannel('C', 'DC', 5.0, 0.0, enabled=True,
+                                 BWLimited=False)
+    ps.setSimpleTrigger('C', 2.5, 'Falling', timeout_ms=10000, enabled=True)
 
-    ps.setSigGenBuiltInSimple(offsetVoltage=0, pkToPk=1.2, waveType="Sine",
-                              frequency=50E3)
-
+    print('Run 1')
     ps.runBlock()
     ps.waitReady()
     print("Waiting for awg to settle.")
@@ -49,6 +66,7 @@ if __name__ == "__main__":
     ps.waitReady()
     print("Done waiting for trigger")
     dataA = ps.getDataV('A', nSamples, returnOverflow=False)
+    dataC = ps.getDataV('C', nSamples, returnOverflow=False)
 
     dataTimeAxis = np.arange(nSamples) * actualSamplingInterval
 
@@ -60,9 +78,10 @@ if __name__ == "__main__":
 
     plt.figure()
     plt.hold(True)
-    plt.plot(dataTimeAxis, dataA, label="Clock")
+    plt.plot(dataTimeAxis, dataA, label="Power")
+    plt.plot(dataTimeAxis, dataC, label="Clock")
     plt.grid(True, which='major')
-    plt.title("Picoscope 2000 waveforms")
+    plt.title("Picoscope 6000 waveforms")
     plt.ylabel("Voltage (V)")
     plt.xlabel("Time (ms)")
     plt.legend()
