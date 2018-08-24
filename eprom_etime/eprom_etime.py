@@ -10,10 +10,19 @@ import zlib
 import binascii
 import md5
 
-def is_erased(fw, prog_dev):
+def popcount(x):
+    return bin(x).count("1")
+
+def is_erased1(fw, prog_dev):
     # for now assume all 1's is erased
     # on some devices like PIC this isn't true due to file 0 padding
     percent = 100.0 * sum(bytearray(fw)) / (len(fw) * 0xFF)
+    return percent == 100.0, percent
+
+def is_erased(fw, prog_dev):
+    # for now assume all 1's is erased
+    # on some devices like PIC this isn't true due to file 0 padding
+    percent = 100.0 * sum([popcount(x) for x in bytearray(fw)]) / (len(fw) * 8)
     return percent == 100.0, percent
 
 def run(fnout, prog_dev, ethresh=20., interval=3.0):
@@ -46,10 +55,15 @@ def run(fnout, prog_dev, ethresh=20., interval=3.0):
             fout.write(json.dumps(j) + '\n')
 
             signature = binascii.hexlify(md5.new(fw).digest())[0:8]
-            print('%s iter %u: erased %u w/ erase_percent %0.3f%%, sig %s, pcomplete: %0.1f' % (now, passn, erased, erase_percent, signature, pcomplete))
+            print('%s iter %u: erased %u w/ erase_percent %0.3f%%, sig %s, erase completion: %0.1f' % (now, passn, erased, erase_percent, signature, 100. * pcomplete / ethresh))
             if pcomplete >= ethresh:
                 break
-        print('Erased after %0.1f sec' % (tlast - tstart,))
+        dt = tlast - tstart
+        print('Erased after %0.1f sec' % (dt,))
+
+        j = {'type': 'footer', 'etime': dt}
+        fout.write(json.dumps(j) + '\n')
+    return dt
 
 if __name__ == "__main__":
     import argparse
