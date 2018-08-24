@@ -33,6 +33,7 @@ def run(fnout, prog_dev, ethresh=20., interval=3.0):
 
         tstart = time.time()
         tlast = None
+        thalf = None
         passn = 0
         nerased = 0
         while True:
@@ -56,14 +57,18 @@ def run(fnout, prog_dev, ethresh=20., interval=3.0):
 
             signature = binascii.hexlify(md5.new(fw).digest())[0:8]
             print('%s iter %u: erased %u w/ erase_percent %0.3f%%, sig %s, erase completion: %0.1f' % (now, passn, erased, erase_percent, signature, 100. * pcomplete / ethresh))
+            if thalf is None and erase_percent >= 50:
+                thalf = tlast
+                dt_half = thalf - tstart
+                print('50%% erased after %0.1f sec' % (dt_half,))
             if pcomplete >= ethresh:
                 break
         dt = tlast - tstart
-        print('Erased after %0.1f sec' % (dt,))
+        print('120%% erased after %0.1f sec' % (dt,))
 
-        j = {'type': 'footer', 'etime': dt}
+        j = {'type': 'footer', 'etime': dt, 'half_etime': dt_half}
         fout.write(json.dumps(j) + '\n')
-    return dt
+    return dt, dt_half
 
 if __name__ == "__main__":
     import argparse
