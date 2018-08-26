@@ -211,8 +211,15 @@ class Planner(object):
         plane calibration corner ended at 0.0000, 0.2674, -0.0129
         '''
         
-        start = (float(scan_config['start']['x']), float(scan_config['start']['y']))
-        end = (float(scan_config['end']['x']), float(scan_config['end']['y']))
+        start = [float(scan_config['start']['x']), float(scan_config['start']['y'])]
+        end = [float(scan_config['end']['x']), float(scan_config['end']['y'])]
+        border = None
+        if 'border' in scan_config:
+            border = float(scan_config['border'])
+            start[0] -= border
+            start[1] -= border
+            end[0] += border
+            end[1] += border
         self.axes = OrderedDict([
                 ('x', PlannerAxis('X', ideal_overlap,
                     img_sz[0] * unit_per_pix, img_sz[0],
@@ -232,6 +239,8 @@ class Planner(object):
             self.log('  Ideal overlap: %f, actual %g' % (ideal_overlap, axis.step_percent()), 2)
             self.log('  full delta: %f' % (self.x.delta()), 2)
             self.log('  view: %d pix' % (axis.view_pixels,), 2)
+            if border:
+                self.log('  border: %f' % border)
             
         # A true useful metric of efficieny loss is how many extra pictures we had to take
         # Maybe overhead is a better way of reporting it

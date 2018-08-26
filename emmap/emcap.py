@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# minipro -p PIC16C57 -r out.bin
+
 from config import get_config
 from uvscada.v4l2_util import ctrl_set
 from uvscada.minipro import Minipro
@@ -15,6 +17,7 @@ import sys
 import traceback
 import os
 import signal
+import time
 
 import gobject, pygst
 pygst.require('0.10')
@@ -24,9 +27,9 @@ import StringIO
 from PIL import Image
 
 uconfig = {
-        "Red Balance":  90,
-        "Gain":         100,
-        "Blue Balance": 207,
+        "Red Balance":  500,
+        "Gain":         500,
+        "Blue Balance": 500,
         "Exposure":     800
     }
 
@@ -77,7 +80,7 @@ gst.element_register (CaptureSink, 'capturesink', gst.RANK_MARGINAL)
 class ImageProcessor(QThread):
     n_frames = pyqtSignal(int) # Number of images
 
-    def __init__(self):
+    def __init__(self, postfix):
         QThread.__init__(self)
 
         self.running = threading.Event()
@@ -85,48 +88,69 @@ class ImageProcessor(QThread):
         self.image_requested = threading.Event()
         self.q = Queue.Queue()
         self.ncap = 0
-        self.imgbuff = []
-        self.out_dir = 'out'
+        '''
+        2018-05-01_01_pic16c57
+        normal gains
+        2018-05-01_02_pic16c57
+        highest gains
+        deleted above sets because image buffer wasn't getting cleared correctly
+
+        2018-05-02_01_pic16c57
+        daytime
+        inserted IR filter
+
+        2018-05-02_01_pic16c57
+        night time
+        still .jpg since .png has issue
+        should try raw?
+        '''
+        self.out_dir = '/media/jmstuff/emcap/2018-05-02_02_pic16c57'
+        self.file_postfix = postfix
 
     def run(self):
         self.running.set()
         self.image_requested.set()
+        mode = 'dark'
+        state_time = 20
         while self.running.is_set():
-            try:
-                img = self.q.get(True, 0.05)
-            except Queue.Empty:
-                continue
-            self.imgbuff.append(img)
-            print 'Loop: got image w/ cnt %d' % len(self.imgbuff)
+            imgbuff = []
+            # drain queue accumulated during save etc
+            while True:
+                try:
+                    img = self.q.get(False)
+                except Queue.Empty:
+                    break
 
-            # Got two dark frames?
-            if len(self.imgbuff) == 2:
-                # Start light frames
-                _fw = prog.read()
-            elif len(self.imgbuff) == 4:
-                # Verify we haven't overrun buffer
-                while True:
-                    try:
-                        img_none = self.q.get(False)
-                    except Queue.Empty:
-                        break
-                    self.imgbuff.append(img_none)
+            print
+            if mode == 'dark':
+                print 'Dark wait'
+                time.sleep(state_time)
+                new_mode = 'light'
+            else:
+                print 'Light activity'
+                tstart = time.time()
+                while time.time() - tstart < state_time:
+                    _fw = prog.read()
+                new_mode = 'dark'
 
-                if len(self.imgbuff) > 4:
-                    #raise Exception("Image buffer overrun")
-                    print "Image buffer overrun w/ %d images" % len(self.imgbuff)
-                else:
-                    # First two frames are dark, second two are light
-                    # 0.3 sec / frame => 1.2 sec per cycle
-                    # say 5 MB / image => 
-                    # overnight easily 10k+ frames => 250 GB of data?
-                    # FIXME: get png not jpg
-                    for i, img in enumerate(self.imgbuff):
-                        open('%s/cap_%05u-%u.jpg' % (self.out_dir, self.ncap, i), 'w').write(img)
-                self.imgbuff = []
-                self.ncap += 1
-            elif len(self.imgbuff) > 4:
-                raise Exception("bad state")
+            print 'Draining'
+            while True:
+                try:
+                    img = self.q.get(False)
+                except Queue.Empty:
+                    break
+                imgbuff.append(img)
+
+            # First two frames are dark, second two are light
+            # 0.3 sec / frame => 1.2 sec per cycle
+            # say 5 MB / image => 
+            # overnight easily 10k+ frames => 250 GB of data?
+            # FIXME: get png not jpg
+            print "Save %d images" % len(imgbuff)
+            for i, img in enumerate(imgbuff):
+                open('%s/cap_%05u_%s_%u.%s' % (self.out_dir, self.ncap, mode, i, self.file_postfix), 'w').write(img)
+            self.ncap += 1
+            mode = new_mode
 
     def stop(self):
         self.running.clear()
@@ -161,7 +185,12 @@ class GUI(QMainWindow):
         else:
             raise Exception('Unknown engine %s' % (engine_config,))
 
-        self.processor = ImageProcessor()
+        ext = None
+        if self.capture_enc:
+            ext = {
+                'jpegenc0': 'jpg',
+            }[self.capture_enc.get_name()]
+        self.processor = ImageProcessor(ext)
         self.capture_sink.img_cb = self.processor.img_cb
 
         self.processor.start()
@@ -203,7 +232,16 @@ class GUI(QMainWindow):
         sinkx = gst.element_factory_make("ximagesink", 'sinkx_overview')
         fcs = gst.element_factory_make('ffmpegcolorspace')
         caps = gst.caps_from_string('video/x-raw-yuv')
+
         self.capture_enc = gst.element_factory_make("jpegenc")
+        # not found
+        #self.capture_enc = gst.element_factory_make("openjpegenc")
+        #  error destination buffer too small
+        #self.capture_enc = gst.element_factory_make("pngenc")
+        # libv4l2: error converting / decoding frame data: v4l-convert: error destination buffer too small (16777216 < 23970816)
+        #self.capture_enc = gst.element_factory_make("pnmenc")
+        #self.capture_enc = None
+
         self.capture_sink = gst.element_factory_make("capturesink")
         self.capture_sink_queue = gst.element_factory_make("queue")
         self.resizer =  gst.element_factory_make("videoscale")
@@ -215,8 +253,14 @@ class GUI(QMainWindow):
         self.player.add(fcs,                 self.resizer, sinkx)
         gst.element_link_many(self.tee, fcs, self.resizer, sinkx)
 
-        self.player.add(                self.capture_sink_queue, self.capture_enc, self.capture_sink)
-        gst.element_link_many(self.tee, self.capture_sink_queue, self.capture_enc, self.capture_sink)
+        if self.capture_enc:
+            self.player.add(                self.capture_sink_queue, self.capture_enc, self.capture_sink)
+            gst.element_link_many(self.tee, self.capture_sink_queue, self.capture_enc, self.capture_sink)
+        else:
+            self.player.add(                self.capture_sink_queue, self.capture_sink)
+            gst.element_link_many(self.tee, self.capture_sink_queue, self.capture_sink)
+        #self.player.add(                self.resizer, self.capture_enc, self.capture_sink)
+        #gst.element_link_many(self.tee, self.resizer, self.capture_enc, self.capture_sink)
 
         bus = self.player.get_bus()
         bus.add_signal_watch()
