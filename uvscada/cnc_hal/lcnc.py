@@ -199,6 +199,7 @@ class LcncPyHal(LcncHal):
     def pos(self):
         if self.dry:
             return self._dry_pos
+        self.stat.poll()
         ret = {}
         for axis in self.axes():
             ret[axis] = self.stat.axis[ord(axis) - ord('x')]['output']

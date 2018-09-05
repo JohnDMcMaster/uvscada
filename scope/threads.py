@@ -26,12 +26,12 @@ class ImagingThread(QThread):
     def __init__(self):
         self.queue = Queue.Queue()
         self.running = threading.Event()
-    
+
     def run(self):
         self.running.set()
         while self.running.is_set():
             time.sleep(1)
-    
+
     def stop(self):
         self.running.clear()
 
@@ -54,44 +54,56 @@ class CncThread(QThread):
         self.normal_running = threading.Event()
         self.normal_running.set()
         self.cmd_done = cmd_done
+        self.lock = threading.Event()
 
     def log(self, msg):
         self.emit(SIGNAL('log'), msg)
-        
+
     def setRunning(self, running):
         if running:
             self.normal_running.set()
         else:
             self.normal_running.clear()
-    
+
     def wait_idle(self):
         while True:
             time.sleep(0.15)
             if self.idle.is_set():
                 break
-        
+
     def cmd(self, cmd, *args):
         self.queue.put((cmd, args))
+
+    def pos(self):
+        self.lock.set()
+        ret = self.hal.pos()
+        self.lock.clear()
+        return ret
 
     def run(self):
         self.running.set()
         self.idle.clear()
         self.hal.on()
-        
+
         while self.running.is_set():
+            self.lock.set()
             if not self.normal_running.isSet():
                 self.normal_running.wait(0.1)
                 continue
             try:
+                self.lock.clear()
                 (cmd, args) = self.queue.get(True, 0.1)
-                self.idle.clear()
             except Queue.Empty:
                 self.idle.set()
                 continue
-            
+            finally:
+                self.lock.set()
+
+            self.idle.clear()
+
             def default(*args):
                 raise Exception("Bad command %s" % (cmd,))
-            
+
             def mv_abs(pos):
                 try:
                     self.hal.mv_abs(pos)
@@ -105,15 +117,15 @@ class CncThread(QThread):
                 except AxisExceeded as e:
                     self.log(str(e))
                 return self.hal.pos()
-            
+
             def home(axes):
                 self.hal.home(axes)
                 return self.hal.pos()
-            
+
             def forever(*args):
                 self.hal.forever(*args)
                 return self.hal.pos()
-            
+
             #print 'cnc thread: dispatch %s' % cmd
             # Maybe I should just always emit the pos
             ret = {
@@ -126,9 +138,9 @@ class CncThread(QThread):
                 'unestop':  self.hal.unestop,
             }.get(cmd, default)(*args)
             self.cmd_done(cmd, args, ret)
-    
+
     def stop(self):
-        self.running.clear()        
+        self.running.clear()
 
 # Sends events to the imaging and movement threads
 class PlannerThread(QThread):
@@ -138,23 +150,23 @@ class PlannerThread(QThread):
         QThread.__init__(self, parent)
         self.rconfig = rconfig
         self.planner = None
-        
+
     def log(self, msg):
         #print 'emitting log %s' % msg
         #self.log_buff += str(msg) + '\n'
         self.emit(SIGNAL('log'), msg)
-    
+
     def setRunning(self, running):
         planner = self.planner
         if planner:
             planner.setRunning(running)
-        
+
     def run(self):
         try:
             self.log('Initializing planner!')
-    
+
             scan_config = json.load(open('scan.json'))
-            
+
             rconfig = self.rconfig
             obj = rconfig['uscope']['objective'][rconfig['obj']]
             im_w_pix = int(rconfig['uscope']['imager']['width'])

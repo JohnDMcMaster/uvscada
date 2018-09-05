@@ -530,7 +530,7 @@ class Planner(object):
             if not self.dry:
                 self.write_meta()
         finally:
-            print 'Planner: restoring old dry'
+            print('Planner: restoring old dry %s' % (str(hal_dry_old)))
             self.hal.set_dry(hal_dry_old)
         
     def meta(self):
