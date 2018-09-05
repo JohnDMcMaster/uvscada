@@ -319,7 +319,6 @@ class CNCGUI(QMainWindow):
         self.obj_configi = self.obj_cb.currentIndex()
         self.obj_config = self.uconfig['objective'][self.obj_configi]
         self.log('Selected objective %s' % self.obj_config['name'])
-        #self.obj_mag.setText('Magnification: %0.2f' % self.obj_config["mag"])
 
         im_w_pix = int(self.uconfig['imager']['width'])
         im_h_pix = int(self.uconfig['imager']['height'])
@@ -352,32 +351,33 @@ class CNCGUI(QMainWindow):
         self.obj_cb = QComboBox()
         cl.addWidget(self.obj_cb, row, 1)
         self.obj_cb.currentIndexChanged.connect(self.update_obj_config)
-        row += 1
-        
-        self.obj_mag = QLabel("")
-        cl.addWidget(self.obj_mag, row, 1)
         self.obj_view = QLabel("")
-        row += 1
-
-        cl.addWidget(self.obj_view, row, 1)
-        row += 1
+        cl.addWidget(self.obj_view, row, 2)
         # seed it
         self.reload_obj_cb()
         self.update_obj_config()
-
-        self.v4l_cb = QComboBox()
-        cl.addWidget(self.v4l_cb, row, 1)
-        self.v4l_cb.currentIndexChanged.connect(self.update_v4l_config)
         row += 1
+
+        if 0:
+            cl.addWidget(QLabel("Sensor config"), row, 0)
+            self.v4l_cb = QComboBox()
+            cl.addWidget(self.v4l_cb, row, 1)
+            self.v4l_cb.currentIndexChanged.connect(self.update_v4l_config)
+            row += 1
         
         self.v4ls = {}
-        for k in ("Red Balance", "Blue Balance", "Gain", "Exposure"):
-            cl.addWidget(QLabel(k), row, 0)
+        # hacked driver to directly drive values
+        for ki, (label, v4l_name) in enumerate((("Red", "Red Balance"), ("Green", "Gain"), ("Blue", "Blue Balance"), ("Exp", "Exposure"))):
+            cols = 4
+            rowoff = ki / cols
+            coloff = cols * (ki % cols)
+
+            cl.addWidget(QLabel(label), row + rowoff, coloff)
             le = QLineEdit('')
-            self.v4ls[k] = le
-            cl.addWidget(le, row, 1)
+            self.v4ls[v4l_name] = le
+            cl.addWidget(le, row + rowoff, coloff + 1)
             le.textChanged.connect(self.v4l_updated)
-            row += 1
+        row += 2
         
         return cl
     
