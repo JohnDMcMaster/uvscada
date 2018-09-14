@@ -1,3 +1,10 @@
+'''
+WARNING: this code doesn't seem to work
+For some reason I never get a WD response
+
+Thermotek T251P can also be branded as a Silicon Thermal CH250
+'''
+
 import serial
 import binascii
 import datetime
