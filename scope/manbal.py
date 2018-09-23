@@ -144,7 +144,7 @@ class ImageProcessor(QThread):
             self.image_requested.clear()
 
 
-class CNCGUI(QMainWindow):
+class TestGUI(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
         self.showMaximized()
@@ -424,7 +424,7 @@ if __name__ == '__main__':
     gobject.threads_init()
 
     app = QApplication(sys.argv)
-    _gui = CNCGUI()
+    _gui = TestGUI()
     # XXX: what about the gstreamer message bus?
     # Is it simply not running?
     # must be what pygst is doing
