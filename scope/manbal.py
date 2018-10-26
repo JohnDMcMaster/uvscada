@@ -156,7 +156,7 @@ class TestGUI(QMainWindow):
         # Must not be initialized until after layout is set
         self.gstWindowId = None
         engine_config = 'gstreamer'
-        #engine_config = 'gstreamer-testsrc'
+        engine_config = 'gstreamer-testsrc'
         if engine_config == 'gstreamer':
             self.source = gst.element_factory_make("v4l2src", "vsource")
             self.source.set_property("device", "/dev/video0")
