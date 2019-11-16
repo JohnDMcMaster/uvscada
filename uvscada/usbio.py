@@ -41,7 +41,10 @@ class USBIO:
         self.serial = None
         self.debug = debug
         if device is None:
-            for s in ("/dev/ttyUSB0", "/dev/ttyACM0", "/dev/ttyS5", "COM12"):
+            # Only one board left and I only use it under Linux
+            # just hard code the ID to avoid confusing with other devices
+            # for s in ("/dev/ttyUSB0", "/dev/ttyACM0", "/dev/ttyS5", "COM12"):
+            for s in ("/dev/serial/by-id/usb-Microchip_Technology_Inc._CDC_RS-232_Emulation_Demo-if00",):
                 try:
                     self.try_open(s)
                     dbg('Opened %s okay' % s)
@@ -89,39 +92,39 @@ class USBIO:
     def recv(self):
         # Sync until first ~
         if self.debug:
-            print 'USBIO DEBUG: recv: waiting for opening ~'
-        for _i in xrange(3):
+            print('USBIO DEBUG: recv: waiting for opening ~')
+        for _i in range(3):
             c = self.serial.read(1)
             if self.debug:
-                print 'USBIO DEBUG: recv open wait: got "%s", wait: %d' % (c, self.serial.inWaiting())
-            if c == '~':
+                print('USBIO DEBUG: recv open wait: got "%s", wait: %d' % (c, self.serial.inWaiting()))
+            if c == b'~':
                 break
         else:
             raise Timeout('Timed out waiting for opening ~')
         
         if self.debug:
-            print 'USBIO DEBUG: recv: waiting for closing ~'
+            print('USBIO DEBUG: recv: waiting for closing ~')
         # Read until ~
-        ret = ''
-        for _i in xrange(60):
+        ret = b''
+        for _i in range(60):
             c = self.serial.read(1)
-            if c == '~':
+            if c == b'~':
                 break
             ret += c
         else:
             raise Timeout('Timed out waiting for closing ~')
         
         if self.debug:
-            print 'USBIO DEBUG: recv: returning: "%s"' % (ret,)
+            print('USBIO DEBUG: recv: returning: "%s"' % (ret,))
         return ret
         
     def send(self, bytes_out):
         out = '~' + bytes_out + '~'
         if self.debug:
-            print 'USBIO DEBUG: sending: %s' % (out,)
+            print('USBIO DEBUG: sending: %s' % (out,))
             if self.serial.inWaiting():
                 raise Exception('At send %d chars waiting' % self.serial.inWaiting())
-        self.serial.write(out)
+        self.serial.write(out.encode('ascii'))
         # if it doesn't get written we will not get a reply
         self.serial.flush()
         # Always expect a reply
@@ -141,9 +144,18 @@ class USBIO:
         is_on = 1 if is_on else 0
         #self.serial.flush()
         reply = self.send("out%X=%d" % (index, is_on))
-        if reply != "OK":
+        if reply != b"OK":
             raise Exception("Expected OK but got %s" % (reply,)) 
-    
+
+    def get_gpio(self, index):
+        reply = self.send("in%X" % (index,))
+        # ~OUTES9=1~
+        #print(reply)
+        reply_pin, val = reply.split('=')
+        if val not in b"01":
+            raise Exception("Expected 01 but got %s" % (val,)) 
+        return bool(int(val))
+
     def set_relay(self, relay_id, is_on):
         if relay_id == 1:
             self.set_gpio(9, is_on)
@@ -151,6 +163,14 @@ class USBIO:
             self.set_gpio(8, is_on)
         else:
             raise Exception("bad relay id")
+
+    def get_16(self):
+        """Return all 16 GPIO states as 16 bit integer"""
+        ret = 0
+        for i in range(16):
+            if self.get_gpio(i):
+                ret |= 1 << i
+        return ret
 
 def str2bool(arg_value):
     arg_value = arg_value.lower()
@@ -160,12 +180,12 @@ def str2bool(arg_value):
         return True
 
 def help():
-    print 'usbio version %s' % VERSION
-    print 'Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>'
-    print 'Usage:'
-    print 'usbio [options] [<port> <state>]'
-    print 'Options:'
-    print '--help: this message'
+    print('usbio version %s' % VERSION)
+    print('Copyright 2011 John McMaster <JohnDMcMaster@gmail.com>')
+    print('Usage:')
+    print('usbio [options] [<port> <state>]')
+    print('Options:')
+    print('--help: this message')
 
 if __name__ == "__main__":
     port = None
@@ -221,13 +241,13 @@ if __name__ == "__main__":
     
     while True:
         i += 1
-        print i
+        print(i)
         usbio.set_gpio(0, True)
         usbio.set_gpio(0, False)
         #time.sleep(0.05)
     
     if port is None:
-        print 'port must be specified'
+        print('port must be specified')
         help()
         sys.exit(1)
     
@@ -237,7 +257,7 @@ if __name__ == "__main__":
     elif port == "RELAY2":
         usbio.set_relay(2, state)
     else:
-        print 'bad port: %s' % port
+        print('bad port: %s' % port)
         help()
         sys.exit(1)
 
