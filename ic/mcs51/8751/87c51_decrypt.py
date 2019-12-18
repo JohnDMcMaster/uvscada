@@ -4,7 +4,7 @@ import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Combine stock encrypted dump + 0'd XOR table dump to create XOR key")
-    #parser.add_argument('--keysz', default=None, help="XOR encryption table size")
+    parser.add_argument('--keysz', default=None, help="XOR encryption table size")
     #parser.add_argument('--fwsz', default=None, help="Firmware size")
     #parser.add_argument('--device', default="87C52", help="Automatically select XOR encryption table size")
     parser.add_argument('orig', help="Dump w/ untampered XOR table")
@@ -13,6 +13,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     keysz = 0x20
+    if args.keysz:
+        keysz = int(args.keysz, 0)
     fwsz = 0x2000
 
     encpat = bytearray(open(args.orig, 'rb').read()[0:0x1000])
