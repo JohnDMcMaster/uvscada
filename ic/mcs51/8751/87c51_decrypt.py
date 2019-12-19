@@ -17,7 +17,8 @@ if __name__ == "__main__":
         keysz = int(args.keysz, 0)
     fwsz = 0x2000
 
-    encpat = bytearray(open(args.orig, 'rb').read()[0:0x1000])
+    encpat = bytearray(open(args.orig, 'rb').read()[0:fwsz])
+    assert len(encpat) == fwsz, (len(encpat), fwsz)
     key = bytearray(open(args.keyfn, 'rb').read())
     assert len(key) == keysz
     buff = bytearray(fwsz)
