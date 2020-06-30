@@ -131,6 +131,10 @@ class K2750(object):
             adc = float(adc.replace('OHM', ''))
         else:
             adc = float('inf')
+        # consistently got this, not sure why
+        # restarting unit fixed it
+        # +9.9E37,+45775778+9.9E37SECS,+45775991RDNG#
+        # print(raw)
         secs = float(m.group(2))
         rdngn = float(m.group(3))
         return {"ADC": adc, "SECS": secs, "RDNG#": rdngn}
