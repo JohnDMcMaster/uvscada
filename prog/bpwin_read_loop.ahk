@@ -4,11 +4,14 @@
 ; shift to stop
 !a::
 
+show_data := 0
+save_data := 1
+
 loopi := 0
 
-FormatTime, CurrentDateTime,, yyyy-MM-dd_HH.mm.ss
+FormatTime, StartDateTime,, yyyy-MM-dd_HH.mm.ss
 basedir = D:\buffer\rom\ahk\out
-dirout = %basedir%\%CurrentDateTime%
+dirout = %basedir%\%StartDateTime%
 ; MsgBox %dirout%
 FileCreateDir, %dirout%
 
@@ -24,42 +27,45 @@ Loop {
 	Sleep, 200
 	
 	
-	; activate data view
-	send ^e
-	; select hex view
-	Loop, 7 {
+	if (show_data) {
+		; activate data view
+		send ^e
+		; select hex view
 		send {Tab}
+		send B
+		send {Up}
+		; let user oogle the data
+		Sleep, 2000
+		; Close hex view
+		Send {Esc}
+
+
+		Sleep, 200
 	}
-	send {Up}
-	; let user oogle the data
-	Sleep, 2000
-	; Close hex view
-	Send {Esc}
 
+	if (save_data) {
+		; file => save pattern as
+		; activate file menu
+		; send !f
+		Send {Alt}
+		Send {Down}
+		Send {Down}
+		Send {Down}
+		Send {Down}
+		send {Enter}
+		; save dialogue
+		Sleep, 200
+		loops := Format("{:04}", loopi)
+		FormatTime, curdt,, yyyy-MM-dd_HH.mm.ss
+		fn = %dirout%\%loops%_%curdt%.bin
+		Send %fn%
+		send {Enter}
+		; file format options: accept deafult
+		send {Enter}
 
-	Sleep, 200
-
-
-	; file => save pattern as
-	; activate file menu
-	; send !f
-	Send {Alt}
-	Send {Down}
-	Send {Down}
-	Send {Down}
-	Send {Down}
-	send {Enter}
-	; save dialogue
-	Sleep, 200
-	loops := Format("{:04}", loopi)
-	fn = %dirout%\%loops%.bin
-	Send %fn%
-	send {Enter}
-	; file format options: accept deafult
-	send {Enter}
-
-	
-	Sleep, 200
+		
+		Sleep, 200
+	}
 
 	loopi := loopi + 1
 	;MsgBox, %loopi%
