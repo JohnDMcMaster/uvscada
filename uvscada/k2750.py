@@ -1,7 +1,9 @@
-from uvscada.plx_usb import PUGpib
+from pymeasure.instruments.keithley import Keithley2700
+from pymeasure.adapters import PrologixAdapter
 
 import re
 import time
+import glob
 
 # -1.25629986E-02VDC,+2319.404SECS,+10155RDNG#
 # -3.47094010E-06VDC,+4854.721SECS,+20115RDNG#
@@ -13,14 +15,21 @@ curr_dc_re = re.compile("(.*)ADC,(.*)SECS,(.*)RDNG#")
 res_re = re.compile("(.*),(.*)SECS,(.*)RDNG#")
 
 class K2750(object):
-    def __init__(self, port='/dev/ttyUSB0', clr=True, ident=True):
-        self.gpib = PUGpib(port=port, addr=16, clr=clr, eos=3, ser_timeout=1.0, gpib_timeout=0.9)
+    def __init__(self, port=None, clr=True, ident=True):
+        if port is None:
+            devices = glob.glob("/dev/serial/by-id/usb-Prologix_Prologix_GPIB-USB_Controller_*")
+            assert len(devices), "No GPIB found"
+            device = devices[0]
+
+        self.adapter = PrologixAdapter('/dev/ttyUSB0')
+        self.instrument = Keithley2700(self.adapter.gpib(5))
         self.func = None
         self.vendor = None
         self.model = None
         self.sn = None
         if ident:
             vendor, model = self.ident()
+            # print("ident init", vendor, model)
             if (vendor, model) != ('KEITHLEY INSTRUMENTS INC.', 'MODEL 2750'):
                 raise ValueError('Bad instrument: %s, %s' % (vendor, model))
 
@@ -35,7 +44,9 @@ class K2750(object):
         unit.
         ['KEITHLEY INSTRUMENTS INC.', 'MODEL 2750', '0967413', 'A07  /A01']
         '''
-        ret = self.gpib.sendrecv_str("*IDN?").split(',')
+        tmp = self.instrument.ask("*IDN?")
+        # print("ident debug", tmp)
+        ret = tmp.split(',')
         self.vendor = ret[0]
         self.model = ret[1]
         sn = ret[2]
@@ -43,16 +54,16 @@ class K2750(object):
         return (self.vendor, self.model, sn, fw)
 
     def card_sn(self):
-        return self.gpib.sendrecv_str("SYSTem:CARD1:SNUMber?")
+        return self.gpib.ask("SYSTem:CARD1:SNUMber?")
 
     def tim_int(self):
         '''Query timer interval'''
-        return float(self.gpib.snd_rcv('TRIGger:TIMer?'))
+        return float(self.instrument.ask('TRIGger:TIMer?'))
 
     def local(self):
         '''Go to local mode'''
         # Error -113
-        self.gpib.snd('GTL')
+        self.instrument.ask('GTL')
 
     def set_beep(self, en):
         '''
@@ -60,13 +71,13 @@ class K2750(object):
         is again selected, the beeper will automatically enable.
         '''
         if en:
-            self.gpib.snd("SYSTEM:BEEPER OFF")
+            self.instrument.ask("SYSTEM:BEEPER OFF")
         else:
-            self.gpib.snd("SYSTEM:BEEPER ON")
+            self.instrument.ask("SYSTEM:BEEPER ON")
 
     def error(self):
         '''Get next error from queue'''
-        return self.gpib.snd_rcv("SYSTEM:ERROR?")
+        return self.instrument.ask("SYSTEM:ERROR?").strip()
 
     def errors(self):
         ret = []
@@ -75,14 +86,15 @@ class K2750(object):
             if e == '0,"No error"':
                 return ret
             ret.append(e)
+        return ret
     
     def volt_dc_ex(self):
         if self.func != 'VOLT:DC':
-            self.gpib.snd(":FUNC 'VOLT:DC'")
+            self.instrument.ask(":FUNC 'VOLT:DC'")
             time.sleep(0.20)
             self.func = 'VOLT:DC'
 
-        raw = self.gpib.snd_rcv(":DATA?")
+        raw = self.instrument.ask(":DATA?")
         m = volt_dc_re.match(raw)
         if not m:
             raise Exception("Bad reading: %s" % (raw,))
@@ -96,13 +108,13 @@ class K2750(object):
 
     def curr_dc_ex(self):
         if self.func != 'CURR:DC':
-            self.gpib.snd(":FUNC 'CURR:DC'")
+            self.instrument.ask(":FUNC 'CURR:DC'")
             # Seems to take at least 0.1 sec
             # had problems with 0.15
             time.sleep(0.20)
             self.func = 'CURR:DC'
 
-        raw = self.gpib.snd_rcv(":DATA?")
+        raw = self.instrument.ask(":DATA?")
         m = curr_dc_re.match(raw)
         if not m:
             raise Exception("Bad reading: %s" % (raw,))
@@ -114,15 +126,22 @@ class K2750(object):
     def curr_dc(self):
         return self.curr_dc_ex()["ADC"]
 
-    def res_ex(self):
-        if self.func != 'RES':
-            self.gpib.snd(":FUNC 'RES'")
-            # Seems to take at least 0.1 sec
-            # had problems with 0.15
-            time.sleep(0.20)
-            self.func = 'RES'
+    def set_func(self, mode, lazy=True):
+        if lazy and self.func == mode:
+            return
+        self.instrument.ask(":FUNC '%s'" % (mode,))
+        # Seems to take at least 0.1 sec
+        # had problems with 0.15
+        time.sleep(0.20)
+        self.func = mode
 
-        raw = self.gpib.snd_rcv(":DATA?")
+    def func_res(self, lazy=True):
+        self.set_func("RES", lazy=lazy)
+
+    def res_ex(self):
+        self.set_func("RES")
+
+        raw = self.instrument.ask(":DATA?")
         m = res_re.match(raw)
         if not m:
             raise Exception("Bad reading: %s" % (raw,))

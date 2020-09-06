@@ -5,6 +5,7 @@ REV 6.4.1
 http://prologix.biz/getfile?attachment_id=2
 '''
 
+from uvscada.aserial import ASerial
 import serial
 
 class Timeout(Exception):
@@ -31,7 +32,7 @@ class PUGpib:
     def __init__(self, port="/dev/ttyUSB0", ser_timeout=1.0, gpib_timeout=0.9, addr=5, clr=True, eos=0):
         self.port = port
         self.addr = addr
-        self.ser = serial.Serial(port,
+        self.ser = ASerial(port,
                 # They claim this parameter is ignored                          
                 baudrate=9600,
                 bytesize=serial.EIGHTBITS,
@@ -106,7 +107,7 @@ class PUGpib:
             for c in '\x1b\x2b\x0d\x0a':
                 s = s.replace(c, '\x1b' + c)
         
-        self.ser.write(s + "\n")
+        self.ser.writea(s + "\n")
         # FIXME: flow control deadlock can get us stuck here
         # need some sort of timeout mechanism
         self.ser.flush()
@@ -115,13 +116,16 @@ class PUGpib:
         return self.recv_str(*args, **kwargs)
     
     def recv_str(self, l=1024, empty=False, short=True):
-        self.ser.write('++read eoi\n')
+        self.ser.writea('++read eoi\n')
         self.ser.flush()
         
         if self.bin:
-            s = self.ser.read(l)
+            print("read() begin")
+            s = self.ser.reada(l)
         else:
-            s = self.ser.readline()
+            print("readline() begin")
+            s = self.ser.readlinea()
+        assert type(s) is str, type(s)
 
         if not s and not empty:
             raise Timeout('Failed recv any bytes')
@@ -155,12 +159,12 @@ class PUGpib:
         self.send_str(s)
         return self.recv_str(l=l, empty=empty, short=short)
 
-    def sendrecv_astr(self, s):
+    def sendrecv_astr(self, s, empty=False):
         '''Send receive adapter string.  No ++read is required'''
         self.send_str(s)
         
         # wait for response line
-        s = self.ser.readline()
+        s = self.ser.readlinea()
         if not s and not empty:
             raise Timeout('Failed recv')
         s = s.rstrip()
@@ -177,10 +181,10 @@ class PUGpib:
         If enabled, the following configuration parameters are saved whenever they are
         updated - mode, addr, auto, eoi, eos, eot_enable, eot_char and read_tmo_ms.
         '''
-        print 'versions: %s' % self.version()
-        print 'versions: %s' % self.sendrecv_astr("++ver")
+        print('versions: %s' % self.version())
+        print('versions: %s' % self.sendrecv_astr("++ver"))
         for cmd in  ('mode', 'addr', 'auto', 'eoi', 'eos', 'eot_enable', 'eot_char', 'read_tmo_ms'):
-            print '%s: %s' % (cmd, self.sendrecv_astr("++%s" % cmd))
+            print('%s: %s' % (cmd, self.sendrecv_astr("++%s" % cmd)))
     
     def local(self):
         self.send_str('++loc')

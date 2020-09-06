@@ -6,7 +6,7 @@ import sys
 
 def print_debug(s = None):
     if False:
-        print 'DEBUG: %s' % s
+        print('DEBUG: %s' % s)
 
 def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     dashed = yes_arg.replace('--', '')
@@ -14,25 +14,44 @@ def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     parser.add_argument(yes_arg, dest=dest, action='store_true', default=default, **kwargs)
     parser.add_argument('--no-' + dashed, dest=dest, action='store_false', **kwargs)
 
+def tobytes(buff):
+    if type(buff) is str:
+        #return bytearray(buff, 'ascii')
+        return bytearray([ord(c) for c in buff])
+    elif type(buff) is bytearray or type(buff) is bytes:
+        return buff
+    else:
+        assert 0, type(buff)
+
+
+def tostr(buff):
+    if type(buff) is str:
+        return buff
+    elif type(buff) is bytearray or type(buff) is bytes:
+        return ''.join([chr(b) for b in buff])
+    else:
+        assert 0, type(buff)
+
 def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
     def isprint(c):
         return c >= ' ' and c <= '~'
 
     if label:
-        print label
-    
+        print(label)
+
     bytes_per_half_row = 8
     bytes_per_row = 16
-    data = bytearray(data)
+    datab = tobytes(data)
+    datas = tostr(data)
     data_len = len(data)
-    
+
     def hexdump_half_row(start):
         left = max(data_len - start, 0)
-        
+
         real_data = min(bytes_per_half_row, left)
 
-        f.write(''.join('%02X ' % c for c in data[start:start+real_data]))
-        f.write(''.join('   '*(bytes_per_half_row-real_data)))
+        f.write(''.join('%02X ' % c for c in datab[start:start + real_data]))
+        f.write(''.join('   ' * (bytes_per_half_row - real_data)))
         f.write(' ')
 
         return start + bytes_per_half_row
@@ -50,7 +69,10 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
         left = data_len - row_start
         real_data = min(bytes_per_row, left)
 
-        f.write(''.join([c if isprint(c) else '.' for c in str(data[row_start:row_start+real_data])]))
+        f.write(''.join([
+            c if isprint(c) else '.'
+            for c in str(datas[row_start:row_start + real_data])
+        ]))
         f.write((" " * (bytes_per_row - real_data)) + "|\n")
 
 '''
@@ -83,7 +105,7 @@ def where(pos=1):
     callerframerecord = inspect.stack()[pos]
     frame = callerframerecord[0]
     info = inspect.getframeinfo(frame)
-    print '%s.%s():%d' % (info.filename, info.function, info.lineno)
+    print('%s.%s():%d' % (info.filename, info.function, info.lineno))
 
 # Print timestamps in front of all output messages
 class IOTimestamp(object):
