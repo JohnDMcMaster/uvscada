@@ -1,3 +1,8 @@
+"""
+For both K2700 and K2750
+But I had a K2750 first
+"""
+
 from pymeasure.instruments.keithley import Keithley2700
 from pymeasure.adapters import PrologixAdapter
 
@@ -14,14 +19,14 @@ curr_dc_re = re.compile("(.*)ADC,(.*)SECS,(.*)RDNG#")
 # +6.97856784E-01OHM,+201938.582SECS,+1846490RDNG#
 res_re = re.compile("(.*),(.*)SECS,(.*)RDNG#")
 
-class K2750(object):
+class K2700(object):
     def __init__(self, port=None, clr=True, ident=True):
         if port is None:
             devices = glob.glob("/dev/serial/by-id/usb-Prologix_Prologix_GPIB-USB_Controller_*")
             assert len(devices), "No GPIB found"
-            device = devices[0]
+            port = devices[0]
 
-        self.adapter = PrologixAdapter('/dev/ttyUSB0')
+        self.adapter = PrologixAdapter(port)
         self.instrument = Keithley2700(self.adapter.gpib(5))
         self.func = None
         self.vendor = None
@@ -30,7 +35,7 @@ class K2750(object):
         if ident:
             vendor, model = self.ident()
             # print("ident init", vendor, model)
-            if (vendor, model) != ('KEITHLEY INSTRUMENTS INC.', 'MODEL 2750'):
+            if (vendor, model) != ('KEITHLEY INSTRUMENTS INC.', 'MODEL 2750') and (vendor, model) != ('KEITHLEY INSTRUMENTS INC.', 'MODEL 2700'):
                 raise ValueError('Bad instrument: %s, %s' % (vendor, model))
 
     def ident(self):
@@ -160,3 +165,5 @@ class K2750(object):
 
     def res(self):
         return self.res_ex()["ADC"]
+
+K2750 = K2700
